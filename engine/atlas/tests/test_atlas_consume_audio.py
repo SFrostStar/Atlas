@@ -1,4 +1,4 @@
-"""Exercise the real consumable emitter's sound routing without a window.
+"""Exercise the real drop prediction and consumable emitter without a window.
 
 Vanilla Player.playSound excludes that player from the server broadcast;
 LocalPlayer.playSound plays the predicted bite locally. Both copies must not
@@ -40,6 +40,11 @@ class ConsumeAudioTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("rustc"), "requires Rust")
     def test_q_menu_drop_predicts_one_swing_only_when_item_is_removed(self):
         source = (ROOT / "crates/atlas-client/src/game/remote.rs").read_text(encoding="utf-8")
+        # Keep both production functions: prediction now lives in a shared helper.
+        # Only its concrete engine types are replaced by this fixture's Menu/Env.
+        prediction = method(source, "predict_clicks").replace(
+            "atlas_client::menu::Menu", "Menu"
+        ).replace("atlas_client::menu::Env", "Env")
         fixture = r'''
 #[derive(Clone, Copy, PartialEq)] enum Input { Throw, Swap }
 #[derive(Clone)] struct Stack;
@@ -48,6 +53,7 @@ enum Hand { Main }
 struct SwingAnimation;
 impl SwingAnimation { const DEFAULT: Self = Self; }
 #[derive(Default)] struct Menu { count: usize, dropped: Vec<u8>, carried: Option<Stack> }
+type Env = ();
 impl Menu {
     fn click(&mut self, _: &(), _: i32, button: i32, input: Input) -> Result<(), ()> {
         if input == Input::Throw && self.count > 0 {
@@ -60,6 +66,7 @@ impl Menu {
 }
 fn menu_items(_: &Menu) -> Vec<Option<Stack>> { vec![] }
 fn changed_slots(_: &[Option<Stack>], _: &Menu) -> Vec<(i16, Option<Stack>)> { vec![] }
+PREDICTION
 #[derive(Default)] struct Game { menu: Menu, carried: Option<Stack>, swings: usize }
 impl Game {
     fn crafter_slot_clicked(&mut self, _: usize, _: i32, _: Input) {}
@@ -85,7 +92,7 @@ fn main() {
     game.remote_menu_ops(&[(Some(0), 0, Input::Swap)]);
     assert_eq!(game.swings, 2, "empty slots and swaps must not swing");
 }
-'''.replace("METHOD", method(source, "remote_menu_ops"))
+'''.replace("METHOD", method(source, "remote_menu_ops")).replace("PREDICTION", prediction)
         self.compile_and_run(fixture)
 
     @unittest.skipUnless(shutil.which("rustc"), "requires Rust")

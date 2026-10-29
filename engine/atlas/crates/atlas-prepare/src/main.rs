@@ -96,7 +96,7 @@ fn main() -> ExitCode {
             }
         };
         let parsed = match flag.as_str() {
-            "--prepare" | "--server-jar" if assets.is_some() => {
+            "--prepare" | "--server-jar" if assets.is_some() && assets.as_deref() != Some(std::ffi::OsStr::new("compile-exporters")) => {
                 Err(format!("{flag} is for preparing, not for asset copying"))
             }
             "--prepare" if inline.is_none() => {

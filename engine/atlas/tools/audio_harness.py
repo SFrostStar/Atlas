@@ -26,8 +26,9 @@ COMMON_SOURCES = [
     lab.ROOT / 'Cargo.toml',
     lab.ROOT / 'Cargo.lock',
     lab.ROOT / 'crates/atlas-client/Cargo.toml',
-    lab.ROOT / 'crates/atlas-client/src/sound_events.rs',
-    lab.ROOT / 'crates/atlas-client/src/sound_engine.rs',
+    lab.ROOT / 'crates/atlas-client-render/Cargo.toml',
+    lab.ROOT / 'crates/atlas-client-render/src/sound_events.rs',
+    lab.ROOT / 'crates/atlas-client-render/src/sound_engine.rs',
 ]
 
 

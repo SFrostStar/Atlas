@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('atlas', {
   getState: () => ipcRenderer.invoke('atlas:get-state'),
+  updateInstance: (id,patch) => ipcRenderer.invoke('atlas:update-instance', id,patch),
+  supportGift: () => ipcRenderer.invoke('atlas:support-gift'),
+  dismissSupport: () => ipcRenderer.invoke('atlas:dismiss-support'),
+  startInstall: () => ipcRenderer.invoke('atlas:start-install'),
+  cancelInstall: () => ipcRenderer.invoke('atlas:cancel-install'),
+  chooseMinecraftInstall: () => ipcRenderer.invoke('atlas:choose-minecraft-install'),
   createInstance: (input) => ipcRenderer.invoke('atlas:create-instance', input),
   selectInstance: (id) => ipcRenderer.invoke('atlas:select-instance', id),
   deleteInstance: (id) => ipcRenderer.invoke('atlas:delete-instance', id),

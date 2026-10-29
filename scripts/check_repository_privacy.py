@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_DIRS = {"data", "work", "runtime", "node_modules", "target", ".local",
+PRIVATE_DIRS = {"data", "work", "runtime", "bundle", "node_modules", "target", ".local", "dist",
                 "saves", "worlds", "backups", "screenshots", "crash-reports",
                 "logs", "run", "minecraft", "decompiled", "auth-sessions",
                 ".atlas-cache", ".horizon-cache"}
@@ -24,6 +24,7 @@ SECRET = re.compile(rb"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,
 def prohibited(name):
     path = PurePosixPath(name)
     return (any(p in PRIVATE_DIRS for p in path.parts)
+            or (path.parts and path.parts[0] == "docs")
             or (path.parts and path.parts[0] == "tools")
             or path.name in PRIVATE_NAMES or path.suffix.lower() in PRIVATE_SUFFIXES
             or (path.name.startswith(".env") and path.name != ".env.example")

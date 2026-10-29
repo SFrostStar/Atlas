@@ -30,21 +30,21 @@
       <button class="add-sidebar" data-action="new-instance"><i data-lucide="plus"></i>Добавить сборку</button>
       <div class="sidebar-bottom">
         <button class="nav-item" data-page="settings"><i data-lucide="settings-2"></i>Настройки</button>
-        <div class="sidebar-footer"><span>Atlas <b>0.1</b></span></div>
+
       </div>
     </aside>
     <main>
-      <header class="page-header"><div class="breadcrumb"><strong id="breadcrumb-current">Главная</strong></div><span class="local-badge"><span class="status-dot"></span>Atlas 26.3</span></header>
+      <header class="page-header"><div class="support-notice" id="support-notice"><button class="support-link" data-action="support-gift"><i data-lucide="gift"></i><span>Поддержать подарком</span></button><button class="bare" data-action="dismiss-support" aria-label="Скрыть предложение поддержки"><i data-lucide="x"></i></button></div><span class="local-badge"><span class="status-dot"></span>Atlas 26.3</span></header>
       <div class="content" id="content"></div>
-      <footer class="statusbar"><span><span class="status-dot" id="footer-dot"></span><span id="footer-status">Готово</span></span><span>Atlas 26.3 <span class="footer-separator">/</span> <span id="footer-version">0.1</span></span></footer>
     </main>
   </div>
   <dialog id="instance-dialog">
     <form id="instance-form">
-      <div class="dialog-top"><h2>Новая сборка</h2><button class="bare" type="button" data-action="close-dialog" aria-label="Закрыть"><i data-lucide="x"></i></button></div>
+      <div class="dialog-top"><h2 id="instance-dialog-title">Новая сборка</h2><button class="bare" type="button" data-action="close-dialog" aria-label="Закрыть"><i data-lucide="x"></i></button></div>
       <label class="field">Название<input id="instance-name" name="name" maxlength="48" placeholder="Название сборки" required autocomplete="off"></label>
       <label class="field">Описание <span class="optional">необязательно</span><input name="description" maxlength="140" placeholder="Описание"></label>
-      <fieldset class="color-field"><legend>Цвет сборки</legend><div class="color-options"><label><input type="radio" name="accent" value="amber" aria-label="Песочный" checked><span class="color-swatch sand"></span></label><label><input type="radio" name="accent" value="mint" aria-label="Шалфейный"><span class="color-swatch sage"></span></label><label><input type="radio" name="accent" value="blue" aria-label="Синий"><span class="color-swatch blue"></span></label><label><input type="radio" name="accent" value="violet" aria-label="Фиолетовый"><span class="color-swatch purple"></span></label></div></fieldset>
+      <fieldset class="color-field"><legend>Цвет сборки</legend><div class="color-options" id="instance-colors"></div></fieldset>
+      <fieldset class="icon-field"><legend>Значок сборки</legend><div class="icon-options" id="instance-icons"></div></fieldset>
       <p class="form-error" id="form-error" role="alert"></p>
       <div class="dialog-footer"><button class="button secondary" type="button" data-action="close-dialog">Отмена</button><button class="button primary" type="submit"><i data-lucide="plus"></i>Создать сборку</button></div>
     </form>
@@ -58,10 +58,23 @@
       <div class="dialog-footer"><button class="button secondary" type="button" data-action="close-delete">Отмена</button><button class="button danger" type="submit"><i data-lucide="trash-2"></i>В корзину</button></div>
     </form>
   </dialog>
+  <dialog id="install-dialog" aria-labelledby="install-title" aria-describedby="install-description">
+    <div class="dialog-top"><div class="install-brand"><img src="assets/icon.png" alt="" width="32" height="32"><h2 id="install-title">Файлы игры не установлены</h2></div><button class="bare" type="button" data-action="close-install" aria-label="Закрыть"><i data-lucide="x"></i></button></div>
+    <p class="subtitle" id="install-description">Скачивание файлов игры</p>
+    <div class="install-status" id="install-status" hidden>
+      <div class="install-progress-heading"><strong id="install-stage"></strong><span id="install-progress-value"></span></div>
+      <progress id="install-progress" max="100" aria-label="Подготовка игры"></progress>
+      <p id="install-detail" class="subtitle"></p>
+    </div>
+    <p id="install-error" class="form-error" role="alert" hidden></p>
+    <div class="install-options"><button type="button" class="button secondary" data-action="import-minecraft"><i data-lucide="folder-open"></i>Выбрать установленный Minecraft</button></div>
+    <div class="dialog-footer"><button type="button" class="button secondary" data-action="cancel-install">Отмена</button><button type="button" class="button primary" data-action="start-install"><i data-lucide="download"></i><span id="install-start-label">Скачать и подготовить</span></button></div>
+  </dialog>
   <div class="context-menu" id="context-menu" role="menu" hidden></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="node_modules/lucide/dist/umd/lucide.js"></script>
   <script src="i18n.js"></script>
+  <script src="instance-options.js"></script>
   <script src="app-settings.js"></script>
   <script src="renderer.js"></script>
 </body>

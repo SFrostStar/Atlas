@@ -75,11 +75,29 @@
     'Твоя первая сборка Atlas':'Your first Atlas instance', 'Вернуться':'Back', 'ещё окно':'another window',
     'Песочный':'Sand', 'Шалфейный':'Sage'
   };
+  Object.assign(en, {
+    'Редактировать':'Edit','Переименовать':'Rename','Редактировать сборку':'Edit instance','Переименовать сборку':'Rename instance','Сохранить':'Save','Значок сборки':'Instance icon','Сборка обновлена':'Instance updated',
+    'Некорректный цвет сборки.':'Invalid instance color.','Некорректный значок сборки.':'Invalid instance icon.','Некорректные параметры сборки.':'Invalid instance settings.',
+    'Поддержать подарком':'Support with a gift','Скрыть предложение поддержки':'Dismiss support notice',
+    'Файлы игры не установлены':'Game files are not installed','Скачать и подготовить':'Download and prepare','Выбрать установленный Minecraft':'Choose installed Minecraft',
+    'Подготовка игры':'Setting up game','Нужна подготовка игры':'Game setup required','Скачивание файлов':'Downloading files','Проверка файлов':'Verifying files','Подготовка ресурсов':'Preparing resources','Установка клиента':'Installing client',
+    'Игра готова':'Game is ready','Не удалось подготовить игру':'Game setup failed','Загрузка отменена':'Download cancelled','Это может занять несколько минут.':'This can take a few minutes.',
+    'Скачивание файлов игры':'Downloading game files',
+    'Отменить загрузку':'Cancel download','Закрой игру перед подготовкой файлов.':'Close the game before setup.','Повторить':'Retry','Начать установку':'Start setup','В этой сборке нет файлов для подготовки игры. Установи полный пакет Atlas.':'This Atlas build is missing its preparation payload. Install the complete launcher package.',
+    'В этой сборке нет игрового клиента. Установи полный пакет Atlas.':'This Atlas build is missing its game payload. Install the complete launcher package.',
+    'В этой сборке нет atlas-prepare.exe. Установи полный пакет Atlas.':'This Atlas build is missing atlas-prepare.exe. Install the complete launcher package.',
+    'Скачанный файл не прошёл проверку целостности.':'Downloaded file failed its checksum check.',
+    'Подготовленные ресурсы игры неполные.':'Prepared game resources are incomplete.',
+    'Выбери встроенный клиент Atlas перед установкой.':'Choose the bundled Atlas client before setup.',
+    'Метаданные Minecraft не соответствуют версии Atlas.':'Minecraft metadata does not match this Atlas version.',
+    'У Mojang нет подходящей Java для этой платформы.':'Mojang has no compatible Java runtime for this platform.',
+    'Среда Java установлена не полностью.':'Java runtime is incomplete.'
+  });
   function t(text, language = 'ru') {
     if (typeof text !== 'string') return text;
     const translatedAccountError = accountError(text, language);
     if (translatedAccountError !== text) return translatedAccountError;
-    if (language !== 'en') return text;
+    if (language !== 'en') { const reverse=Object.keys(en).find(key=>en[key]===text.trim()); return reverse?text.replace(text.trim(),reverse):text; }
     const trimmed = text.trim();
     if (Object.hasOwn(en, trimmed)) return text.replace(trimmed, en[trimmed]);
     // Only translate known UI prefixes; account and instance names remain untouched.

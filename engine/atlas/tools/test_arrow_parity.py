@@ -225,7 +225,7 @@ def main():
         'VanillaFaceSupportOracle', 'VanillaEntityAttributeOracle', 'VanillaBlockLandingOracle', 'VanillaMovementRegistryOracle', 'VanillaDamageSourceOracle']]
     sources = [Path(__file__), lab.ROOT / 'tools/test_native_client.py', lab.ROOT / 'tools/test_rust_parity.py', lab.ROOT / 'tools/lab.py',
                oracle, *helpers, lab.ROOT / 'Cargo.toml', lab.ROOT / 'Cargo.lock', lab.ROOT / 'crates/atlas-client/examples/probe/arrow_probe.rs']
-    for crate in ['atlas-core', 'atlas-world', 'atlas-assets', 'atlas-client']:
+    for crate in ['atlas-core', 'atlas-world', 'atlas-assets', 'atlas-client', 'atlas-client-render']:
         sources += [lab.ROOT / 'crates' / crate / 'Cargo.toml', *sorted((lab.ROOT / 'crates' / crate / 'src').rglob('*.rs'))]
     tested = base.source_hashes(sources)
     def run(command, name):

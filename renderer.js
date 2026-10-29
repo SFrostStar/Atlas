@@ -8,9 +8,13 @@ let selectedGameSessionId = null;
 let contextMenuState = null;
 let contextMenuSignature = '';
 let deleteInstanceId = null;
+let editInstanceId=null;
+let renameOnly=false;
 let toastTimer;
+let installIntent = null;
+let installActionPending = false;
 const titles = { home: 'Главная', instances: 'Мои сборки', workshop: 'Мастерская', settings: 'Настройки', logs: 'Журнал запуска' };
-const accents = { mint: '#86b3a2', amber: '#e8a16b', blue: '#94a8db', violet: '#ba9ccc', rose: '#eab28d' };
+const accents = AtlasInstanceOptions.colors;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
 const selected = () => state.instances.find(i => i.id === state.selectedId) || state.instances[0];
@@ -23,7 +27,7 @@ const selectedInstanceRunning = () => gameSessions().length
   ? gameSessions().some(session => session.instanceId === state.selectedId)
   : Boolean(state.game?.running && state.game.instanceId === state.selectedId);
 const accent = instance => accents[instance.accent] || accents.amber;
-const cube = (instance, extra = '') => `<span class="instance-cube ${extra}" style="--accent:${accent(instance)}">${icon('box')}</span>`;
+const cube = (instance, extra = '') => `<span class="instance-cube ${extra}" style="--accent:${accent(instance)}">${icon(AtlasInstanceOptions.icons.includes(instance.icon)?instance.icon:'box')}</span>`;
 const button = (action, label, glyph = '', kind = 'secondary', attrs = '') => `<button type="button" class="button ${kind}" data-action="${action}" ${attrs}>${glyph ? icon(glyph) : ''}${label}</button>`;
 function hydrateIcons() { if (window.lucide) window.lucide.createIcons({ attrs: { 'stroke-width': 1.65 } }); }
 function notify(message, error = false) {
@@ -41,6 +45,82 @@ async function invoke(operation, message) {
     return result;
   } catch (error) { notify(error.message, true); return null; }
 }
+function installActive() { return Boolean(state?.install?.active || state?.install?.status === 'running'); }
+function openInstall(instanceId) {
+  installIntent = { instanceId, startRequested: false };
+  renderInstall();
+  const dialog = document.getElementById('install-dialog');
+  if (!dialog.open) dialog.showModal();
+}
+function closeInstall() {
+  if (installActive()) return;
+  installIntent = null;
+  document.getElementById('install-dialog').close();
+}
+async function launchWithSetup(instanceId) {
+  busy=true; render();
+  try {
+    const result=await invoke(()=>window.atlas.launch(instanceId));
+    if(result?.install?.needsSetup)openInstall(instanceId);
+  } finally {busy=false;render();}
+}
+function renderInstall() {
+  const dialog=document.getElementById('install-dialog');
+  if(!dialog || (!dialog.open && !installIntent))return;
+  const install=state.install||{};
+  const phase=install.phase||install.status||'idle';
+  const active=installActive();
+  const phases={idle:'Файлы игры не установлены',download:'Скачивание файлов',verify:'Проверка файлов',prepare:'Подготовка ресурсов',install:'Установка клиента',ready:'Игра готова',error:'Не удалось подготовить игру',cancelled:'Загрузка отменена'};
+  document.getElementById('install-title').textContent=tr(active?'Подготовка игры':phase==='error'?'Не удалось подготовить игру':phase==='cancelled'?'Загрузка отменена':'Файлы игры не установлены');
+  const status=document.getElementById('install-status');
+  status.hidden=!active && !['cancelled','ready'].includes(phase);
+  document.getElementById('install-stage').textContent=tr(phases[phase]||'Подготовка игры');
+  const bar=document.getElementById('install-progress');
+  const raw=typeof install.progress==='number' && Number.isFinite(install.progress)?install.progress:null;
+  const percent=raw===null?null:Math.max(0,Math.min(100,raw<=1?raw*100:raw));
+  if(percent===null)bar.removeAttribute('value');else bar.value=percent;
+  const count=Number.isFinite(install.total)&&install.total>0?`${Math.min(install.completed||0,install.total)} / ${install.total}`:'';
+  document.getElementById('install-progress-value').textContent=percent===null?count:`${Math.floor(percent)}%`;
+  const bytes=Number.isFinite(install.bytesTotal)&&install.bytesTotal>0?`${Math.floor((install.bytesDone||0)/1024**2)} / ${Math.ceil(install.bytesTotal/1024**2)} ${tr('МБ')}`:'';
+  document.getElementById('install-detail').textContent=active?(bytes||count||tr('Это может занять несколько минут.')):phase==='cancelled'?tr('Повторный запуск продолжит подготовку.'):'';
+  const error=document.getElementById('install-error');
+  error.hidden=!install.error;
+  error.textContent=install.error?tr(install.error.message||install.error):'';
+  document.getElementById('install-start-label').textContent=tr(['error','cancelled'].includes(phase)?'Повторить':'Скачать и подготовить');
+  dialog.querySelector('[data-action="start-install"]').disabled=active||installActionPending;
+  dialog.querySelector('[data-action="import-minecraft"]').disabled=active||installActionPending;
+  dialog.querySelector('[data-action="close-install"]').disabled=active||installActionPending;
+  const cancel=dialog.querySelector('[data-action="cancel-install"]');
+  cancel.disabled=installActionPending||(active&&install.canCancel===false);
+  cancel.textContent=tr(active?'Отменить загрузку':'Отмена');
+  AtlasI18n.translateTree(dialog,state.settings.language);
+  if(installIntent?.startRequested && !active && install.status==='ready' && install.ready && !install.error){
+    const id=installIntent.instanceId;
+    installIntent=null;
+    dialog.close();
+    queueMicrotask(()=>launchWithSetup(id));
+  }
+}
+async function runInstall(importExisting=false) {
+  if(installActionPending||installActive()||!installIntent)return;
+  installActionPending=true;
+  installIntent.startRequested=true;
+  renderInstall();
+  try {
+    const result=await invoke(()=>importExisting?window.atlas.chooseMinecraftInstall():window.atlas.startInstall());
+    if(!result || (importExisting && result.install?.status==='idle' && !result.install?.active)) {
+      if(installIntent)installIntent.startRequested=false;
+    }
+  } finally {installActionPending=false;renderInstall();}
+}
+async function cancelInstall() {
+  if(installActionPending)return;
+  if(installIntent)installIntent.startRequested=false;
+  if(!installActive()){closeInstall();return;}
+  installActionPending=true;renderInstall();
+  try{await invoke(()=>window.atlas.cancelInstall());}
+  finally{installActionPending=false;renderInstall();}
+}
 function intro(title, subtitle, action = '') {
   return `<div class="page-intro"><h1>${title}</h1>${action}</div>`;
 }
@@ -50,15 +130,15 @@ function tabNavigation() {
 function homePage() {
   const instance = selected();
   const selectedRunning = selectedInstanceRunning();
-  const top = intro('Главная', '', button('new-instance','Новая сборка','plus')) + tabNavigation();
+  const top = intro('Главная', '') + tabNavigation();
   if (currentTab === 'files') return top + filePage();
   return top + `<section class="hero" aria-label="Пейзаж Atlas"><div class="hero-copy"><h2>Твой мир.<br>Твои правила.</h2></div></section>
-  <div class="launch-bar"><div class="launch-main">${cube(instance)}<div class="launch-info"><strong>${escapeHtml(instance.name)}</strong><span><span class="status-dot"></span>${selectedRunning ? 'Игра запущена' : state.runtimeAvailable ? 'Готово к запуску' : 'Выбери клиент в настройках'}</span></div><div class="launch-meta"><b>Atlas 26.3</b></div>${selectedRunning ? button('game-menu','Игра запущена','chevron-down','primary launch-button',`aria-haspopup="menu" aria-expanded="${contextMenuState?.type==='game'}" ${pendingGameAction?'disabled':''}`) : button('launch',busy?'Запускаем…':'Играть','play','primary launch-button',busy||pendingGameAction?'disabled':'')}</div></div>
+  <div class="launch-bar"><div class="launch-main">${cube(instance)}<div class="launch-info"><strong>${escapeHtml(instance.name)}</strong><span><span class="status-dot"></span>${selectedRunning ? 'Игра запущена' : installActive()?'Подготовка игры':state.install && !state.install.ready?'Нужна подготовка игры':state.runtimeAvailable ? 'Готово к запуску' : 'Выбери клиент в настройках'}${selectedRunning?` · <span class="playtime" data-session-id="${activeGameSession()?.id}"></span>`:''}</span></div>${selectedRunning ? button('game-menu','Игра запущена','chevron-down','running launch-button',`aria-haspopup="menu" aria-expanded="${contextMenuState?.type==='game'}" ${pendingGameAction?'disabled':''}`) : button('launch',busy?'Запускаем…':installActive()?'Подготовка игры':'Играть','play','primary launch-button',busy||pendingGameAction||installActive()?'disabled':'')}</div></div>
   <div class="quick-grid"><button class="quick-card" data-open="project">${icon('folder-open')}<strong>Корневая папка</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button><button class="quick-card" data-page="workshop">${icon('code-2')}<strong>Исходники</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button><button class="quick-card" data-open="resourcepacks">${icon('package-open')}<strong>Ресурспаки</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button></div>
   `;
 }
 function instancesPage() {
-  return intro('Мои сборки', '', button('new-instance','Новая сборка','plus')) + `<div class="instance-grid">${state.instances.map(instance => `<article class="instance-card" data-instance="${instance.id}" style="--accent:${accent(instance)}"><div class="instance-cover">${icon('box')}${instance.id===state.selectedId?'<span class="tag">Выбрана</span>':''}</div><div class="instance-body"><h3>${escapeHtml(instance.name)}</h3>${instance.description?`<p>${escapeHtml(instance.description)}</p>`:''}<div class="instance-card-footer"><small>Atlas 26.3</small><div><button class="bare" data-open="instance" data-id="${instance.id}" aria-label="Открыть папку ${escapeHtml(instance.name)}">${icon('folder-open')}</button>${button('select-instance',instance.id===state.selectedId?'Открыть':'Выбрать','arrow-up-right','secondary',`data-id="${instance.id}"`)}<button class="bare" data-action="instance-menu" data-id="${instance.id}" aria-label="Действия со сборкой ${escapeHtml(instance.name)}" aria-haspopup="menu">${icon('ellipsis-vertical')}</button></div></div></div></article>`).join('')}<button class="instance-new" data-action="new-instance">${icon('plus')}<span>Новая сборка</span></button></div>`;
+  return intro('Мои сборки', '', button('new-instance','Новая сборка','plus')) + `<div class="instance-grid">${state.instances.map(instance => `<article class="instance-card" data-instance="${instance.id}" style="--accent:${accent(instance)}"><div class="instance-cover">${icon(AtlasInstanceOptions.icons.includes(instance.icon)?instance.icon:'box')}${instance.id===state.selectedId?'<span class="tag">Выбрана</span>':''}</div><div class="instance-body"><h3>${escapeHtml(instance.name)}</h3>${instance.description?`<p>${escapeHtml(instance.description)}</p>`:''}<div class="instance-card-footer"><small>Atlas 26.3</small><div><button class="bare" data-open="instance" data-id="${instance.id}" aria-label="Открыть папку ${escapeHtml(instance.name)}">${icon('folder-open')}</button>${button('select-instance',instance.id===state.selectedId?'Открыть':'Выбрать','arrow-up-right','secondary',`data-id="${instance.id}"`)}<button class="bare" data-action="instance-menu" data-id="${instance.id}" aria-label="Действия со сборкой ${escapeHtml(instance.name)}" aria-haspopup="menu">${icon('ellipsis-vertical')}</button></div></div></div></article>`).join('')}<button class="instance-new" data-action="new-instance">${icon('plus')}<span>Новая сборка</span></button></div>`;
 }
 function filePage() {
   const instance = selected();
@@ -88,15 +168,15 @@ function render() {
   const contentScroll = document.getElementById('content').scrollTop;
   applyAppearance();
   document.querySelectorAll('.nav-item[data-page]').forEach(element => element.classList.toggle('active', element.dataset.page===currentPage));
-  document.getElementById('breadcrumb-current').textContent = titles[currentPage];
+  document.getElementById('support-notice').hidden = state.supportVisible===false;
   document.getElementById('instance-count').textContent = state.instances.length;
   document.getElementById('sidebar-instances').innerHTML = state.instances.map(instance=>`<button class="sidebar-instance ${instance.id===state.selectedId?'selected':''}" data-action="select-instance" data-id="${instance.id}">${cube(instance)}<span>${escapeHtml(instance.name)}</span></button>`).join('');
   const renderer = {home:homePage,instances:instancesPage,workshop:workshopPage,settings:settingsPage,logs:logsPage};
   document.getElementById('content').innerHTML = renderer[currentPage]();
-  document.getElementById('footer-status').textContent = state.game?.count>1?`Запущено окон: ${state.game.count}`:state.game?.running?'Игра запущена · '+(state.instances.find(i=>i.id===state.game.instanceId)?.name||'Atlas'):'Готово';
-  document.getElementById('footer-version').textContent = state.version;
   hydrateIcons();
   if (contextMenuState) renderContextMenu();
+  renderInstall();
+  updatePlaytime();
   AtlasI18n.translateTree(document.body,state.settings.language);
   document.getElementById('content').scrollTop = contentScroll;
   if (editable?.name) {
@@ -135,7 +215,7 @@ function renderContextMenu() {
     if(!instance){closeContextMenu();return;}
     const running=gameSessions().some(session=>session.instanceId===instance.id);
     const reason=running?'Сначала закрой окна этой сборки':state.instances.length===1?'Должна остаться хотя бы одна сборка':'';
-    html=`<div class="context-heading">${escapeHtml(instance.name)}</div>${item('menu-open-instance','Открыть папку','folder-open',`data-id="${instance.id}"`)}${item('delete-instance','Удалить сборку','trash-2',`data-id="${instance.id}" ${reason?`disabled title="${reason}"`:''}`)}`;
+    html=`<div class="context-heading">${escapeHtml(instance.name)}</div>${item('edit-instance','Редактировать','pencil',`data-id="${instance.id}"`)}${item('rename-instance','Переименовать','text-cursor-input',`data-id="${instance.id}"`)}${item('menu-open-instance','Открыть папку','folder-open',`data-id="${instance.id}"`)}${item('delete-instance','Удалить сборку','trash-2',`data-id="${instance.id}" ${reason?`disabled title="${reason}"`:''}`)}`;
     menu.setAttribute('aria-label','Действия со сборкой');
   }else{
     const session=gameSessions().find(item=>item.id===menuState.sessionId);
@@ -199,9 +279,11 @@ document.addEventListener('click', async event => {
   const action = control.dataset.action;
   if(control.closest('#context-menu')&&action!=='choose-game-session')closeContextMenu();
   if (action === 'new-instance') {
-    document.getElementById('instance-form').reset(); document.getElementById('form-error').textContent='';
-    AtlasI18n.translateTree(document.body,state.settings.language); document.getElementById('instance-dialog').showModal(); document.getElementById('instance-name').focus();
-  } else if (action === 'close-dialog') document.getElementById('instance-dialog').close();
+    openInstanceEditor();
+  } else if(action==='edit-instance'||action==='rename-instance'){openInstanceEditor(control.dataset.id,action==='rename-instance');}
+  else if(action==='support-gift')await invoke(()=>window.atlas.supportGift());
+  else if(action==='dismiss-support')await invoke(()=>window.atlas.dismissSupport());
+  else if (action === 'close-dialog') document.getElementById('instance-dialog').close();
   else if (action === 'close-delete') document.getElementById('delete-dialog').close();
   else if (action === 'instance-menu' || action === 'game-menu') {
     const rect=control.getBoundingClientRect();
@@ -223,10 +305,12 @@ document.addEventListener('click', async event => {
   }
   else if (action === 'select-instance') { const next = await invoke(()=>window.atlas.selectInstance(control.dataset.id)); if(next){currentPage='home';currentTab='overview';render();} }
   else if (action === 'launch' && !busy) {
-    busy=true; render();
-    try { await invoke(()=>window.atlas.launch(state.selectedId)); }
-    finally { busy=false; render(); }
+    await launchWithSetup(state.selectedId);
   }
+  else if(action==='start-install')await runInstall();
+  else if(action==='import-minecraft')await runInstall(true);
+  else if(action==='cancel-install')await cancelInstall();
+  else if(action==='close-install')closeInstall();
   else if (['stop-game','restart-game','another-game'].includes(action) && !pendingGameAction) {
     const session = control.dataset.sessionId ? gameSessions().find(item=>item.id===control.dataset.sessionId) : activeGameSession();
     if(!session){notify('Это окно уже закрыто.',true);return;}
@@ -264,8 +348,9 @@ document.getElementById('instance-form').addEventListener('submit', async event 
   const data = new FormData(event.currentTarget);
   const submit = event.currentTarget.querySelector('[type="submit"]');submit.disabled=true;
   try {
-    state = await window.atlas.createInstance({ name:data.get('name'), description:data.get('description'), accent:data.get('accent') });
-    document.getElementById('instance-dialog').close(); currentPage='instances';render();notify('Сборка создана');
+    const patch={name:data.get('name'),description:data.get('description'),accent:data.get('accent'),icon:data.get('icon')};
+    state=editInstanceId?await window.atlas.updateInstance(editInstanceId,renameOnly?{name:patch.name}:patch):await window.atlas.createInstance(patch);
+    document.getElementById('instance-dialog').close(); if(!editInstanceId)currentPage='instances';render();notify(editInstanceId?'Сборка обновлена':'Сборка создана');
   } catch(error) { document.getElementById('form-error').textContent=tr(error.message.replace(/^Error invoking remote method '[^']+': Error: /,'')); }
   finally { submit.disabled=false; }
 });
@@ -283,6 +368,7 @@ document.getElementById('delete-form').addEventListener('submit',async event=>{
   finally{submit.disabled=false;}
 });
 window.atlas.onGameEvent(next=>{state=next;if(next.game?.running)busy=false;render();});
+document.getElementById('install-dialog').addEventListener('cancel',event=>{event.preventDefault();cancelInstall();});
 const initialStateReady = (async()=>{try{state=await window.atlas.getState();render();}catch(error){document.getElementById('content').textContent='Не удалось загрузить Atlas: '+error.message;}})();
 {
   const splash = document.getElementById('boot-splash');
@@ -298,3 +384,28 @@ const initialStateReady = (async()=>{try{state=await window.atlas.getState();ren
     window.dispatchEvent(new CustomEvent('atlas:ready', { detail: { splashDuration: performance.now() - startedAt } }));
   }, remaining);
 }
+
+function openInstanceEditor(id=null,onlyName=false){
+ editInstanceId=id;renameOnly=onlyName;
+ const instance=id?state.instances.find(i=>i.id===id):null;
+ const form=document.getElementById('instance-form');form.reset();
+ document.getElementById('instance-dialog-title').textContent=tr(id?(onlyName?'Переименовать сборку':'Редактировать сборку'):'Новая сборка');
+ document.getElementById('form-error').textContent='';
+ form.elements.name.value=instance?.name||'';form.elements.description.value=instance?.description||'';
+ const colors={amber:'Оранжевый',mint:'Шалфейный',blue:'Синий',violet:'Фиолетовый',rose:'Розовый'};
+ document.getElementById('instance-colors').innerHTML=Object.entries(accents).map(([name,color])=>`<label><input type="radio" name="accent" value="${name}" aria-label="${tr(colors[name])}" ${(instance?.accent||'amber')===name?'checked':''}><span class="color-swatch" style="background:${color}"></span></label>`).join('');
+ document.getElementById('instance-icons').innerHTML=AtlasInstanceOptions.icons.map(name=>`<label><input type="radio" name="icon" value="${name}" aria-label="${name}" ${(instance?.icon||'box')===name?'checked':''}><span>${icon(name)}</span></label>`).join('');
+ for(const element of [form.elements.description.closest('.field'),form.querySelector('.color-field'),form.querySelector('.icon-field')])element.hidden=onlyName;
+ const submit=form.querySelector('[type="submit"]');submit.textContent=tr(id?'Сохранить':'Создать сборку');
+ hydrateIcons();AtlasI18n.translateTree(document.body,state.settings.language);
+ document.getElementById('instance-dialog').showModal();document.getElementById('instance-name').focus();
+}
+function updatePlaytime(){
+ for(const element of document.querySelectorAll('.playtime')){
+  const session=gameSessions().find(item=>item.id===element.dataset.sessionId);
+  const seconds=Math.max(0,Math.floor((Date.now()-(session?.startedAt||Date.now()))/1000));
+  const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;
+  element.textContent=(h?String(h)+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+ }
+}
+setInterval(updatePlaytime,1000);

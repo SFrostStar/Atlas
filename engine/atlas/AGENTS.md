@@ -13,13 +13,15 @@ Feature → files → harness for the most-changed areas: [docs/architecture.md]
   `XDG_CONFIG_HOME`, plus `ATLAS_LAUNCHER_NO_SELF_UPDATE=1` and `ATLAS_NO_AUDIO=1`, and, for the
   launcher, `ATLAS_LAUNCHER_TRASH`, `ATLAS_LAUNCHER_CLIPBOARD` and `ATLAS_LAUNCHER_DESKTOP` pointing into the scratch home. Never write to
   `~/.local/share/{applications,atlas,atlas-launcher}` or `~/.local/bin`.
-- **Mark what an agent posts.** A PR body starts with a line naming whose agent opened it and with what.
-  Ludovic's agents write `> 🤖 Opened by Ludovic's AI agent (Claude), not by Ludovic himself.`, and a
-  contributor's agent names its own person and tool (issues: "Filed by", reviews: "Review by"). Every
-  comment starts with `🤖 Agent:`. Never write as Ludovic or as anyone else.
+- **Mark what an agent posts.** A PR body starts with a line naming the person whose agent opened it and
+  the tool: `> 🤖 Opened by <login>'s AI agent (<tool, model>), not by <login> personally.`, where `<login>`
+  is the GitHub account the PR is opened from (`gh api user --jq .login`). Issues say "Filed by", reviews
+  "Review by". Every comment starts with `🤖 Agent:`. Write only as the person you work for: the lines on
+  this page that name Ludovic are for his own agents (account `ludovic111`), never for anyone else's.
 - **Attribution.** Commits end with a `Co-Authored-By:` line for the agent that wrote them, and PR bodies
-  with that agent's own "Generated with" line. Ludovic's agents use
-  `Co-Authored-By: Claude <model> <noreply@anthropic.com>` and
+  with that agent's own "Generated with" line. Example, Ludovic's agents (Claude Code on `ludovic111`):
+  first line `> 🤖 Opened by Ludovic's AI agent (Claude), not by Ludovic himself.`, commits
+  `Co-Authored-By: Claude <model> <noreply@anthropic.com>`, last line
   `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 - Everything players run is Rust. Python/Java only for dev tools and harness drivers in `tools/`.
 - Atlas-only features follow [docs/design-system.md](docs/design-system.md) and are off by default where
@@ -35,11 +37,12 @@ Game workspace (root `Cargo.toml`); `launcher/` and `crates/atlas-telemetry-serv
 
 | Crate | Owns |
 |---|---|
-| `atlas-client` | The game: a lib (`src/lib.rs`, ~170 flat modules) and the bin (`src/main.rs` → `game.rs` + `game/`), plus `atlas-ctl` (`src/bin/atlas-ctl/`). Also the dedicated server (`--dedicated`) |
+| `atlas-client` | The game: a lib (`src/lib.rs`, ~100 flat modules: gameplay, networking, title screens) and the bin (`src/main.rs` → `game.rs` + `game/`), plus `atlas-ctl` (`src/bin/atlas-ctl/`). Also the dedicated server (`--dedicated`) |
 | `atlas-items` | Blocks and items below gameplay: `blocks.rs` (block facts), `items.rs`, `item_data.rs` (components), `enchant.rs`, `cooldowns.rs`, `bundle.rs`, `item_nbt.rs`. Re-exported as `atlas_client::items`... |
 | `atlas-command` | Command parsing (Brigadier): the vanilla tree, argument types, selectors, suggestions, the tree's network form. Re-exported as `atlas_client::command` |
 | `atlas-client-core` | The client lib's bottom layer: `text.rs`, `lang.rs`, `snbt.rs`, `nbt_path.rs`, `component.rs`, `scoreboard.rs`, `bossbar.rs`, `gamerules.rs`, `block_entity_nbt.rs`, registry/particle/sound tables. Re-exported under the old paths (`atlas_client::text`...) |
 | `atlas-client-input` | Key bindings and key names, toggle keys, mouse options, controller settings and glyphs, the clipboard, window options (`keybinds.rs`, `gamepad.rs`, `mouse.rs`, `window.rs`...). Re-exported under the old paths |
+| `atlas-client-render` | The client's world data, rendering and screens (chunks, meshing, light, streaming, `gfx`, HUD, menus, settings): ~80 modules that atlas-client re-exports under the same paths. Nothing in it reaches gameplay |
 | `atlas-world` | Vanilla world data with no gameplay loop: NBT, regions, chunks, `datafix/`, `worldgen/`, `level/` (server-side block behaviour, ticks, redstone), entity physics, items, effects, food, damage |
 | `atlas-core` | Simulation primitives: Java `Random`s, `jmath` (HotSpot-exact `Math`), positions, noise, density, paletted storage, `version.rs` (the pinned version) |
 | `atlas-protocol` | Network protocol 777: codecs, framing, encryption, `packets/{handshake,status,login,configuration,play}.rs`, `entity_data.rs` |
@@ -73,7 +76,7 @@ cargo build --profile fast -p atlas-client        # optimized, quick to link: us
 python3 tools/parity.py --changed origin/main       # the harnesses your branch can affect (CI's parity job)
 python3 tools/parity.py --changed-files paths.txt --list   # which harnesses cover these files, without running them
 python3 tools/parity.py mob_ai sculk       # named harnesses
-python3 tools/lan_e2e.py --check chest     # two real games over LAN (server-thread host); --in-frame compares the fallback
+python3 tools/lan_e2e.py --check chest     # two real games over LAN (server-thread host)
 python3 tools/agent_control_e2e.py         # atlas-ctl / MCP end to end
 ```
 
@@ -99,6 +102,9 @@ python3 tools/agent_control_e2e.py         # atlas-ctl / MCP end to end
 
 ## Vanilla reference
 
+- Start parity work from the port ledger, not grep: `python3 tools/port_ledger.py issue N` (or `where
+  Class.method`, `what file:line`), and `check --base origin/main` before the PR. How:
+  [.claude/skills/vanilla-parity/SKILL.md](.claude/skills/vanilla-parity/SKILL.md), [docs/port-ledger.md](docs/port-ledger.md).
 - Decompiled sources: `.local/minecraft/26.3/sources/{client,server}/` (`python3 tools/lab.py decompile`).
 - Bytecode queries (callers through lambdas, every overload):
   `python3 tools/rea_vanilla.py method net.minecraft.world.level.block.DispenserBlock dispenseFrom`
@@ -110,7 +116,8 @@ python3 tools/agent_control_e2e.py         # atlas-ctl / MCP end to end
 
 ## atlas-client: where things live
 
-`L:` = lib (`crates/atlas-client/src/`), `G:` = bin (`crates/atlas-client/src/game/`). The lib can't see
+`L:` = lib (`crates/atlas-client/src/`, or `crates/atlas-client-render/src/` for the modules that crate holds, under
+the same `atlas_client::<module>` paths), `G:` = bin (`crates/atlas-client/src/game/`). The lib can't see
 `Game`; bin code reaches the lib as `atlas_client::<module>`.
 
 | Subsystem | Files |
@@ -162,17 +169,18 @@ python3 tools/agent_control_e2e.py         # atlas-ctl / MCP end to end
    "Server thread" with one level per dimension; the window joins it as a client through memory (`remote`),
    exactly as a LAN guest or a dedicated server's player does. This is what players run. Open
    `[server-thread]` issues list the gaps left.
-2. **In-frame (`--in-frame`, `--no-server-thread` or `ATLAS_SERVER_THREAD=0`):** the window's `Game` ticks
-   the world itself, one level that follows the player (`fn enter_dimension`). Deterministic rule fixtures still use this path; player-facing integration uses the default server thread.
+2. **In-frame (`--in-frame`, `--no-server-thread` or `ATLAS_SERVER_THREAD=0`): DEPRECATED, never use it, it
+   will be removed soon.** The window's `Game` ticks the world itself, one level that follows the player
+   (`fn enter_dimension`). Compatibility does not matter: don't add features or fixes for it, don't write new
+   tests against it, and move code off it when you touch it. The deterministic rule fixtures still run on it
+   until they are ported.
 
-LAN guests and dedicated servers always use the server code, so a fix there serves both. Test both paths
-when you touch player-facing gameplay:
+LAN guests and dedicated servers always use the server code, so a fix there serves both. Test the server
+thread when you touch player-facing gameplay:
 
 ```sh
 cargo run --profile fast -p atlas-client -- --resources .local/atlas-client/26.3 --world T               # server thread
-cargo run --profile fast -p atlas-client -- --resources .local/atlas-client/26.3 --world T --in-frame    # in-frame
 python3 tools/lan_e2e.py --check <name>                  # host on its server thread, guest is a server client
-python3 tools/lan_e2e.py --in-frame --check <name>       # comparison (portals, levels, distance, lava need server-thread mode)
 python3 tools/parity.py dedicated_server server_entities server_player_damage
 ```
 

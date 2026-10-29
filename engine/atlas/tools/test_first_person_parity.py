@@ -181,7 +181,7 @@ def main():
     harness.differential(
         'rust-first-person-parity', 'VanillaFirstPersonOracle', 'first_person_probe', make_cases, scope,
         sources=[lab.ROOT / 'crates/atlas-client/src/first_person.rs', lab.ROOT / 'crates/atlas-client/src/attack_strength.rs',
-                 lab.ROOT / 'crates/atlas-client/src/camera.rs',
+                 lab.ROOT / 'crates/atlas-client-render/src/camera.rs',
                  lab.ROOT / 'mods/atlas/src/test/java/dev/atlaslab/parity/ParityData.java'])
 
 

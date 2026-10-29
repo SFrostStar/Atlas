@@ -269,32 +269,30 @@ def parity_summary(output):
     return text
 
 
-# CI's verify job (.github/workflows/ci.yml): clippy over the whole workspace with the game's code mods, and over the
-# server build (the game without sound or controllers); tests with code mods and mod packaging.
-CI_CLIPPY = "cargo clippy --workspace --all-targets --locked --features atlas-client/mods -- -D warnings"
+# CI's verify job (.github/workflows/ci.yml): clippy over the whole workspace, and over the server build (the game
+# without sound or controllers); tests with mod packaging.
+CI_CLIPPY = "cargo clippy --workspace --all-targets --locked -- -D warnings"
 CI_CLIPPY_SERVER = "cargo clippy -p atlas-client --all-targets --locked --no-default-features -- -D warnings"
-CI_TEST_FEATURES = "atlas-client/mods,atlas-mods/pack"
+CI_TEST_FEATURES = "atlas-mods/pack"
 
 
 def mod_features(crates):
-    """The features CI's workspace-wide test run gives these crates (code mods are off by default: docs/mods.md).
-    Cargo unifies features over the packages it builds, so a crate tested alone needs the ones the workspace would
-    have turned on for it: atlas-client's code mods, and atlas-mods' runtime, packaging and index."""
+    """The features CI's workspace-wide test run gives these crates. Cargo unifies features over the packages it
+    builds, so a crate tested alone needs the ones the workspace would have turned on for it: atlas-mods' runtime,
+    packaging and index."""
     if crates is None:
         return f" --features {CI_TEST_FEATURES}"
     features = []
     if "atlas-mods" in crates:
         features += ["atlas-mods/runtime", "atlas-mods/pack", "atlas-mods/index"]
-    if "atlas-client" in crates:
-        features.append("atlas-client/mods")
     return f" --features {','.join(features)}" if features else ""
 
 
 # What atlas-client's full content-root tests load (mod_content_tests.rs). They take minutes on prepared data, so
 # they are #[ignore]d and run here only when one of these changes.
-CONTENT_ROOT = ("crates/atlas-client/src/mod_content", "crates/atlas-client/src/assets.rs", "crates/atlas-items/",
+CONTENT_ROOT = ("crates/atlas-client/src/mod_content", "crates/atlas-client-render/src/assets.rs", "crates/atlas-items/",
                 "crates/atlas-mods/", "crates/atlas-assets/")
-CONTENT_ROOT_TESTS = "cargo test --locked -p atlas-client --features atlas-client/mods --lib mod_content::tests:: -- --ignored"
+CONTENT_ROOT_TESTS = "cargo test --locked -p atlas-client --lib mod_content::tests:: -- --ignored"
 
 
 def plan(args, base, changed, crates_of, libraries, dependencies):

@@ -9,7 +9,7 @@ PACKAGES = {"atlas-core": "crates/atlas-core", "atlas-client": "crates/atlas-cli
             "atlas-theme": "crates/atlas-theme", "xtask": "xtask"}
 LIBRARIES = set(PACKAGES) - {"xtask"}
 DEPENDENCIES = {"atlas-client": {"atlas-core"}}
-MODS = " --features atlas-client/mods,atlas-mods/pack"
+MODS = " --features atlas-mods/pack"
 CLIPPY = pr_ready.CI_CLIPPY + " && " + pr_ready.CI_CLIPPY_SERVER
 
 
@@ -52,7 +52,7 @@ class PrReadyTests(unittest.TestCase):
         by_name = {step.name: step for step in steps}
         self.assertEqual(by_name["clippy"].command, CLIPPY)
         self.assertEqual(by_name["tests: atlas-client"].command,
-                         "cargo test --locked -p atlas-client --features atlas-client/mods --tests")
+                         "cargo test --locked -p atlas-client --tests")
         self.assertEqual(by_name["doc tests"].command, "cargo test --locked -p atlas-client --doc")
         self.assertIsNone(by_name["doc tests"].status)
 
@@ -81,7 +81,7 @@ class PrReadyTests(unittest.TestCase):
 
     def test_tests_get_the_features_ci_s_workspace_run_gives_them(self):
         self.assertEqual(pr_ready.mod_features(["atlas-world"]), "")
-        self.assertEqual(pr_ready.mod_features(["atlas-client"]), " --features atlas-client/mods")
+        self.assertEqual(pr_ready.mod_features(["atlas-client"]), "")
         self.assertEqual(pr_ready.mod_features(["atlas-mods"]),
                          " --features atlas-mods/runtime,atlas-mods/pack,atlas-mods/index")
         self.assertEqual(pr_ready.mod_features(None), MODS)

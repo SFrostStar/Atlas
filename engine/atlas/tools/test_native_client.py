@@ -47,6 +47,8 @@ def main():
     sources = [lab.ROOT / 'Cargo.toml', lab.ROOT / 'Cargo.lock', Path(__file__).resolve(),
                lab.ROOT / 'crates/atlas-client/Cargo.toml', lab.ROOT / 'crates/atlas-assets/Cargo.toml',
                *sorted((lab.ROOT / 'crates/atlas-client/src').rglob('*')),
+               lab.ROOT / 'crates/atlas-client-render/Cargo.toml',
+               *sorted((lab.ROOT / 'crates/atlas-client-render/src').rglob('*')),
                *sorted((lab.ROOT / 'crates/atlas-assets/src').rglob('*.rs'))]
     oracle = lab.ROOT / 'mods/atlas/src/test/java/dev/atlaslab/parity/VanillaGallerySelectionOracle.java'
     helper = oracle.with_name('VanillaCuboidModelOracle.java')

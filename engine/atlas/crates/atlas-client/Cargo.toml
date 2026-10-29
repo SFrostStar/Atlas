@@ -12,6 +12,7 @@ atlas-memory = { path = "../atlas-memory" }
 atlas-assets = { path = "../atlas-assets" }
 atlas-client-core = { path = "../atlas-client-core" }
 atlas-client-input = { path = "../atlas-client-input" }
+atlas-client-render = { path = "../atlas-client-render" }
 atlas-command = { path = "../atlas-command" }
 atlas-items = { path = "../atlas-items" }
 atlas-core = { path = "../atlas-core" }
@@ -44,9 +45,6 @@ serde_json = { version = "1.0.151", features = ["raw_value"] }
 # hlsl-out: the gfx.rs tests translate every shader as wgpu's DirectX 12 backend does. A normal feature,
 # not a dev-dependency's, so builds, tests and examples share one build of naga, wgpu and this crate.
 naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out"] }
-# Sound (ALSA on Linux); the `audio` feature.
-cpal = { version = "0.16", optional = true }
-symphonia = { version = "0.5", default-features = false, features = ["ogg", "vorbis"] }
 miniz_oxide = "0.8"
 ab_glyph = "0.2.32"
 log = "0.4"
@@ -71,7 +69,8 @@ unicode-bidi = "0.3.18"
 rustix = { version = "1", default-features = false, features = ["std", "time"] }
 
 [target.'cfg(windows)'.dependencies]
-junction = "=2.1.0"
+# Use the registered URI handler without routing links through Explorer/cmd.
+open = { version = "5.4.5", features = ["shellexecute-on-windows"] }
 # DirectX 12, where Vulkan has no adapter or device, or by choice (`graphicsApi`, graphics.rs).
 # Shaders compile with FXC (d3dcompiler_47.dll, part of Windows), or DXC when dxcompiler.dll is
 # on the PATH.
@@ -90,12 +89,9 @@ winresource = "0.1"
 default = ["audio", "controllers"]
 # Sound output. Without it (and `controllers`) the program links neither libasound nor libudev on
 # Linux: the server build (`--no-default-features`, released as atlas-engine; docs/server.md).
-audio = ["dep:cpal"]
+audio = ["atlas-client-render/audio"]
 # Controllers: gilrs, and the DualSense's own output. Without it only `atlas-ctl pad`'s virtual pad.
 controllers = ["dep:gilrs", "dep:atlas-dualsense", "atlas-client-input/controllers"]
-# Runs code mods (wasmtime and cranelift: a quarter of a clean build). On in every release build
-# (release.yml); the tests and probes don't need it. Content mods load without it.
-mods = ["atlas-mods/runtime"]
 # Records the call sites of mob random draws (`mob_ai_probe` traces).
 rng-trace = ["atlas-core/rng-trace"]
 
@@ -108,6 +104,7 @@ path = "examples/probe/main.rs"
 workspace = true
 
 [dev-dependencies]
+atlas-client-render = { path = "../atlas-client-render", features = ["test-support"] }
 atlas-items = { path = "../atlas-items", features = ["test-support"] }
 # Every WGSL shader translated as wgpu's DirectX 12 backend does (gfx.rs tests).
 naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out", "msl-out", "spv-out"] }

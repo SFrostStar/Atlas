@@ -13,7 +13,7 @@ def main():
     resources = lab.RESOURCES
     build = lab.LOCAL / "block-particles-parity"
     build.mkdir(exist_ok=True)
-    paths = [lab.ROOT / p for p in ["tools/test_block_particles_parity.py", "tools/test_breaking_model_parity.py", "tools/oracle_harness.py", "tools/lab.py", "crates/atlas-client/src/particles.rs", "crates/atlas-client/src/game.rs", "crates/atlas-items/src/blocks.rs", "crates/atlas-client/src/mesher.rs", "crates/atlas-client/examples/probe/block_particles_fixture.rs", "mods/atlas/src/test/java/dev/atlaslab/parity/VanillaBlockParticlesOracle.java", "crates/atlas-core/src/random.rs", "Cargo.lock", "mods/atlas/src/test/java/dev/atlaslab/parity/VanillaGameplayFactsExporter.java"]]
+    paths = [lab.ROOT / p for p in ["tools/test_block_particles_parity.py", "tools/test_breaking_model_parity.py", "tools/oracle_harness.py", "tools/lab.py", "crates/atlas-client-render/src/particles.rs", "crates/atlas-client/src/game.rs", "crates/atlas-items/src/blocks.rs", "crates/atlas-client-render/src/mesher.rs", "crates/atlas-client/examples/probe/block_particles_fixture.rs", "mods/atlas/src/test/java/dev/atlaslab/parity/VanillaBlockParticlesOracle.java", "crates/atlas-core/src/random.rs", "Cargo.lock", "mods/atlas/src/test/java/dev/atlaslab/parity/VanillaGameplayFactsExporter.java"]]
     tested = base.source_hashes(paths)
     rows = [dict(case=i, seed=(-1 if i % 2 else 1) * i * 987654321, **row) for i, row in enumerate(breaking.cases(resources))]
     rows[0]["seed"] = -(2**63)

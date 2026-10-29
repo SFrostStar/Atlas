@@ -69,5 +69,5 @@ if __name__ == '__main__':
         'twinkle, defaults and tooltip_display',
         sources=[lab.ROOT / 'crates/atlas-items/src/enchant.rs',
                  lab.ROOT / 'crates/atlas-client/src/item_tooltip.rs', lab.ROOT / 'crates/atlas-items/src/item_data.rs',
-                 lab.ROOT / 'crates/atlas-client/src/particles.rs'],
+                 lab.ROOT / 'crates/atlas-client-render/src/particles.rs'],
         expected_lines=COUNT)

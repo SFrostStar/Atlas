@@ -1,0 +1,28 @@
+const {_electron}=require('playwright-core');const assert=require('node:assert/strict');const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+(async()=>{const app=await _electron.launch({executablePath:path.join(root,'node_modules/electron/dist/electron.exe'),args:[root],cwd:root,env:{...process.env,ATLAS_GUI_TEST:'1'}});try{
+ const page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.waitForSelector('#boot-splash',{state:'detached'});
+ assert.equal(await page.locator('.statusbar').count(),0);assert.equal(await page.locator('.sidebar-footer').count(),0);
+ assert.equal(await page.locator('.launch-meta').count(),0);assert.equal(await page.locator('#support-notice').isVisible(),true);
+ await page.locator('.sidebar-instance').first().click({button:'right'});await page.locator('[data-action="edit-instance"]').click();
+ assert.equal(await page.locator('#instance-icons input').count(),20);
+ await page.locator('#instance-icons input[value="gem"]').check();await page.locator('#instance-colors input[value="violet"]').check();
+ const expected=await page.locator('#instance-colors input[value="violet"]+span').evaluate(e=>getComputedStyle(e).backgroundColor);
+ await page.locator('#instance-form [type="submit"]').click();
+ await page.waitForSelector('#instance-dialog:not([open])',{state:'attached'});
+ const cube=page.locator('.sidebar-instance').first().locator('.instance-cube');
+ assert.equal(await cube.evaluate(e=>getComputedStyle(e).color),expected);assert.equal(await cube.locator('svg.lucide-gem').count(),1);
+ await page.locator('.sidebar-instance').first().click({button:'right'});await page.locator('[data-action="rename-instance"]').click();
+ assert.equal(await page.locator('.icon-field').isVisible(),false);await page.locator('#instance-name').fill('UI custom '+Date.now());await page.locator('#instance-form [type="submit"]').click();
+ await page.waitForSelector('#instance-dialog:not([open])',{state:'attached'});
+ await page.locator('[data-page="home"]').click();
+ await page.evaluate(()=>{state.game={running:true,count:1,sessions:[{id:'ui-clock',instanceId:state.selectedId,name:'test',status:'running',startedAt:Date.now()-65000}]};render();});
+ assert.match(await page.locator('.playtime').innerText(),/^01:0[5-7]$/);assert.equal(await page.locator('[data-action="game-menu"].running').count(),1);
+ await page.locator('[data-action="dismiss-support"]').click();assert.equal(await page.locator('#support-notice').isVisible(),false);
+ await page.reload();await page.waitForSelector('#boot-splash',{state:'detached'});assert.equal(await page.locator('#support-notice').isVisible(),false);
+ await page.locator('[data-page="settings"]').click();await page.locator('[data-setting="language"]').selectOption('en');
+ assert.equal(await page.locator('h1').textContent(),'Settings');
+ await page.screenshot({path:path.join(root,'work','launcher-new-settings.png')});assert.deepEqual(errors,[]);
+ console.log('PASS launcher customization: exact instance colors,20icons,edit/rename,timer,runningbutton,minimalism,supportdismiss,translations.');
+ }finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1});

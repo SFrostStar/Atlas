@@ -1,27 +1,13 @@
-> This is the local Atlas fork. Public download, community and project-site links below refer to the original upstream project; they are not Atlas releases. Use the repository-root README and `Build Atlas.cmd` for this local launcher.
-
-# Atlas 26.3
-
-Personal Atlas game source, based on Horizon v0.2.93
-(`b6c936f82b08798057161bdfa577e3aac53fb91e`). The Atlas title-screen footer,
-native window title and settings headings are customised in this checkout.
-Internal `atlas-*` crate names remain compatible with upstream.
-
-Build from the Atlas Launcher folder with `scripts/Build-Atlas.ps1`;
-the resulting executable is `target/fast/atlas-client.exe` in this source folder.
-See `../../docs/EDITING-ATLAS.md` for the Russian editing guide.
-
-Original Atlas documentation and attribution follow. The original MIT license
-and third-party notices are preserved in `LICENSE` and `THIRD_PARTY_NOTICES.md`.
-
----
+Atlas поддерживается SFrostStar и основан на Horizon (MIT).
+Точная база — [ATLAS-UPSTREAM.json](ATLAS-UPSTREAM.json), собственные изменения —
+[модуль Atlas](crates/atlas-client-render/src/atlas). Ниже сохранена справочная документация движка.
 
 <p align="center">
-  <img src="docs/media/banner.webp" alt="Atlas: Minecraft: Java Edition 26.3, rewritten in Rust and checked against vanilla by 281 differential harnesses" width="100%">
+  <img src="docs/media/banner.webp" alt="Atlas: Minecraft: Java Edition 26.3, rewritten in Rust and checked against vanilla by more than 300 differential harnesses" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/horizon-rust/horizon/actions/workflows/ci.yml"><img src="https://github.com/horizon-rust/horizon/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/atlas-rust/atlas/actions/workflows/ci.yml"><img src="https://github.com/atlas-rust/atlas/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/Minecraft-Java%2026.3-5D9C3F" alt="Minecraft Java 26.3">
   <img src="https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/vanilla%20parity-100%25-F0795A" alt="Vanilla parity 100%">
@@ -30,10 +16,10 @@ and third-party notices are preserved in `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 </p>
 
 <p align="center">
-  <a href="https://playhorizon.dev"><b>Website</b></a> ·
+  <a href="https://playatlas.dev"><b>Website</b></a> ·
   <a href="#download"><b>Download</b></a> ·
-  <a href="https://playhorizon.dev/docs/"><b>Documentation</b></a> ·
-  <a href="https://github.com/horizon-rust/horizon/releases"><b>Release notes</b></a> ·
+  <a href="https://playatlas.dev/docs/"><b>Documentation</b></a> ·
+  <a href="https://github.com/atlas-rust/atlas/releases"><b>Release notes</b></a> ·
   <a href="ROADMAP.md"><b>Roadmap</b></a> ·
   <a href="#project-status"><b>Project status</b></a> ·
   <a href="#contributing"><b>Contributing</b></a>
@@ -41,15 +27,15 @@ and third-party notices are preserved in `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
 # Atlas
 
-Atlas is Minecraft: Java Edition 26.3 rewritten in Rust: a native game that reads the same worlds, follows the same rules and generates the same terrain as the Java game, and is checked against it by 281 differential harnesses. You play it through a small launcher, on the files from your own copy of Minecraft. It is free, open source and unofficial.
+Atlas is Minecraft: Java Edition 26.3 rewritten in Rust: a native game that reads the same worlds, follows the same rules and generates the same terrain as the Java game, and is checked against it by more than 300 differential harnesses. You play it through a small launcher, on the files from your own copy of Minecraft. It is free, open source and unofficial.
 
 > Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft. Atlas contains no Minecraft code, assets or data: you need your own legally obtained copy of Minecraft: Java Edition 26.3.
 
 ## Download
 
-Atlas is installed through **the Atlas launcher**. Get it from [playhorizon.dev](https://playhorizon.dev) (the Download button picks your system) or from [the launcher releases](https://github.com/horizon-rust/horizon/releases?q=launcher-v&expanded=true), for Linux x86-64, macOS on Apple Silicon or Windows x64. The launcher installs and updates the game, prepares its files from your own copy of Minecraft, and updates itself.
+Atlas is installed through **the Atlas launcher**. Get it from [playatlas.dev](https://playatlas.dev) (the Download button picks your system) or from [the launcher releases](https://github.com/atlas-rust/atlas/releases?q=launcher-v&expanded=true), for Linux x86-64, macOS on Apple Silicon or Windows x64. The launcher installs the game and keeps it up to date with each new build (Atlas ships on one channel, the Nightly), prepares its files from your copy of Minecraft (your own install, or downloaded from Mojang for your account), and updates itself.
 
-**You need** a Microsoft account that owns Minecraft: Java Edition (the launcher signs in with it, as other launchers do; see [Microsoft account](docs/microsoft-account.md)); Minecraft: Java Edition 26.3, played once (the official launcher, Prism, MultiMC and other launchers all work); a Java 25 runtime, for the one-time preparation; and a GPU with Vulkan on Linux and Windows, or any Apple Silicon Mac. Step by step, with macOS's first-open prompt and the first launch: [Install and first launch](https://playhorizon.dev/docs/install).
+**You need** a Microsoft account that owns Minecraft: Java Edition (the launcher signs in with it, as other launchers do; see [Microsoft account](docs/microsoft-account.md)) and a GPU with Vulkan or OpenGL 3.3 on Linux, Vulkan or DirectX 12 on Windows, or any Apple Silicon Mac. Nothing else: with no Minecraft on your computer, Play downloads 26.3 and the Java it needs from Mojang for your account, as the official launcher does, then prepares it once. An install you already have (the official launcher, Prism, MultiMC and other launchers all work) is used instead. Step by step, with macOS's first-open prompt and the first launch: [Install and first launch](https://playatlas.dev/docs/install).
 
 <table>
   <tr>
@@ -60,13 +46,13 @@ Atlas is installed through **the Atlas launcher**. Get it from [playhorizon.dev]
 
 ## What works today
 
-The [documentation](https://playhorizon.dev/docs/) covers each of these.
+The [documentation](https://playatlas.dev/docs/) covers each of these.
 
 - **The game:** singleplayer with vanilla's world generation, mobs, villagers, raids, redstone, every command, the HUD and the recipe book, on saves in vanilla's format. Worlds from 1.8 to 26.2 are upgraded as vanilla does. [Status table](#project-status).
-- **Atlas's own extras:** new menus (vanilla's are one setting away), graphics presets, distant terrain up to 1024 chunks, controller support, optional zoom, minimap and more, all off by default where they would change the vanilla look. See [Settings](https://playhorizon.dev/docs/settings).
-- **Resource packs and data packs:** resource packs work, and data packs load functions, predicates and item modifiers.
-- **Playing with others:** invite friends from the pause menu's Friends button with a code, Open to LAN, and joining servers, online-mode ones with the Microsoft account the launcher signs in with. See [Multiplayer](https://playhorizon.dev/docs/multiplayer).
-- **Mods:** Atlas has its own mod system (Rust compiled to WebAssembly). Java mod jars do not run. See [Mods and data packs](https://playhorizon.dev/docs/mods).
+- **Atlas's own extras:** new menus (vanilla's are one setting away), graphics presets, distant terrain up to 1024 chunks, controller support, optional zoom, minimap and more, all off by default where they would change the vanilla look. See [Settings](https://playatlas.dev/docs/settings).
+- **Resource packs and data packs:** resource packs work, and data packs load functions, predicates, item modifiers and world generation (vanilla's heights and biomes for now).
+- **Playing with others:** invite friends from the pause menu's Friends button with a code, Open to LAN, and joining servers, online-mode ones with the Microsoft account the launcher signs in with. See [Multiplayer](https://playatlas.dev/docs/multiplayer).
+- **Mods:** Atlas has its own mods, installed from the launcher. The official ones (Zoom, FPS Counter, Keystrokes and Minimap) are native Rust that the launcher builds into your game, with no Rust to install; older WebAssembly mods still run while they move. Java mod jars do not run in Atlas. See [Mods and data packs](https://playatlas.dev/docs/mods).
 
 Screenshots, captured in the Rust client itself with vanilla assets and no mods or shaders:
 
@@ -86,11 +72,11 @@ Screenshots, captured in the Rust client itself with vanilla assets and no mods 
 
 ## Host a server
 
-The launcher's **Servers** page creates, starts, backs up and updates a Atlas server with buttons, and invites friends over Tailscale. On a VPS, `atlas-server` installs with one command and runs without Java. Guide: [Host a server](https://playhorizon.dev/docs/hosting) ([reference](docs/hosting.md)).
+The launcher's **Servers** page creates, starts, backs up and updates a Atlas server with buttons, and invites friends over Tailscale. On a VPS, `atlas-server` installs with one command and runs without Java. Guide: [Host a server](https://playatlas.dev/docs/hosting) ([reference](docs/hosting.md)).
 
 ## Modpacks
 
-The launcher's **Modpacks** page imports a Modrinth or CurseForge pack, shows which of its mods Atlas can carry over, and plays the ones it can as their own profile. Today that means content mods made of data and assets; mods with Java code are not ported yet. See [Modpacks](https://playhorizon.dev/docs/modpacks).
+The launcher's **Modpacks** page imports a Modrinth or CurseForge pack, shows which of its mods Atlas can carry over, and plays the ones it can as their own profile. Today that means content mods made of data and assets; mods with Java code are not ported yet. See [Modpacks](https://playatlas.dev/docs/modpacks).
 
 ## Agent control
 
@@ -111,13 +97,13 @@ Commands block until the action is done and reply with what happened; errors are
 
 For developers. Requirements: Rust 1.90 or newer, Python 3.10 or newer, JDK 25, and on Linux the ALSA and udev development headers (`libasound2-dev libudev-dev` on Debian and Ubuntu). Development and the vanilla harnesses run on Linux.
 
-Atlas contains no game files and never downloads them. It builds its resources from **your own copy** of Minecraft: Java Edition 26.3, verified against the checksums in `research-lock.json`:
+Atlas contains no game files, and `atlas-prepare` never downloads them (the launcher downloads them from Mojang only for a signed-in account that owns the game). It builds its resources from **your own copy** of Minecraft: Java Edition 26.3, verified against the checksums in `research-lock.json`:
 
 1. **Client:** install Java Edition with the official launcher and play 26.3 once. Atlas reads `versions/26.3/`, `libraries/` and `assets/` from the launcher's game directory (`~/.minecraft` on Linux). If yours lives elsewhere, pass `--minecraft-dir` or set `ATLAS_MINECRAFT_DIR`.
 2. **Server jar:** the 26.3 server jar, from the `downloads.server.url` in your launcher's `versions/26.3/26.3.json` (or [minecraft.net/download/server](https://www.minecraft.net/en-us/download/server) while 26.3 is the current release). Pass it with `--server-jar` or set `ATLAS_SERVER_JAR`. It is only needed the first time.
 
 ```sh
-git clone https://github.com/horizon-rust/horizon.git
+git clone https://github.com/atlas-rust/atlas.git
 cd atlas
 cargo run --release -p atlas-prepare -- --prepare --server-jar ~/Downloads/server.jar   # needs JDK 25
 cargo run --release -p atlas-prepare -- sounds   # optional: sounds from your launcher install
@@ -130,11 +116,11 @@ The client starts on the title screen. Command-line options (`--world`, `--seed`
 
 ## Roadmap
 
-What is being done now, what comes next and where you can help, in plain words and in technical detail: [ROADMAP.md](ROADMAP.md). [playhorizon.dev/hub](https://playhorizon.dev/hub) shows it with the work board, the journal of what shipped and how to help.
+What is being done now, what comes next and where you can help, in plain words and in technical detail: [ROADMAP.md](ROADMAP.md). [playatlas.dev/hub](https://playatlas.dev/hub) shows it with the work board, the journal of what shipped and how to help.
 
 ## Contributing
 
-Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for how we work (vanilla first, small pull requests, labels), or [the contributing guide](https://playhorizon.dev/docs/contributing) on the site. Questions and ideas: [Discord](https://discord.gg/HcTeMZxe5E). Before opening a pull request, run the self-check and paste the block it prints:
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for how we work (vanilla first, small pull requests, labels), or [the contributing guide](https://playatlas.dev/docs/contributing) on the site. Questions and ideas: [Discord](https://discord.gg/HcTeMZxe5E). Before opening a pull request, run the self-check and paste the block it prints:
 
 ```sh
 git config core.hooksPath .githooks
@@ -156,6 +142,11 @@ average; `tests/test_parity.py` keeps it in sync with this table. Last audited
 2026-10-13 against the harness results: all 281 harnesses pass on Linux, each
 rerun whenever one of its inputs changed, and the Mac mini now runs every one of
 them too (Rust uses Java's own float maths on each platform).
+
+The harnesses measure behaviour. A second measure is method by method: the [port ledger](tools/port_ledger.py)
+lists every method of vanilla 26.3 next to the Rust functions that port it, with a verdict for each one
+(ported, folded into another function, missing, or needing no port), and the untested ports. Run
+`python3 tools/port_ledger.py build`, then `coverage`, with the vanilla data in `.local/`.
 
 | Subsystem | Score | Main gaps |
 | --- | ---: | --- |

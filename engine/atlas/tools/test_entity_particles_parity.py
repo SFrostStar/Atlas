@@ -73,7 +73,7 @@ def main():
     sources = [lab.ROOT / p for p in [
         'tools/test_entity_particles_parity.py', 'tools/oracle_harness.py', 'tools/test_rust_parity.py', 'tools/lab.py',
         f'mods/atlas/src/test/java/dev/atlaslab/parity/{oracle}.java', 'Cargo.toml', 'Cargo.lock',
-        'crates/atlas-client/Cargo.toml', 'crates/atlas-client/src/particles.rs',
+        'crates/atlas-client/Cargo.toml', 'crates/atlas-client-render/src/particles.rs',
         f'crates/atlas-client/examples/probe/{probe}.rs', 'crates/atlas-core/src/random.rs']]
     tested = base.source_hashes(sources)
     cases_path, units = make_cases(build)

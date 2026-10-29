@@ -197,9 +197,10 @@ def main():
     sources = [oracle, Path(__file__), lab.ROOT / 'crates/atlas-client/examples/probe/natural_spawn_fixture.rs',
                lab.ROOT / 'crates/atlas-client/src/mobs/trial_spawner.rs',
                lab.ROOT / 'crates/atlas-client/src/mobs/spawner.rs',
-               lab.ROOT / 'crates/atlas-client/src/chunk/block_entity.rs',
+               lab.ROOT / 'crates/atlas-client-render/src/chunk/block_entity.rs',
                lab.ROOT / 'crates/atlas-client-core/src/identifier.rs',
                lab.ROOT / 'crates/atlas-client/src/mobs/spawn_selection.rs',
+               lab.ROOT / 'crates/atlas-client-render/src/biome.rs',
                lab.ROOT / 'crates/atlas-client/src/mobs/spawn_rules.rs']
     tested = base.source_hashes(sources)
     inputs = build / 'inputs.txt'

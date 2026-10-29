@@ -127,8 +127,8 @@ def main():
         harness.differential(f"resource-pack-parity-{index}", "VanillaPackResourcesOracle",
                                     "pack_resources_fixture", make,
                                     "Pack discovery, overlays, filters and the resource stacks vanilla merges.",
-                                    sources=[lab.ROOT / "crates/atlas-client/src/packs.rs",
-                                             lab.ROOT / "crates/atlas-client/src/sound_events.rs",
+                                    sources=[lab.ROOT / "crates/atlas-client-render/src/packs.rs",
+                                             lab.ROOT / "crates/atlas-client-render/src/sound_events.rs",
                                              lab.ROOT / "crates/atlas-client-core/src/lang.rs"])
         total += len(QUERIES)
     print(f"{total} resource pack queries match the pinned client over {len(SELECTIONS)} selections")

@@ -66,7 +66,7 @@ if __name__ == '__main__':
         'and the positions tickChunk draws in them, with each position\'s block and fluid random-tick flags. The '
         'blocks\' random-tick behaviour itself is test_random_tick_parity\'s.',
         sources=[lab.ROOT / 'crates/atlas-client/src/random_tick_sections.rs',
-                 lab.ROOT / 'crates/atlas-client/src/chunk.rs',
+                 lab.ROOT / 'crates/atlas-client-render/src/chunk.rs',
                  lab.ROOT / 'crates/atlas-core/src/paletted.rs',
                  lab.ROOT / 'crates/atlas-world/src/level/tick.rs',
                  lab.ROOT / 'crates/atlas-world/src/level/ticks.rs'],

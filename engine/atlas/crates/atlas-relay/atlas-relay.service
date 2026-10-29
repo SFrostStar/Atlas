@@ -1,13 +1,13 @@
 # A systemd unit for a self-hosted Play with friends relay (docs/play-with-friends.md,
-# "Running your own relay"). Install the binary as /usr/local/bin/atlas-relay, copy this
-# file to /etc/systemd/system/, then: systemctl enable --now atlas-relay
+# "Running your own relay"). Install the binary as /usr/local/bin/horizon-relay, copy this
+# file to /etc/systemd/system/, then: systemctl enable --now horizon-relay
 [Unit]
-Description=Atlas play-with-friends relay
+Description=Horizon play-with-friends relay
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/atlas-relay
+ExecStart=/usr/local/bin/horizon-relay
 # The port friends reach (forward it on your router, TCP). Limits: RELAY_* in the docs.
 Environment=PORT=7000
 # Environment=RELAY_SESSION_KBPS=1024

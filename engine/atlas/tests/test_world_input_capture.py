@@ -30,7 +30,8 @@ def method(source, name):
 def function(source, name):
     start = source.index(f"pub fn {name}(")
     opening = source.index("{", start)
-    depth, end = 1, opening + 1
+    depth = 1
+    end = opening + 1
     while depth:
         depth += (source[end] == "{") - (source[end] == "}")
         end += 1
@@ -101,6 +102,7 @@ struct Remote;
 struct ServerPacks { prompt: Option<()> }
 struct Game {
     focused: bool, agent_pointer: bool, window: Option<Window>, mouse: Mouse,
+    keyboard_mouse: bool, view_at: [u32; 2],
     captured: bool, title: Option<()>, screen: Screen, remote: Option<Remote>,
     mining: bool, lan_acting: Option<u32>, renderer: Option<Renderer>, cursor: (f32, f32),
     server_packs: ServerPacks,
@@ -108,6 +110,7 @@ struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self { focused: true, agent_pointer: false, window: Some(Window::default()),
+            keyboard_mouse: true, view_at: [0, 0],
             mouse: Mouse::default(), captured: false, title: None,
             screen: Screen::Playing, remote: None, mining: false, lan_acting: None,
             renderer: None, cursor: (0.0, 0.0), server_packs: ServerPacks::default() }
@@ -176,7 +179,38 @@ fn main() {
         assert!(!game.captured); // Focus alone does not resume gameplay.
         game.capture(true); // Click or resume action.
         assert!(game.captured);
-        assert_eq!(game.cursor, (213.5, 120.0));
+        assert_eq!(game.cursor, (213.5, 120.0)); // The grab puts the mouse at the centre.
+    }
+    // A controller-only player's screens leave the shared native pointer alone.
+    {
+        let mut game = Game::default();
+        game.keyboard_mouse = false;
+        game.captured = true;
+        game.mining = true;
+        for capture in [false, true] {
+            game.capture(capture);
+            assert!(!game.captured);
+            assert!(!game.mining);
+            let window = game.window.as_ref().unwrap();
+            assert_eq!(window.grabs.get(), 0);
+            assert_eq!(window.warps.get(), 0);
+            assert!(!window.visible.get()); // No change to native visibility.
+        }
+    }
+    // The owning player's warp includes its view's offset in the shared window;
+    // its menu cursor remains in local GUI coordinates.
+    {
+        let mut game = Game::default();
+        game.view_at = [1200, 400];
+        game.renderer = Some(Renderer { config: Config { width: 1000, height: 600 } });
+        game.capture(true);
+        assert!(game.captured);
+        assert_eq!(game.window.as_ref().unwrap().at.get(), (1700.0, 700.0));
+        assert_eq!(game.cursor, (250.0, 150.0));
+        game.capture(false);
+        assert!(!game.captured);
+        assert_eq!(game.window.as_ref().unwrap().at.get(), (1700.0, 700.0));
+        assert_eq!(game.cursor, (250.0, 150.0));
     }
     let mut game = Game::default();
     // On a server the chat is ChatScreen (#708): loading never grabs over it.

@@ -15,7 +15,7 @@ const fs = require('node:fs');
     assert.ok(await page.locator('svg.lucide').count() > 15);
     assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
     assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
-    assert.ok(await page.evaluate(() => document.querySelector('.statusbar').getBoundingClientRect().bottom <= innerHeight));
+    assert.ok(await page.evaluate(() => document.querySelector('main').getBoundingClientRect().bottom <= innerHeight));
     const initial = await page.evaluate(() => window.atlas.getState());
     if (!initial.instances.some(item => item.name === 'Песочница')) {
       await page.locator('[data-page="instances"]').first().click();

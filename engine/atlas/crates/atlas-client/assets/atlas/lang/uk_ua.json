@@ -1,0 +1,15 @@
+{
+  "atlas.options.controller": "Геймпад",
+  "atlas.options.vibration": "Вібрація",
+  "atlas.options.adaptive_triggers": "Адаптивні тригери",
+  "atlas.options.lightbar": "Світлова панель",
+  "atlas.options.look_sensitivity": "Чутливість огляду",
+  "atlas.options.invert_x": "Інвертувати огляд по X",
+  "atlas.options.invert_y": "Інвертувати огляд по Y",
+  "atlas.options.sneak_button": "Кнопка присідання",
+  "atlas.options.move_deadzone": "Мертва зона руху",
+  "atlas.options.look_deadzone": "Мертва зона огляду",
+  "atlas.options.button_glyphs": "Значки кнопок",
+  "atlas.options.menu_navigation": "Навігація в меню",
+  "atlas.options.on_screen_keyboard": "Екранна клавіатура"
+}

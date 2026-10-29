@@ -37,9 +37,9 @@ try {
     Push-Location -LiteralPath $sourcePath
     try {
         if ($CheckOnly) {
-            & $cargoPath check --locked -p atlas-client --bin atlas-client --bin atlas-ctl --features mods
+            & $cargoPath check --locked -p atlas-client --bin atlas-client --bin atlas-ctl
         } else {
-            & $cargoPath build --locked --profile $Profile -p atlas-client --bin atlas-client --bin atlas-ctl --features mods
+            & $cargoPath build --locked --profile $Profile -p atlas-client --bin atlas-client --bin atlas-ctl
         }
         if ($LASTEXITCODE -ne 0) { throw 'Atlas build failed. Read the compiler output above.' }
         if (-not $CheckOnly) {

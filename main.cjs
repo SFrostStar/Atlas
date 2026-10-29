@@ -8,6 +8,8 @@ const { DiscordPresence, readPreference } = require('./lib/discord-rpc.cjs');
 const manifest = require('./package.json');
 const { AccountManager } = require('./lib/account-manager.cjs');
 const { t } = require('./i18n.js');
+const { GameInstallManager } = require('./lib/game-install.cjs');
+const { resolvePortableRoot } = require('./lib/portable-root.cjs');
 
 app.setName('Atlas Launcher');
 if (process.platform === 'win32') app.setAppUserModelId('Atlas.Launcher.Desktop');
@@ -15,13 +17,16 @@ let window;
 let store;
 let games;
 let accounts;
+let installer;
+let needsSetup=false;
+let supportVisible=true;
 let discordPresence;
 let discordPoll;
 let discordObserved;
 const launcherVersion = manifest.version.replace(/\.0$/, '');
 const logs = [];
 let publishTimer;
-const projectRoot = app.isPackaged ? path.resolve(path.dirname(process.execPath), '..', '..') : __dirname;
+const projectRoot = app.isPackaged ? resolvePortableRoot(process.execPath) : __dirname;
 const startupDeadline = performance.timeOrigin + 1000;
 const guiTest = !app.isPackaged && process.env.ATLAS_GUI_TEST === '1';
 if (guiTest) {
@@ -38,7 +43,7 @@ function appendLog(message, level = 'info') {
 }
 
 function state() {
-  return { ...store.getState(), version: launcherVersion, game: games.snapshot(), accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs] };
+  return { ...store.getState(), version: launcherVersion, game: games.snapshot(), supportVisible, install: installer ? { ...installer.snapshot(), ...installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}), needsSetup } : null, accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs] };
 }
 
 function discordEnabled() {
@@ -95,10 +100,23 @@ function publishSoon() {
 }
 
 async function launch(id, additional = false) {
+  if(!installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}).ready){needsSetup=true;publish();return state();}
+  needsSetup=false;
   if (additional) await games.launchAnother(id);
   else await games.launch(id);
   if (store.config.settings.closeOnLaunch && window && !window.isDestroyed()) window.hide();
   publish();
+  return state();
+}
+
+function startInstall(options={}) {
+  if(games.snapshot().running)throw new Error('Закрой игру перед подготовкой файлов.');
+  if(!installer.snapshot().active){
+    needsSetup=true;
+    installer.start({...options,runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot})
+      .then(()=>{if(installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}).ready)needsSetup=false;publish();})
+      .catch(error=>{appendLog(error.message,'error');publish();});
+  }
   return state();
 }
 
@@ -111,6 +129,16 @@ function registerHandlers() {
     });
   }
   handle('get-state', () => state());
+  handle('update-instance', (id,patch) => {store.updateInstance(id,patch);return state();});
+  handle('support-gift', () => shell.openExternal('https://t.me/protecteduzername'));
+  handle('dismiss-support', () => {supportVisible=false;return state();});
+  handle('start-install', () => startInstall());
+  handle('cancel-install', () => {installer.cancel();return state();});
+  handle('choose-minecraft-install', async () => {
+    const result=await dialog.showOpenDialog(window,{title:t('Выбрать установленный Minecraft',store.config.settings.language),properties:['openDirectory']});
+    if(!result.canceled&&result.filePaths[0])return startInstall({minecraftDirectory:result.filePaths[0]});
+    return state();
+  });
   handle('create-instance', (input) => { store.createInstance(input); observeDiscordPreference(); syncDiscord(); return state(); });
   handle('select-instance', (id) => { store.selectInstance(id); observeDiscordPreference(); syncDiscord(); return state(); });
   handle('delete-instance', async (id) => {
@@ -200,6 +228,7 @@ else {
       }
       publish();
     } });
+    installer = new GameInstallManager({projectRoot,dataRoot:store.dataRoot,onChange:()=>{if(installer?.snapshot().status==='ready')needsSetup=false;publishSoon();}});
     registerHandlers();
     window = new BrowserWindow({
       width: 1360, height: 900, minWidth: 1050, minHeight: 740,
@@ -217,5 +246,5 @@ else {
     window.loadFile(path.join(__dirname, 'index.html'), { query: { startupDeadline: String(startupDeadline) } });
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('will-quit', () => { clearInterval(discordPoll); discordPresence?.dispose(); accounts?.dispose(); });
+  app.on('will-quit', () => { clearInterval(discordPoll); discordPresence?.dispose(); accounts?.dispose(); installer?.cancel(); });
 }

@@ -2,7 +2,9 @@
 data/
 work/
 runtime/
+/bundle/
 /tools/
+/docs/
 node_modules/
 dist/
 target/
@@ -76,6 +78,10 @@ session.lock
 *.jfr
 *.hprof
 *.log
+*.tmp
+*.bak
+*.dmp
+*.stackdump
 
 # Locally extracted Mojang game icons; Atlas artwork stays in the repository.
 /assets/game-icon.png
@@ -89,6 +95,10 @@ Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+.claude/
+.codex/
 __pycache__/
 *.py[cod]
 .venv/
+.cache/
+coverage/
