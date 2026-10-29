@@ -1,0 +1,36 @@
+/.local/
+/target/
+**/__pycache__/
+*.py[cod]
+/.venv/
+# Downloaded/decompiled game content and private profiling artifacts.
+*.jar
+*.class
+*.jfr
+*.hprof
+/decompiled/
+/minecraft/
+/assets/
+/run/
+/logs/
+/dist/
+/mods/atlas/build/
+/saves/
+/backups/
+/tools/logs/
+.DS_Store
+# What the client writes to its working directory when run from the repo root.
+/options.txt
+/atlas.txt
+/atlas-graphics.txt
+/atlas-controller.txt
+/atlas-extras.txt
+/atlas-player.txt
+/servers.dat
+/screenshots/
+/.atlas-cache/
+/crash-reports/
+/debug/
+
+# Release-only compiled original exporter bundle.
+/exporters/

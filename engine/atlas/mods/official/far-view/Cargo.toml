@@ -1,0 +1,16 @@
+[package]
+name = "far-view"
+version = "1.0.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Atlas's official far view: distant terrain past the render distance."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+atlas-mod-sdk = { path = "../../../crates/atlas-mod-sdk" }
+
+[lints]
+workspace = true

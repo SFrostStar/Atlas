@@ -1,0 +1,15 @@
+{
+  "atlas.options.controller": "Геймпад",
+  "atlas.options.vibration": "Вибрация",
+  "atlas.options.adaptive_triggers": "Адаптивные триггеры",
+  "atlas.options.lightbar": "Подсветка",
+  "atlas.options.look_sensitivity": "Чувствительность обзора",
+  "atlas.options.invert_x": "Инверсия обзора по X",
+  "atlas.options.invert_y": "Инверсия обзора по Y",
+  "atlas.options.sneak_button": "Кнопка приседания",
+  "atlas.options.move_deadzone": "Мёртвая зона движения",
+  "atlas.options.look_deadzone": "Мёртвая зона обзора",
+  "atlas.options.button_glyphs": "Символы кнопок",
+  "atlas.options.menu_navigation": "Навигация по меню",
+  "atlas.options.on_screen_keyboard": "Экранная клавиатура"
+}

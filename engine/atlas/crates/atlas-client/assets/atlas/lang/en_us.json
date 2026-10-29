@@ -1,0 +1,15 @@
+{
+  "atlas.options.controller": "Controller",
+  "atlas.options.vibration": "Vibration",
+  "atlas.options.adaptive_triggers": "Adaptive Triggers",
+  "atlas.options.lightbar": "Lightbar",
+  "atlas.options.look_sensitivity": "Look Sensitivity",
+  "atlas.options.invert_x": "Invert Look X",
+  "atlas.options.invert_y": "Invert Look Y",
+  "atlas.options.sneak_button": "Sneak Button",
+  "atlas.options.move_deadzone": "Move Deadzone",
+  "atlas.options.look_deadzone": "Look Deadzone",
+  "atlas.options.button_glyphs": "Button Glyphs",
+  "atlas.options.menu_navigation": "Menu Navigation",
+  "atlas.options.on_screen_keyboard": "On-Screen Keyboard"
+}

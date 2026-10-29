@@ -1,0 +1,45 @@
+const { _electron }=require('playwright-core');
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const fs=require('node:fs');
+const root=path.resolve(__dirname,'..');
+const launch=()=>_electron.launch({executablePath:path.join(root,'node_modules/electron/dist/electron.exe'),args:[root],env:{...process.env,ATLAS_GUI_TEST:'1'},cwd:root});
+(async()=>{
+  let app=await launch();
+  try {
+    let page=await app.firstWindow();const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    await page.waitForSelector('#boot-splash',{state:'detached'});
+    await page.locator('[data-page="settings"]').click();
+    await page.locator('[data-setting="language"]').selectOption('en');
+    await page.waitForFunction(()=>document.documentElement.lang==='en');
+    assert.equal(await page.locator('h1').textContent(),'Settings');
+    assert.equal(await page.locator('[data-page="instances"]').innerText().then(s=>s.replace(/\d+/g,'').trim()),'Instances');
+    await page.locator('[data-setting="theme"]').selectOption('light');
+    await page.locator('[data-accent="blue"]').click();
+    await page.locator('[data-setting="heroStyle"]').selectOption('sunset');
+    await page.locator('[data-setting="showHeroText"]').uncheck();
+    await page.locator('[data-setting="reducedMotion"]').uncheck();
+    await page.locator('#instance-memory').selectOption('2048');
+    const state=await page.evaluate(()=>window.atlas.getState());
+    assert.equal(state.settings.theme,'light');assert.equal(state.settings.accentColor,'blue');
+    assert.equal(state.settings.showHeroText,false);assert.equal(state.settings.reducedMotion,true);
+    assert.equal(state.instances.find(i=>i.id===state.selectedId).memoryMb,2048);
+    const leftovers=await page.evaluate(()=>[...document.querySelectorAll('#content strong,#content h3,#content p,#content button,#content option,.nav-item')].filter(e=>!e.closest('[data-user-text],.path')&&e.textContent.trim()!=='Русский'&&/[А-Яа-яЁё]/.test(e.textContent)).map(e=>e.textContent));
+    assert.deepEqual(leftovers,[],'Untranslated UI');
+    await page.locator('#local-account-form input').fill('AtlasUITest');
+    await page.locator('#local-account-form button').click();
+    await page.waitForFunction(()=>document.querySelector('.account-row [data-user-text]')?.textContent==='AtlasUITest'||[...document.querySelectorAll('.account-row [data-user-text]')].some(e=>e.textContent==='AtlasUITest'));
+    await page.screenshot({path:path.join(root,'work','settings-light-en.png'),fullPage:false});
+    await page.reload();await page.waitForSelector('#boot-splash',{state:'detached'});
+    assert.equal(await page.getAttribute('html','data-theme'),'light');
+    await page.locator('[data-page="settings"]').click();
+    assert.equal(await page.locator('[data-setting="language"]').inputValue(),'en');
+    await page.locator('[data-setting="language"]').selectOption('ru');
+    await page.locator('[data-setting="theme"]').selectOption('dark');
+    await page.locator('[data-accent="orange"]').click();
+    assert.equal(await page.locator('h1').textContent(),'Настройки');
+    await page.screenshot({path:path.join(root,'work','settings-dark-ru.png')});
+    assert.deepEqual(errors,[]);
+    console.log('PASS: English/Russian, light/dark, accents, personalization, per-instance RAM, local accounts, persistence, no renderer errors.');
+  } finally {await app.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

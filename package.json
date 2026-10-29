@@ -1,0 +1,31 @@
+{
+  "name": "atlas-launcher",
+  "version": "0.1.0",
+  "private": true,
+  "author": {
+    "name": "SFrostStar",
+    "url": "https://github.com/SFrostStar"
+  },
+  "description": "Atlas: your personal launcher and Rust game workshop",
+  "atlasDiscord": {
+    "applicationId": "1565017139516285079",
+    "imageKey": "atlas"
+  },
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "package": "electron-packager . \"Atlas Launcher\" --platform=win32 --arch=x64 --icon=assets/atlas-launcher.ico --out=dist --overwrite --ignore=\"^/(engine|data|dist|docs|scripts|tests|work|tools|runtime|.git)(/|$)\" --ignore=\"^/[^/]+\\.(lnk|cmd|md|png)$\""
+  },
+  "dependencies": {
+    "lucide": "1.63.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.1.0",
+    "playwright-core": "1.64.1"
+  },
+  "atlasMicrosoft": {
+    "clientId": ""
+  }
+}

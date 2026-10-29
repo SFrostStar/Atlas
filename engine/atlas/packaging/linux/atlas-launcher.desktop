@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Atlas
+GenericName=Game launcher
+Comment=Install, prepare and play Atlas, Minecraft: Java Edition 26.3 rewritten in Rust
+Exec=atlas-launcher
+Icon=atlas
+Terminal=false
+Categories=Game;
+StartupWMClass=atlas-launcher

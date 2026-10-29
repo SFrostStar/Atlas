@@ -1,0 +1,60 @@
+# Server API
+
+What a host, a panel or a bot can do with a Atlas server: the `atlas-server` commands, `server.toml` and the
+control API. How to host: [hosting.md](../hosting.md); the design: [server.md](../server.md).
+
+## Overview
+
+`atlas-server` sets up a server folder, runs the game as a dedicated server under a supervisor (restarts on a crash,
+backups on a schedule, updates with a rollback), and lets other programs manage it through a local HTTP API with a
+token. The web panel uses that API.
+
+| | Count |
+| --- | --- |
+| Commands | 22 (`init`, `run`, `start`, `stop`, `restart`, `status`, `cmd`, `logs`, `backup`, `backups`, `restore`, `service`, `panel`, `update`, `rollback`, `config`, `config set`, `import`, `op`, `deop`, `whitelist`, `version`) |
+| `server.toml` keys | 22 in 6 sections, plus `[properties]` for any other vanilla key |
+| Control API endpoints | 11 under `/api/v1` |
+
+## Guide
+
+1. `atlas-server init` in an empty folder, then `atlas-server start` ([hosting.md](../hosting.md)).
+2. From a script: `atlas-server status --json`, `atlas-server cmd say hi`, `atlas-server backup`.
+3. From a program: read `.atlas/api.json` (address and token), then `GET /api/v1/status` with
+   `Authorization: Bearer <token>`.
+
+## Reference
+
+[server-reference.md](server-reference.md), generated from `atlas-server`'s source: the help text, every
+`server.toml` key with its default and the `server.properties` key it writes, and every endpoint.
+
+## Examples
+
+```sh
+token=$(jq -r .token .atlas/api.json); address=$(jq -r .address .atlas/api.json)
+curl -s -H "Authorization: Bearer $token" "http://$address/api/v1/status"
+curl -s -H "Authorization: Bearer $token" -d '{"line": "list"}' "http://$address/api/v1/command"
+```
+
+## Stability
+
+Stable ([stability.md](stability.md)): the commands, `server.toml`'s keys and `/api/v1`. A new key or endpoint is an
+addition; a change to one starts `/api/v2`, served beside `/api/v1`.
+
+## Not there yet
+
+- **Players**: list with ping and position, kick, ban and pardon, op and deop, the whitelist, as endpoints (today only
+  through `cmd` and the files).
+- **Console stream**: the log as a stream (server-sent events) rather than `logs?since=N` polling; chat, joins, leaves,
+  deaths and crashes as typed events.
+- **Metrics**: a plain-text metrics endpoint any monitoring tool can scrape (TPS, MSPT percentiles, players, chunks,
+  entities, RAM, CPU), from the samples `status` already takes.
+- **Backups**: delete and download one; restore a single dimension.
+- **Server mods**: list, turn on and off, and their settings, once the mod API runs on the server
+  ([mods.md](mods.md)).
+- **An MCP server** for the same endpoints, so a host's agent manages the server as it manages the game.
+- **Compatibility tests**: golden replies per endpoint, and a `server.toml` from each release line.
+
+## Changelog
+
+- `api::ROUTES` lists the endpoints; the reference is generated from it.
+- `/api/v1`: status, metrics, logs, command, stop, restart, backups, restore, update, panel login.

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Atlas
+Comment=Minecraft: Java Edition 26.3, rewritten in Rust
+Exec=atlas-client
+Icon=atlas
+Terminal=false
+Categories=Game;
+StartupWMClass=atlas
+NoDisplay=true

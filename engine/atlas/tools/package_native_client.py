@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Package a built atlas-client with its prepared resources into a private
+tarball for one of your own Linux or macOS machines. The resources are Mojang
+assets: keep the archive in ignored .local/ and never publish or commit it.
+
+    cargo build --release -p atlas-client --bins
+    python3 tools/package_native_client.py
+"""
+import argparse
+import hashlib
+import io
+import json
+import platform
+import subprocess
+import tarfile
+from pathlib import Path
+
+try:
+    from . import lab
+except ImportError:
+    import lab
+
+ROOT = Path(__file__).resolve().parent.parent
+LOCAL = ROOT / '.local'
+# Inputs of the exporters, not read by the game at runtime.
+SKIP = {'classes', 'client-classes', 'export.log', 'model-state-export.log'}
+
+LAUNCHER = r'''#!/bin/sh
+# Starts Atlas. Saves and options.txt live in $ATLAS_HOME
+# (default ~/.local/share/atlas), so unpacking an update keeps them.
+here=$(cd "$(dirname "$0")" && pwd)
+if [ "$1" = "--install" ]; then
+    apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    mkdir -p "$apps"
+    cat > "$apps/atlas.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Atlas
+Comment=Minecraft Java Edition @MINECRAFT@ in Rust
+Exec="$here/atlas.sh"
+Icon=$here/atlas.png
+Terminal=false
+Categories=Game;
+EOF
+    echo "Added Atlas to the application menu ($apps/atlas.desktop)"
+    exit 0
+fi
+home="${ATLAS_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/atlas}"
+mkdir -p "$home"
+cd "$home" || exit 1
+exec "$here/atlas-client" "$@"
+'''
+
+README = '''Atlas {version} ({commit}) for {platform}
+
+Run ./atlas.sh (add --help for options, e.g. --render-distance 24 or --creative).
+./atlas.sh --install adds Atlas to the application menu.
+
+Saves and options.txt are kept in ~/.local/share/atlas (override with ATLAS_HOME).
+Esc pauses and releases the mouse; F3 shows the debug screen.
+
+The resources folder contains Mojang's game assets for personal use only;
+do not redistribute this archive.
+'''
+
+
+def git(*args):
+    return subprocess.run(['git', *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def add_bytes(tar, name, data, mode=0o644):
+    info = tarfile.TarInfo(name)
+    info.size = len(data)
+    info.mode = mode
+    tar.addfile(info, io.BytesIO(data))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--binary', type=Path, help='built atlas-client (default: cargo release target)')
+    parser.add_argument('--resources', type=Path, default=lab.RESOURCES)
+    parser.add_argument('--out', type=Path, default=LOCAL / 'dist')
+    args = parser.parse_args()
+
+    if args.binary is None:
+        metadata = json.loads(subprocess.run(
+            ['cargo', 'metadata', '--format-version', '1', '--no-deps'],
+            cwd=ROOT, check=True, capture_output=True, text=True).stdout)
+        args.binary = Path(metadata['target_directory']) / 'release/atlas-client'
+    if not args.binary.is_file():
+        raise SystemExit(f'missing {args.binary}: run cargo build --release -p atlas-client')
+    if not (args.resources / 'atlas-resources.json').is_file():
+        raise SystemExit(f'missing prepared resources in {args.resources}: run atlas-prepare --prepare (cargo run --release -p atlas-prepare -- --prepare)')
+    if not (args.resources / 'assets/minecraft/sounds.json').is_file():
+        print('warning: no sound assets; run cargo run -p atlas-prepare -- sounds for audio')
+
+    system = {'Linux': 'linux', 'Darwin': 'macos'}.get(platform.system())
+    if system is None:
+        raise SystemExit(f'unsupported platform {platform.system()}: Atlas targets Linux and macOS')
+    machine = {'AMD64': 'x86_64', 'arm64': 'aarch64'}.get(platform.machine(), platform.machine())
+    plat = f'{system}-{machine}'
+    commit = git('rev-parse', '--short', 'HEAD') + ('-dirty' if git('status', '--porcelain', '--untracked-files=no') else '')
+    version = '0.1.0'
+    name = f'atlas-{version}-{commit}-{plat}'
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    archive = args.out / f'{name}.tar.gz'
+    with tarfile.open(archive, 'w:gz', compresslevel=1) as tar:
+        tar.add(args.binary, 'atlas/atlas-client')
+        tar.add(ROOT / 'LICENSE', 'atlas/LICENSE')
+        tar.add(ROOT / 'THIRD_PARTY_NOTICES.md', 'atlas/THIRD_PARTY_NOTICES.md')
+        ctl = args.binary.with_name('atlas-ctl')  # built with --bins: scripts and agents play through it
+        if ctl.is_file():
+            tar.add(ctl, 'atlas/atlas-ctl')
+        add_bytes(tar, 'atlas/atlas.sh', LAUNCHER.replace('@MINECRAFT@', lab.VERSION).encode(), 0o755)
+        tar.add(ROOT / 'docs/media/icon-256.png', 'atlas/atlas.png')
+        add_bytes(tar, 'atlas/README.txt', README.format(version=version, commit=commit, platform=plat).encode())
+        for path in sorted(args.resources.iterdir()):
+            if path.name not in SKIP:
+                tar.add(path, f'atlas/resources/{path.name}')
+
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    (args.out / f'{archive.name}.sha256').write_text(f'{digest}  {archive.name}\n')
+    print(f'{archive} ({archive.stat().st_size / 1e6:.0f} MB)\nsha256 {digest}')
+
+
+if __name__ == '__main__':
+    main()

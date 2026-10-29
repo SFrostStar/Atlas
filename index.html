@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>Atlas Launcher</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="boot-splash" id="boot-splash" role="status" aria-label="Загрузка Atlas">
+    <div class="boot-brand" aria-hidden="true"><span class="brand-mark boot-mark"></span><span class="boot-name">Atlas</span></div>
+    <div class="boot-progress" aria-hidden="true"><span></span></div>
+  </div>
+  <div class="window-bar">
+    <div class="window-caption"><span class="mini-mark">A</span> Atlas Launcher</div>
+    <div class="window-actions"><button data-window="minimize" aria-label="Свернуть"><i data-lucide="minus"></i></button><button data-window="maximize" aria-label="Развернуть"><i data-lucide="square"></i></button><button data-window="close" aria-label="Закрыть"><i data-lucide="x"></i></button></div>
+  </div>
+  <div class="app-shell" inert>
+    <aside class="sidebar">
+      <a class="brand" href="#home" aria-label="Atlas — главная"><span class="brand-mark"><span></span></span><div>Atlas</div></a>
+      <nav aria-label="Основная навигация">
+        <button class="nav-item active" data-page="home"><i data-lucide="house"></i>Главная</button>
+        <button class="nav-item" data-page="instances"><i data-lucide="layers-2"></i>Мои сборки<span class="nav-count" id="instance-count">1</span></button>
+        <button class="nav-item" data-page="workshop"><i data-lucide="braces"></i>Мастерская</button>
+        <button class="nav-item" data-page="logs"><i data-lucide="terminal"></i>Журнал запуска</button>
+      </nav>
+      <div class="nav-caption instance-caption">СБОРКИ<button class="bare small" data-action="new-instance" aria-label="Добавить сборку"><i data-lucide="plus"></i></button></div>
+      <div id="sidebar-instances" class="sidebar-instances"></div>
+      <button class="add-sidebar" data-action="new-instance"><i data-lucide="plus"></i>Добавить сборку</button>
+      <div class="sidebar-bottom">
+        <button class="nav-item" data-page="settings"><i data-lucide="settings-2"></i>Настройки</button>
+        <div class="sidebar-footer"><span>Atlas <b>0.1</b></span></div>
+      </div>
+    </aside>
+    <main>
+      <header class="page-header"><div class="breadcrumb"><strong id="breadcrumb-current">Главная</strong></div><span class="local-badge"><span class="status-dot"></span>Atlas 26.3</span></header>
+      <div class="content" id="content"></div>
+      <footer class="statusbar"><span><span class="status-dot" id="footer-dot"></span><span id="footer-status">Готово</span></span><span>Atlas 26.3 <span class="footer-separator">/</span> <span id="footer-version">0.1</span></span></footer>
+    </main>
+  </div>
+  <dialog id="instance-dialog">
+    <form id="instance-form">
+      <div class="dialog-top"><h2>Новая сборка</h2><button class="bare" type="button" data-action="close-dialog" aria-label="Закрыть"><i data-lucide="x"></i></button></div>
+      <label class="field">Название<input id="instance-name" name="name" maxlength="48" placeholder="Название сборки" required autocomplete="off"></label>
+      <label class="field">Описание <span class="optional">необязательно</span><input name="description" maxlength="140" placeholder="Описание"></label>
+      <fieldset class="color-field"><legend>Цвет сборки</legend><div class="color-options"><label><input type="radio" name="accent" value="amber" aria-label="Песочный" checked><span class="color-swatch sand"></span></label><label><input type="radio" name="accent" value="mint" aria-label="Шалфейный"><span class="color-swatch sage"></span></label><label><input type="radio" name="accent" value="blue" aria-label="Синий"><span class="color-swatch blue"></span></label><label><input type="radio" name="accent" value="violet" aria-label="Фиолетовый"><span class="color-swatch purple"></span></label></div></fieldset>
+      <p class="form-error" id="form-error" role="alert"></p>
+      <div class="dialog-footer"><button class="button secondary" type="button" data-action="close-dialog">Отмена</button><button class="button primary" type="submit"><i data-lucide="plus"></i>Создать сборку</button></div>
+    </form>
+  </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title">
+    <form id="delete-form">
+      <div class="dialog-top"><h2 id="delete-title">Удалить сборку?</h2><button class="bare" type="button" data-action="close-delete" aria-label="Закрыть"><i data-lucide="x"></i></button></div>
+      <p class="delete-name" id="delete-name" data-user-text></p>
+      <p class="subtitle">Миры и настройки сборки, включая дополнительные окна, будут перемещены в корзину.</p>
+      <p class="form-error" id="delete-error" role="alert"></p>
+      <div class="dialog-footer"><button class="button secondary" type="button" data-action="close-delete">Отмена</button><button class="button danger" type="submit"><i data-lucide="trash-2"></i>В корзину</button></div>
+    </form>
+  </dialog>
+  <div class="context-menu" id="context-menu" role="menu" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="node_modules/lucide/dist/umd/lucide.js"></script>
+  <script src="i18n.js"></script>
+  <script src="app-settings.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

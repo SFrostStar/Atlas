@@ -1,0 +1,18 @@
+//! Embeds the player's locally prepared game icon in the Windows executables, as icon
+//! resource 1: Explorer and the task bar show it, and the window takes it as its icon.
+fn main() {
+    let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let ico = format!("{dir}/../../.local/atlas-icons/game-icon.ico");
+    println!("cargo:rerun-if-changed={ico}");
+    #[cfg(windows)]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        let mut resource = winresource::WindowsResource::new();
+        resource.set_icon(&ico);
+        resource.set("ProductName", "Atlas");
+        resource.set("FileDescription", "Atlas 26.3");
+        resource.set("OriginalFilename", "atlas-client.exe");
+        if let Err(e) = resource.compile() {
+            panic!("embedding {ico}: {e}");
+        }
+    }
+}
