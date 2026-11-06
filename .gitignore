@@ -39,6 +39,10 @@ atlas-graphics.txt
 atlas-player.txt
 atlas-controller.txt
 atlas-shaders.toml
+atlas-ports.json
+atlas-runtime.json
+atlas-mods.txt
+mod-catalog.json
 horizon-extras.txt
 horizon-graphics.txt
 horizon-player.txt

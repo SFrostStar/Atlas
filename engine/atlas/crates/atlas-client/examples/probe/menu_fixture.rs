@@ -13,6 +13,7 @@ use atlas_client::{
     menu::{Env, Input, Kind, Menu},
 };
 use atlas_protocol::registry::Ids;
+use atlas_world::loot::PackOverlay;
 use serde_json::Value;
 use std::{
     cell::{Cell, RefCell},
@@ -83,11 +84,12 @@ pub fn main() -> atlas_client::Result<()> {
             .ok_or("usage: menu_fixture RESOURCES INPUT OUTPUT")?,
     );
     let input = fs::read_to_string(args.get(2).ok_or("missing INPUT")?)?;
-    let items = Items::catalog(root)?;
-    let recipes = Recipes::load(root, &items)?;
-    let brewing = atlas_client::brewing::Brewing::load(root, &items);
+    let items = Items::catalog(root, &PackOverlay::NONE)?;
+    let recipes = Recipes::load(root, &items, &PackOverlay::NONE)?;
+    let brewing = atlas_client::brewing::Brewing::load(root, &items, &PackOverlay::NONE);
     let banners = atlas_client::banner::Banners::load(root);
-    let station_recipes = atlas_client::stations::StationRecipes::load(root, &items);
+    let station_recipes =
+        atlas_client::stations::StationRecipes::load(root, &items, &PackOverlay::NONE);
     let enchantments = atlas_client::enchant::Enchantments::load(root);
     let names = atlas_client::creative::Names::load(root);
     let case_maps = CaseMaps::default();
@@ -101,6 +103,8 @@ pub fn main() -> atlas_client::Result<()> {
         names: &names,
         trade: None,
         maps: Some(&case_maps),
+        limited_crafting: false,
+        known_recipes: None,
     };
     // The mob effects' network ids (BeaconMenu.encodeEffect).
     let builtin = atlas_protocol::registry::Builtin::find(root)

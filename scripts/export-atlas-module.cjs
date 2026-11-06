@@ -10,12 +10,14 @@ const adapters = [
   ...['lib.rs','atlas_menu.rs','atlas_loading.rs','ui_theme.rs','options_ui.rs','ui.rs',
     'font.rs','hud.rs','hud.wgsl','hud_overlays.rs','screen_draw.rs','packs.rs','packs/cache.rs',
     'gfx.rs'].map(name => 'crates/atlas-client-render/src/' + name),
-  ...['lib.rs','title.rs','title/atlas.rs','game.rs','game/packs.rs','game/startup_menu.rs']
+  ...['lib.rs','client_lib.rs','entry.rs','main.rs','title.rs','title/atlas.rs','game.rs','game/packs.rs','game/server_packs.rs','game/startup_menu.rs','game/native_hooks.rs','game/extras.rs','game/remote.rs','game/chat.rs']
     .map(name => 'crates/atlas-client/src/' + name),
-  'crates/atlas-client-render/Cargo.toml', 'ATLAS-UPSTREAM.json',
+  'crates/atlas-client-render/Cargo.toml', 'crates/atlas-client/Cargo.toml', 'crates/atlas-client-lib/Cargo.toml', 'ATLAS-UPSTREAM.json', 'ATLAS-PORTS.md',
 ];
 fs.mkdirSync(output, { recursive: true });
 fs.cpSync(path.join(source, 'atlas'), path.join(output, 'atlas'), { recursive: true });
+const ports = path.join(engine, 'crates/atlas-client/src/game/atlas_ports');
+if (fs.existsSync(ports)) fs.cpSync(ports, path.join(output, 'game-atlas-ports'), { recursive: true });
 for (const name of adapters) {
   const target = path.join(output, 'adapters-reference', name);
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -38,7 +40,7 @@ function inventory(directory) {
 }
 inventory(output);
 fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify({
-  format: 2, kind: 'Atlas presentation/loading module and adapter references',
+  format: 3, kind: 'Atlas presentation/loading, game feature ports and adapter references',
   upstreamBase: JSON.parse(fs.readFileSync(path.join(engine, 'ATLAS-UPSTREAM.json'), 'utf8')).commit,
   note: 'Adapter references need manual integration; this is not an upstream patch or engine backup.',
   files,

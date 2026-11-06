@@ -10,6 +10,8 @@ const { AccountManager } = require('./lib/account-manager.cjs');
 const { t } = require('./i18n.js');
 const { GameInstallManager } = require('./lib/game-install.cjs');
 const { resolvePortableRoot } = require('./lib/portable-root.cjs');
+const { ModManager } = require('./lib/mod-manager.cjs');
+const { ReleaseUpdater } = require('./lib/release-updater.cjs');
 
 app.setName('Atlas Launcher');
 if (process.platform === 'win32') app.setAppUserModelId('Atlas.Launcher.Desktop');
@@ -18,12 +20,17 @@ let store;
 let games;
 let accounts;
 let installer;
+let mods;
+let updater;
+let updatePoll;
+let updateClosing = false;
+let updateApplying = false;
 let needsSetup=false;
 let supportVisible=true;
 let discordPresence;
 let discordPoll;
 let discordObserved;
-const launcherVersion = manifest.version.replace(/\.0$/, '');
+const launcherVersion = manifest.version;
 const logs = [];
 let publishTimer;
 const projectRoot = app.isPackaged ? resolvePortableRoot(process.execPath) : __dirname;
@@ -43,7 +50,37 @@ function appendLog(message, level = 'info') {
 }
 
 function state() {
-  return { ...store.getState(), version: launcherVersion, game: games.snapshot(), supportVisible, install: installer ? { ...installer.snapshot(), ...installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}), needsSetup } : null, accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs] };
+  return { ...store.getState(), mods: mods?.snapshot(store.config.selectedId), version: launcherVersion, update: updater ? { ...updater.snapshot(), applying: updateApplying } : undefined, game: { ...games.snapshot(), busy: gameBusy() }, supportVisible, install: installer ? { ...installer.snapshot(), ...installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}), needsSetup } : null, accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs] };
+}
+
+function gameBusy() {
+  return Boolean(games?.snapshot().running || games?.pendingInstances.size);
+}
+
+function assertUpdateIdle() {
+  if (updateApplying || updateClosing) throw new Error('Обновление устанавливается.');
+}
+
+async function checkUpdates() {
+  if (!updater || updateClosing) return;
+  await updater.check();
+  if (updater.snapshot().status === 'available') await updater.download();
+}
+
+async function applyUpdate(restart) {
+  if (!updater || updateClosing || updateApplying) return;
+  if (gameBusy() || installer?.snapshot().active) throw new Error('Закрой игру и дождись завершения установки файлов.');
+  updateApplying = true;
+  publishSoon();
+  try {
+    await updater.install({ restart });
+    updateClosing = true;
+    app.quit();
+  } catch (error) {
+    updateApplying = false;
+    publishSoon();
+    throw error;
+  }
 }
 
 function discordEnabled() {
@@ -100,6 +137,7 @@ function publishSoon() {
 }
 
 async function launch(id, additional = false) {
+  assertUpdateIdle();
   if(!installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}).ready){needsSetup=true;publish();return state();}
   needsSetup=false;
   if (additional) await games.launchAnother(id);
@@ -110,7 +148,8 @@ async function launch(id, additional = false) {
 }
 
 function startInstall(options={}) {
-  if(games.snapshot().running)throw new Error('Закрой игру перед подготовкой файлов.');
+  assertUpdateIdle();
+  if(gameBusy())throw new Error('Закрой игру перед подготовкой файлов.');
   if(!installer.snapshot().active){
     needsSetup=true;
     installer.start({...options,runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot})
@@ -129,6 +168,8 @@ function registerHandlers() {
     });
   }
   handle('get-state', () => state());
+  handle('check-updates', async () => { await checkUpdates(); return state(); });
+  handle('apply-update', () => applyUpdate(true));
   handle('update-instance', (id,patch) => {store.updateInstance(id,patch);return state();});
   handle('support-gift', () => shell.openExternal('https://t.me/protecteduzername'));
   handle('dismiss-support', () => {supportVisible=false;return state();});
@@ -157,6 +198,16 @@ function registerHandlers() {
   handle('cancel-signin', () => { accounts.cancelSignIn(); return state(); });
   handle('open-microsoft', () => shell.openExternal('https://www.microsoft.com/link'));
   handle('refresh-discord', () => { syncDiscord(true); return state(); });
+  handle('refresh-mods', async () => { await mods.refresh(); return state(); });
+  handle('change-mod', (id, source, project, action) => {
+    if (games.isInstanceRunning(id)) throw new Error('Закрой окна этой сборки перед изменением её модов.');
+    mods.change(id, source, project, action); return state();
+  });
+  handle('mod-page', (id) => {
+    const project=mods.projects.find(p=>p.id===id);
+    if(!project) throw new Error('Мод не найден в каталоге.');
+    return shell.openExternal(project.page);
+  });
   handle('set-game-options', (id, patch) => {
     if (games.isInstanceRunning(id)) throw new Error('Закрой окна этой сборки перед изменением её настроек.');
     store.setGameOptions(id, patch);
@@ -165,7 +216,7 @@ function registerHandlers() {
   handle('launch', (id) => launch(id));
   handle('launch-another', (id) => launch(id, true));
   handle('stop-game', async (sessionId) => { await games.stop(sessionId); return state(); });
-  handle('restart-game', async (sessionId) => { await games.restart(sessionId); return state(); });
+  handle('restart-game', async (sessionId) => { assertUpdateIdle(); await games.restart(sessionId); return state(); });
   handle('open-folder', async (kind, id) => {
     const directory = store.folder(kind, id);
     if (!fs.existsSync(directory)) throw new Error('Эта папка ещё не создана.');
@@ -229,6 +280,12 @@ else {
       publish();
     } });
     installer = new GameInstallManager({projectRoot,dataRoot:store.dataRoot,onChange:()=>{if(installer?.snapshot().status==='ready')needsSetup=false;publishSoon();}});
+    mods = new ModManager(store);
+    if (app.isPackaged && process.env.ATLAS_LAUNCHER_NO_SELF_UPDATE !== '1') {
+      updater = new ReleaseUpdater({ projectRoot, dataRoot: store.dataRoot, executable: process.execPath,
+        currentVersion: launcherVersion, onChange: publishSoon,
+        isGameRunning: () => Boolean(gameBusy() || installer?.snapshot().active) });
+    }
     registerHandlers();
     window = new BrowserWindow({
       width: 1360, height: 900, minWidth: 1050, minHeight: 740,
@@ -239,12 +296,27 @@ else {
     window.setMenuBarVisibility(false);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
-    window.once('ready-to-show', () => { window.show(); setImmediate(startDiscord); });
+    window.once('ready-to-show', () => {
+      window.show(); setImmediate(startDiscord);
+      if (updater) {
+        setTimeout(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 2500).unref();
+        updatePoll = setInterval(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 30 * 60 * 1000);
+        updatePoll.unref();
+      }
+    });
     if (guiTest) window.webContents.on('did-finish-load', () => window.setTitle('Atlas Launcher — проверка'));
-    window.on('close', (event) => { if (games.snapshot().running) { event.preventDefault(); window.hide(); } });
+    window.on('close', (event) => {
+      if (updateClosing) return;
+      if (updateApplying) { event.preventDefault(); return; }
+      if (gameBusy()) { event.preventDefault(); window.hide(); return; }
+      if (updater?.snapshot().status === 'ready' && !installer?.snapshot().active) {
+        event.preventDefault();
+        applyUpdate(false).catch(error => { appendLog(error.message, 'error'); publish(); });
+      }
+    });
     appendLog('Atlas Launcher готов. Сборки хранятся в отдельных папках.');
     window.loadFile(path.join(__dirname, 'index.html'), { query: { startupDeadline: String(startupDeadline) } });
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('will-quit', () => { clearInterval(discordPoll); discordPresence?.dispose(); accounts?.dispose(); installer?.cancel(); });
+  app.on('will-quit', () => { clearInterval(discordPoll); clearInterval(updatePoll); discordPresence?.dispose(); accounts?.dispose(); installer?.cancel(); });
 }

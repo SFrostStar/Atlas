@@ -19,7 +19,7 @@ From this worktree, with no other benchmark running:
 ```sh
 export CARGO_INCREMENTAL=0
 export CARGO_TARGET_DIR=/home/bob/Documents/atlas/target
-cargo build --profile fast -p atlas-client --example save_batch_bench
+cargo build --profile fast -p atlas-client-lib --example save_batch_bench
 taskset -c 2 "$CARGO_TARGET_DIR/fast/examples/save_batch_bench"
 cargo test --profile fast -p atlas-client --lib save::tests
 cargo clippy --profile fast -p atlas-client --all-targets -- -D warnings

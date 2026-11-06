@@ -131,6 +131,51 @@ class ReachTests(unittest.TestCase):
         self.assertIn("crates/b/src/used.rs", kept)
         self.assertNotIn("crates/c/src/lib.rs", kept)
 
+    def test_external_library_and_probe_roots_follow_the_manifest(self):
+        workspace(self.root, {
+            "crates/b/Cargo.toml": '[package]\nname = "b"\nautobins = false\nautoexamples = false\n'
+            '[lib]\npath = "../a/src/shared.rs"\n'
+            '[[example]]\nname = "client_probe"\npath = "../a/examples/probe/main.rs"\n',
+            "crates/a/src/shared.rs": "pub mod used;\n",
+            "crates/a/src/lib.rs": "pub fn game_only() {}\n",
+            "crates/a/Cargo.toml": '[package]\nname = "a"\nautobins = false\nautoexamples = false\n',
+            "crates/a/examples/probe/main.rs": "extern crate b as legacy;\nfn main() { legacy::used::helper(); }\n",
+            "crates/b/src/main.rs": "compile_error!(\"disabled auto-bin\");\n",
+            "crates/b/examples/ignored.rs": "compile_error!(\"disabled auto-example\");\n",
+        })
+        graph = parity_reach.SourceGraph(self.root, parity.rust_code)
+        roots = parity_reach.crate_roots(self.root / "crates/b")
+        self.assertIn((self.root / "crates/a/src/shared.rs").resolve(), roots)
+        self.assertIn((self.root / "crates/a/examples/probe/main.rs").resolve(), roots)
+        self.assertNotIn((self.root / "crates/b/src/main.rs").resolve(), roots)
+        self.assertTrue(graph.is_library("crates/a/src/shared.rs"))
+        self.assertEqual(graph.entries([["example", "client_probe", "dev", ["-p", "a"], True]],
+                                       {"crates/a/examples/probe/main.rs"}), {"crates/a/examples/probe/main.rs"})
+        reached = graph.reachable({"crates/a/examples/probe/main.rs"},
+                                  {"crates/a/examples/probe/main.rs", "crates/a/src/shared.rs", "crates/a/src/used.rs"})
+        self.assertIn("crates/a/src/used.rs", reached)
+        self.assertEqual(graph.targets(self.root / "crates/b"),
+                         {"client_probe": ("example", "crates/a/examples/probe/main.rs")})
+
+    def test_old_broad_client_records_find_moved_ctl_and_probes(self):
+        workspace(self.root, {
+            "crates/atlas-client/Cargo.toml": '[package]\nname = "atlas-client"\nautobins = false\nautoexamples = false\n'
+            '[[bin]]\nname = "atlas-client"\npath = "src/main.rs"\n',
+            "crates/atlas-client/src/main.rs": "fn main() {}\n",
+            "crates/atlas-client/src/bin/atlas-ctl.rs": "fn main() {}\n",
+            "crates/atlas-client/examples/probe/main.rs": "fn main() {}\n",
+            "crates/atlas-client-lib/Cargo.toml": '[package]\nname = "atlas-client-lib"\nautobins = false\nautoexamples = false\n'
+            '[[bin]]\nname = "atlas-ctl"\npath = "../atlas-client/src/bin/atlas-ctl.rs"\n'
+            '[[example]]\nname = "client_probe"\npath = "../atlas-client/examples/probe/main.rs"\n',
+        })
+        graph = parity_reach.SourceGraph(self.root, parity.rust_code)
+        game, ctl, probe = ("crates/atlas-client/" + path for path in
+                            ["src/main.rs", "src/bin/atlas-ctl.rs", "examples/probe/main.rs"])
+        self.assertEqual(graph.entries([["bins", "", "dev", ["-p", "atlas-client"], False]], {game, ctl, probe}),
+                         {game, ctl})
+        self.assertEqual(graph.entries([["examples", "", "dev", ["-p", "atlas-client"], True]], {game, ctl, probe}),
+                         {probe})
+
     def test_unknown_probes_keep_everything(self):
         self.assertEqual(set(self.narrowed(artifacts=[])), set(self.dependencies))
         self.assertEqual(set(self.narrowed(artifacts=[["example", "missing", "release", ["-p", "a"], True]])),

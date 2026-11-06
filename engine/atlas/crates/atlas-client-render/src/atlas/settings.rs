@@ -4,7 +4,6 @@ pub enum Page {
     Graphics,
     AdvancedGraphics,
     ShaderPacks,
-    Extras,
     Mods,
     Agent,
 }
@@ -22,21 +21,21 @@ pub enum Entry {
 }
 pub fn rows(no_ai: bool) -> Vec<(Entry, Option<Entry>)> {
     use Entry::{Page as Open, Toggle as Switch};
-    vec![
+    let mut rows = vec![
         (
             Open("Graphics", Page::Graphics),
             Some(Open("Advanced Graphics", Page::AdvancedGraphics)),
         ),
         (
             Open("Shader Packs", Page::ShaderPacks),
-            Some(Open("Extras", Page::Extras)),
+            Some(Open("Mods", Page::Mods)),
         ),
-        (Open("Mods", Page::Mods), Some(Switch(Toggle::NoAi))),
-        (
-            Switch(Toggle::DiscordPresence),
-            (!no_ai).then_some(Open("AI Agent", Page::Agent)),
-        ),
-    ]
+        (Switch(Toggle::DiscordPresence), Some(Switch(Toggle::NoAi))),
+    ];
+    if !no_ai {
+        rows.push((Open("AI Agent", Page::Agent), None));
+    }
+    rows
 }
 pub const LIGHTING_TITLE: &str = "Lighting";
 pub const LIGHTING: [Toggle; 2] = [Toggle::Fullbright, Toggle::DynamicLights];
@@ -48,14 +47,13 @@ mod tests {
     fn no_ai_keeps_its_position_and_hides_agent_navigation() {
         for disabled in [false, true] {
             let menu = rows(disabled);
-            assert!(matches!(
-                menu[2],
-                (
-                    Entry::Page(_, Page::Mods),
-                    Some(Entry::Toggle(Toggle::NoAi))
-                )
-            ));
-            assert_eq!(menu[3].1.is_none(), disabled);
+            assert!(matches!(menu[1].1, Some(Entry::Page(_, Page::Mods))));
+            assert!(matches!(menu[2].1, Some(Entry::Toggle(Toggle::NoAi))));
+            if disabled {
+                assert_eq!(menu.len(), 3);
+            } else {
+                assert!(matches!(menu[3], (Entry::Page(_, Page::Agent), None)));
+            }
         }
     }
 }

@@ -3,7 +3,7 @@
 tarball for one of your own Linux or macOS machines. The resources are Mojang
 assets: keep the archive in ignored .local/ and never publish or commit it.
 
-    cargo build --release -p atlas-client --bins
+    cargo build --release -p atlas-client -p atlas-client-lib --bins
     python3 tools/package_native_client.py
 """
 import argparse

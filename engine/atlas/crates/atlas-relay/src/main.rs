@@ -22,7 +22,10 @@ fn main() {
         eprintln!("atlas-relay: can't listen on port {port}: {e}");
         std::process::exit(1);
     });
-    let config = Config::from_env();
+    let config = Config::from_env().unwrap_or_else(|e| {
+        eprintln!("atlas-relay: {e}");
+        std::process::exit(1);
+    });
     println!(
         "atlas-relay {} listening on port {port} (hosts {}, bridges {}, {} KiB/s per stream, per-address limits {})",
         env!("CARGO_PKG_VERSION"),

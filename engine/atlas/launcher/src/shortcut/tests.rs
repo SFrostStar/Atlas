@@ -128,6 +128,28 @@ fn a_windows_shortcut_is_a_shell_link_to_the_launcher() {
     );
 }
 
+/// The shell-written shortcut keeps the instance's arguments, so an uninstall finds it: `plays`
+/// reads them from the file's Unicode strings.
+#[cfg(windows)]
+#[test]
+fn the_shell_written_link_keeps_the_instance_it_plays() {
+    let root = scratch("plays");
+    let exe = root.join("Atlas Launcher").join("atlas-launcher.exe");
+    fs::create_dir_all(exe.parent().unwrap()).unwrap();
+    fs::write(&exe, b"x").unwrap();
+    let link = root.join("Hardcore (Atlas).lnk");
+    write_windows_link(
+        &link,
+        &exe,
+        &windows_args("hardcore"),
+        "Play Hardcore in Atlas",
+    )
+    .unwrap();
+    assert!(plays(&link, "hardcore"));
+    assert!(!plays(&link, "another"));
+    let _ = fs::remove_dir_all(&root);
+}
+
 #[test]
 fn shortcuts_are_made_found_renamed_and_removed() {
     let root = scratch("make");
@@ -139,7 +161,13 @@ fn shortcuts_are_made_found_renamed_and_removed() {
     let bin = trash.clone();
     let trash_fn = move |p: &Path| desktop_seams::to_folder(p, &bin);
     let t: Trash = &trash_fn;
-    let exe = Path::new("/opt/atlas-launcher");
+    // A path the shell accepts on the system running the test: Windows writes its shortcuts through
+    // IShellLinkW, which refuses a Unix path.
+    let exe = if cfg!(windows) {
+        Path::new(r"C:\Atlas\atlas-launcher.exe")
+    } else {
+        Path::new("/opt/atlas-launcher")
+    };
     for system in [System::Linux, System::Mac, System::Windows] {
         let made = make_in(
             system,

@@ -2,6 +2,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('atlas', {
   getState: () => ipcRenderer.invoke('atlas:get-state'),
+  checkUpdates: () => ipcRenderer.invoke('atlas:check-updates'),
+  applyUpdate: () => ipcRenderer.invoke('atlas:apply-update'),
+  refreshMods: () => ipcRenderer.invoke('atlas:refresh-mods'),
+  changeMod: (id, source, project, action) => ipcRenderer.invoke('atlas:change-mod', id, source, project, action),
+  modPage: id => ipcRenderer.invoke('atlas:mod-page', id),
   updateInstance: (id,patch) => ipcRenderer.invoke('atlas:update-instance', id,patch),
   supportGift: () => ipcRenderer.invoke('atlas:support-gift'),
   dismissSupport: () => ipcRenderer.invoke('atlas:dismiss-support'),

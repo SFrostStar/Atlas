@@ -7,12 +7,14 @@ use crate::{
     items::{ItemStack, Items},
     providers::Providers,
 };
+use atlas_world::loot::PackOverlay;
 use serde_json::Value;
-use std::{collections::HashSet, fs, path::Path};
+use std::{collections::HashSet, path::Path};
 
 pub use atlas_client_core::potions::{
-    BASE_POTION_COLOR, Category, EFFECTS, EffectDef, POTIONS, PotionDef, effect, namespaced,
-    potion, potion_color,
+    BASE_POTION_COLOR, Category, EFFECTS, EffectDef, POTIONS, PotionDef, all_effects,
+    description_id, effect, is_mod_effect, mod_effects, namespaced, potion, potion_color,
+    register_mod_effects,
 };
 /// `MobEffectUtil.formatDuration` at 20 TPS.
 pub fn format_duration(ticks: i32) -> String {
@@ -35,6 +37,22 @@ pub fn potion_name_key(item: &str, potion: Option<&str>) -> String {
     let suffix = potion.and_then(self::potion).map_or("empty", |p| p.name);
     format!("item.minecraft.{prefix}.effect.{suffix}")
 }
+/// `PotionContents.getAllEffects`: the potion's effects, then the stack's
+/// `custom_effects` (id, duration, amplifier). Unknown effect ids are dropped.
+pub fn contents_effects(stack: &ItemStack) -> Vec<(&'static str, i32, i32)> {
+    let potion = stack.potion().and_then(self::potion);
+    let custom = stack.custom_potion_effects();
+    potion
+        .map_or(&[][..], |d| d.effects)
+        .iter()
+        .copied()
+        .chain(
+            custom
+                .iter()
+                .filter_map(|(id, duration, amp)| Some((effect(id)?.id, *duration, *amp))),
+        )
+        .collect()
+}
 /// Roman amplifier suffix (`potion.potency.N`) and duration lines of a potion.
 pub fn tooltip(
     potion: Option<&str>,
@@ -50,22 +68,42 @@ pub fn tooltip(
             Category::Neutral,
         )];
     }
-    def.effects
-        .iter()
+    effect_lines(def.effects.iter().copied(), scale, translate)
+}
+/// `PotionContents.addPotionTooltip`'s line per effect: its name, potency and
+/// scaled duration, for (effect id, duration, amplifier) entries.
+pub fn effect_lines<'a>(
+    effects: impl IntoIterator<Item = (&'a str, i32, i32)>,
+    scale: f32,
+    translate: &dyn Fn(&str) -> Option<String>,
+) -> Vec<(String, Category)> {
+    effects
+        .into_iter()
         .map(|(e, duration, amp)| {
-            let mut line =
-                translate(&format!("effect.minecraft.{e}")).unwrap_or_else(|| (*e).to_owned());
-            if *amp > 0 {
+            let e = e.trim_start_matches("minecraft:");
+            let mut line = translate(&description_id(e)).unwrap_or_else(|| e.to_owned());
+            if amp > 0 {
                 line.push(' ');
                 line.push_str(
                     &translate(&format!("potion.potency.{amp}"))
-                        .unwrap_or_else(|| crate::enchant::level_name(*amp as u32 + 1)),
+                        .unwrap_or_else(|| crate::enchant::level_name(amp as u32 + 1)),
                 );
             }
             let instant = effect(e).is_some_and(|d| d.instant);
-            let scaled = (*duration as f32 * scale) as i32;
-            if !instant && scaled > 20 {
-                line = format!("{line} ({})", format_duration(scaled));
+            if !instant {
+                if duration == -1 {
+                    // MobEffectInstance.isInfiniteDuration: formatDuration says
+                    // the infinite sign, not a time.
+                    line = format!(
+                        "{line} ({})",
+                        translate("effect.duration.infinite").unwrap_or_else(|| "∞".to_owned())
+                    );
+                } else {
+                    let scaled = (duration as f32 * scale) as i32;
+                    if scaled > 20 {
+                        line = format!("{line} ({})", format_duration(scaled));
+                    }
+                }
             }
             (line, effect(e).map_or(Category::Neutral, |d| d.category))
         })
@@ -131,21 +169,65 @@ pub struct Brewing {
     /// Items accepted in the bottle slots (`PotionIngredient.isPotionInput`).
     pub inputs: HashSet<String>,
 }
+/// The files right in `recipe/brewing/`, parsed, by id: taken from the whole
+/// recipe folder's read when another table holds it (the start loads them
+/// together), else read alone. A file that doesn't parse is left out.
+fn brewing_sources(root: &Path) -> Vec<(String, Value)> {
+    let recipe = root.join("data/minecraft/recipe");
+    let (folder, prefix) = match crate::json_folder::held(&recipe) {
+        Some(folder) => (folder, "brewing/"),
+        None => match crate::json_folder::read(&recipe.join("brewing")) {
+            Ok(folder) => (folder, ""),
+            Err(_) => return Vec::new(),
+        },
+    };
+    folder
+        .files
+        .iter()
+        .filter_map(|f| {
+            let name = f.name.strip_prefix(prefix).filter(|n| !n.contains('/'))?;
+            let v = serde_json::from_slice::<Value>(f.bytes().ok()?).ok()?;
+            Some((format!("minecraft:brewing/{name}"), v))
+        })
+        .collect()
+}
 impl Brewing {
-    pub fn load(root: &Path, items: &Items) -> Self {
-        let mut files: Vec<_> = fs::read_dir(root.join("data/minecraft/recipe/brewing"))
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .collect();
-        files.sort();
-        let mut recipes = Vec::new();
-        for p in files {
-            let Ok(bytes) = fs::read(&p) else { continue };
-            let Ok(v) = serde_json::from_slice::<Value>(&bytes) else {
+    pub fn load(root: &Path, items: &Items, overlay: &PackOverlay) -> Self {
+        // NeoForge's load conditions: a file whose don't hold is silently
+        // absent. Vanilla's brewing recipes carry none; a pack's can.
+        let mods: Vec<String> = {
+            let mut mods = atlas_items::content_namespaces::mod_ids(root);
+            if !mods.iter().any(|m| m == "minecraft") {
+                mods.push("minecraft".to_owned());
+            }
+            mods
+        };
+        let conditions_hold = |v: &Value| {
+            atlas_world::conditions::conditions_hold(v, &|id: &str| mods.iter().any(|m| m == id))
+        };
+        let mut sources: Vec<(String, Value)> = brewing_sources(root);
+        // The world's packs' brewing recipes over the game's own: the top
+        // pack's file for each id replaces it (`SimpleJsonResourceReloadListener`).
+        for (id, files) in overlay.kind("recipe") {
+            if !id.starts_with("minecraft:brewing/") {
+                continue;
+            }
+            let Ok(v) = serde_json::from_slice::<Value>(PackOverlay::top(files)) else {
                 continue;
             };
+            match sources.iter_mut().find(|(n, _)| n == id) {
+                Some(slot) => slot.1 = v,
+                None => sources.push((id.to_owned(), v)),
+            }
+        }
+        // The gate answers the merged file, as the crafting loader's does:
+        // a false-conditioned pack file leaves the lower one gone too.
+        // The data's recipe filters, over the final set.
+        let filters = atlas_items::recipe_filters::RecipeFilters::load(root, overlay);
+        sources.retain_mut(|(id, v)| conditions_hold(v) && filters.apply(id, v));
+        sources.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut recipes = Vec::new();
+        for (id, v) in sources {
             if v["type"] != "minecraft:brewing" {
                 continue;
             }
@@ -159,10 +241,7 @@ impl Brewing {
                 output = output.with_potion(potion);
             }
             recipes.push(BrewingRecipe {
-                id: format!(
-                    "minecraft:brewing/{}",
-                    p.file_stem().and_then(|s| s.to_str()).unwrap_or("")
-                ),
+                id,
                 input: PotionIngredient::parse(&v["input"], items),
                 reagent: PotionIngredient::parse(&v["reagent"], items),
                 output,
@@ -271,6 +350,17 @@ impl BrewingStand {
             out.bottles = Some(bottles);
         }
         out
+    }
+    pub fn idle(&self) -> bool {
+        let bottles = [
+            self.items[0].is_some(),
+            self.items[1].is_some(),
+            self.items[2].is_some(),
+        ];
+        self.brew_time <= 0
+            && self.items[3].is_none()
+            && (self.fuel > 0 || self.items[4].is_none())
+            && self.last_bottles == Some(bottles)
     }
     fn brew(&mut self, brewing: &Brewing, items: &Items, out: &mut BrewTick) {
         let Some(ingredient) = self.items[3].clone() else {
@@ -387,6 +477,84 @@ mod tests {
         assert_eq!(stand.brew_time, 0);
     }
 
+    #[test]
+    fn a_brewing_stand_is_idle_only_while_its_tick_changes_nothing() {
+        let mut stand = BrewingStand::new();
+        assert!(!stand.idle());
+        stand.last_bottles = Some([false; 3]);
+        assert!(stand.idle());
+        stand.items[0] = Some(ItemStack::new("minecraft:potion", 1));
+        assert!(!stand.idle());
+        stand.last_bottles = Some([true, false, false]);
+        assert!(stand.idle());
+        stand.items[4] = Some(ItemStack::new("minecraft:blaze_powder", 1));
+        assert!(!stand.idle());
+        stand.fuel = 3;
+        assert!(stand.idle());
+        stand.items[3] = Some(ItemStack::new("minecraft:nether_wart", 1));
+        assert!(!stand.idle());
+        stand.items[3] = None;
+        stand.brew_time = 5;
+        assert!(!stand.idle());
+    }
+
+    /// The stand sleeps while `idle`, so its tick must change nothing then: run the real
+    /// tick on idle stands and compare, and check a stand with fuel to take wakes.
+    #[test]
+    fn an_idle_brewing_stand_tick_changes_nothing() {
+        let items = Items::for_tests(std::collections::HashMap::new());
+        let brewing = Brewing {
+            reagents: ["minecraft:nether_wart".to_owned()].into_iter().collect(),
+            inputs: HashSet::new(),
+            recipes: vec![BrewingRecipe {
+                id: "awkward".into(),
+                input: PotionIngredient {
+                    items: ["minecraft:potion".to_owned()].into_iter().collect(),
+                    potions: Some(["minecraft:water".to_owned()].into_iter().collect()),
+                },
+                reagent: PotionIngredient {
+                    items: ["minecraft:nether_wart".to_owned()].into_iter().collect(),
+                    potions: None,
+                },
+                output: ItemStack::new("minecraft:potion", 1).with_potion("minecraft:awkward"),
+            }],
+        };
+        let providers = Providers::empty();
+        let water = || Some(ItemStack::new("minecraft:potion", 1).with_potion("minecraft:water"));
+        let stand = |bottle: bool, fuel: i32, powder: bool| {
+            let mut s = BrewingStand::new();
+            s.fuel = fuel;
+            if bottle {
+                s.items[1] = water();
+            }
+            if powder {
+                s.items[4] = Some(ItemStack::new("minecraft:blaze_powder", 1));
+            }
+            s.last_bottles = Some([false, bottle, false]);
+            s
+        };
+        for before in [
+            stand(false, 0, false),
+            stand(true, 0, false),
+            stand(true, 5, false),
+            stand(true, 5, true),
+        ] {
+            assert!(before.idle(), "{before:?}");
+            let mut after = before.clone();
+            assert_eq!(
+                after.tick(&brewing, &items, &providers),
+                BrewTick::default()
+            );
+            assert_eq!(format!("{after:?}"), format!("{before:?}"));
+        }
+        // A brewable ingredient starts the brew: not idle, and the tick changes it.
+        let mut brewing_now = stand(true, 5, false);
+        brewing_now.items[3] = Some(ItemStack::new("minecraft:nether_wart", 1));
+        assert!(!brewing_now.idle());
+        brewing_now.tick(&brewing, &items, &providers);
+        assert_eq!(brewing_now.brew_time, 400);
+    }
+
     /// #3312: `PotionContents.getPotionDescription` names the effects with
     /// translatable components, so a Russian game reads them from ru_ru.json
     /// (the prepared one; skipped without it), as the tooltip's other lines.
@@ -404,5 +572,16 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[0].0.starts_with("Замедление IV ("), "{lines:?}");
         assert!(lines[1].0.starts_with("Сопротивление III ("), "{lines:?}");
+    }
+
+    #[test]
+    fn infinite_effects_say_the_infinite_sign() {
+        // MobEffectInstance.isInfiniteDuration: a -1 duration says the
+        // infinite sign, not a time; a short one still says nothing.
+        let translate = |key: &str| (key == "effect.duration.infinite").then(|| "∞".to_owned());
+        let lines = effect_lines([("minecraft:resistance", -1, 0)], 1.0, &translate);
+        assert_eq!(lines[0].0, "resistance (∞)");
+        let lines = effect_lines([("minecraft:resistance", 15, 0)], 1.0, &translate);
+        assert_eq!(lines[0].0, "resistance");
     }
 }

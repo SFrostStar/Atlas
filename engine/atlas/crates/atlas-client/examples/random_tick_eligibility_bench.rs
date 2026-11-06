@@ -1,5 +1,6 @@
 //! Selection cost only (not block simulation). Run with prepared client resources.
 //! cargo run --profile fast -p atlas-client --example random_tick_eligibility_bench -- RESOURCES
+extern crate atlas_client_lib as atlas_client;
 use atlas_client::{
     blocks::BlockFacts,
     chunk::{Chunk, MIN_Y, Section},

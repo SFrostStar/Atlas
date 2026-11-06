@@ -305,6 +305,7 @@ impl Game<'_> {
         let (back, label) = self.back_button(layout);
         let atlas = &self.gui.atlas;
         let hover = inside(cursor, back);
+        atlas_client::widgets::declare_action(atlas_client::widgets::Action::Back, back, true);
         let sprite = if hover {
             "gui/sprites/widget/button_highlighted"
         } else {
@@ -489,12 +490,11 @@ impl Game<'_> {
                 );
             }
             let name = self.pack.names.display_item(&stack.item);
-            atlas_client::widgets::record_as(
-                &format!("{name} tab"),
-                [x + 1.0, y + 1.0, 16.0, 16.0],
-                true,
-                atlas_client::widgets::Kind::Tab(i == selected),
-            );
+            let rect = [x + 1.0, y + 1.0, 16.0, 16.0];
+            let kind = atlas_client::widgets::Kind::Tab(i == selected);
+            atlas_client::widgets::record_as(&format!("{name} tab"), rect, true, kind);
+            // The kind reaches the bumpers only as a target (`key_focus::drawn_targets`).
+            atlas_client::widgets::target_as(rect, kind);
         }
     }
 

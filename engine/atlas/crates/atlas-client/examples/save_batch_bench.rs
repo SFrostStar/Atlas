@@ -2,6 +2,7 @@
 //! full chunk NBT encoder. Run with `cargo run --profile fast -p atlas-client
 //! --example save_batch_bench`. Add `-- --nbt` to also time serialization.
 //! Exact NBT equality is always validated. No GPU, compression or disk I/O timed.
+extern crate atlas_client_lib as atlas_client;
 use atlas_client::{
     biome::Biomes,
     chunk::{Chunk, block_strategy},

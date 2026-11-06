@@ -2,6 +2,7 @@
 //! to the ones decoded from the PNGs. Deletes the cache file in ROOT, loads (decodes
 //! and writes it), loads again (reads it) and compares the sprite arrays.
 //! cargo run --profile fast -p atlas-client --example sprite_cache_parity -- ROOT
+extern crate atlas_client_lib as atlas_client;
 use atlas_client::assets::{Assets, RenderAssets};
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
@@ -11,7 +12,7 @@ use std::{
 
 fn digest(render: &RenderAssets) -> u64 {
     let mut h = DefaultHasher::new();
-    render.pixels.hash(&mut h);
+    render.pixels.get().hash(&mut h);
     (
         render.sprite_size,
         render.sprite_minimum_size,

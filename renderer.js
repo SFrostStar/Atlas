@@ -13,6 +13,9 @@ let renameOnly=false;
 let toastTimer;
 let installIntent = null;
 let installActionPending = false;
+let modsSource = 'atlas';
+let modsSearch = '';
+let modsBusy = false;
 const titles = { home: 'Главная', instances: 'Мои сборки', workshop: 'Мастерская', settings: 'Настройки', logs: 'Журнал запуска' };
 const accents = AtlasInstanceOptions.colors;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -125,20 +128,40 @@ function intro(title, subtitle, action = '') {
   return `<div class="page-intro"><h1>${title}</h1>${action}</div>`;
 }
 function tabNavigation() {
-  return `<div class="home-tabs" role="tablist" aria-label="Разделы сборки">${[['overview','Обзор'],['files','Файлы сборки']].map(([id,name]) => `<button type="button" class="tab ${currentTab===id?'active':''}" role="tab" aria-selected="${currentTab===id}" data-tab="${id}">${name}</button>`).join('')}</div>`;
+  return `<div class="home-tabs" role="tablist" aria-label="Разделы сборки">${[['overview','Обзор'],['files','Файлы сборки'],['mods','Моды']].map(([id,name]) => `<button type="button" class="tab ${currentTab===id?'active':''}" role="tab" aria-selected="${currentTab===id}" data-tab="${id}">${name}</button>`).join('')}</div>`;
 }
 function homePage() {
   const instance = selected();
   const selectedRunning = selectedInstanceRunning();
   const top = intro('Главная', '') + tabNavigation();
   if (currentTab === 'files') return top + filePage();
+  if (currentTab === 'mods') return top + modsPage();
   return top + `<section class="hero" aria-label="Пейзаж Atlas"><div class="hero-copy"><h2>Твой мир.<br>Твои правила.</h2></div></section>
   <div class="launch-bar"><div class="launch-main">${cube(instance)}<div class="launch-info"><strong>${escapeHtml(instance.name)}</strong><span><span class="status-dot"></span>${selectedRunning ? 'Игра запущена' : installActive()?'Подготовка игры':state.install && !state.install.ready?'Нужна подготовка игры':state.runtimeAvailable ? 'Готово к запуску' : 'Выбери клиент в настройках'}${selectedRunning?` · <span class="playtime" data-session-id="${activeGameSession()?.id}"></span>`:''}</span></div>${selectedRunning ? button('game-menu','Игра запущена','chevron-down','running launch-button',`aria-haspopup="menu" aria-expanded="${contextMenuState?.type==='game'}" ${pendingGameAction?'disabled':''}`) : button('launch',busy?'Запускаем…':installActive()?'Подготовка игры':'Играть','play','primary launch-button',busy||pendingGameAction||installActive()?'disabled':'')}</div></div>
   <div class="quick-grid"><button class="quick-card" data-open="project">${icon('folder-open')}<strong>Корневая папка</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button><button class="quick-card" data-page="workshop">${icon('code-2')}<strong>Исходники</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button><button class="quick-card" data-open="resourcepacks">${icon('package-open')}<strong>Ресурспаки</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button></div>
   `;
 }
+function modsPage() {
+  const data=state.mods||{ports:[],horizon:[]},en=state.settings.language==='en';
+  const items=(modsSource==='atlas'?data.ports:data.horizon).filter(m=>`${m.name} ${m.description||m.summary||''}`.toLowerCase().includes(modsSearch.toLowerCase()));
+  const blocked=modsBusy||selectedInstanceRunning();
+  const action=(m,kind,label,glyph='download')=>button('change-mod',tr(label),glyph,kind==='install'?'primary':'secondary',`data-mod="${escapeHtml(m.id)}" data-source="${modsSource}" data-mod-action="${kind}" ${blocked?'disabled':''}`);
+  return `<section class="mods-section"><div class="mods-toolbar"><div class="mods-sources" role="group" aria-label="${tr('Каталог модов')}">${[['atlas','Atlas Rust'],['horizon','Horizon']].map(([id,label])=>`<button type="button" class="tab ${modsSource===id?'active':''}" data-mods-source="${id}">${label}</button>`).join('')}</div><input type="search" name="mod-search" value="${escapeHtml(modsSearch)}" placeholder="${tr('Поиск модов')}" aria-label="${tr('Поиск модов')}">${modsSource==='horizon'?button('refresh-mods',tr(modsBusy?'Загрузка…':'Обновить'),'refresh-cw','secondary',modsBusy?'disabled':''):''}</div>
+  <div class="mods-caption"><strong>${escapeHtml(selected().name)}</strong><span>${tr(selectedInstanceRunning()?'Закрой игру для изменения модов.':'Моды применяются при следующем запуске игры.')}</span></div>
+  ${modsSource==='horizon'?`<p class="subtitle">${tr('Каталог Horizon. Доступные аналоги Atlas отмечены отдельно; остальным нужна адаптация и нативная сборка.')}</p>`:''}
+  ${data.error?`<p class="mods-error">${escapeHtml(tr(data.error))}</p>`:''}
+  <div class="mods-grid">${items.map(m=>{
+    const adapted=modsSource==='horizon'&&Boolean(m.port),installable=modsSource==='atlas'||adapted;
+    const description=modsSource==='atlas'?(en?m.descriptionEn:m.description):adapted?tr('Доступна встроенная версия приближения Atlas по клавише C.'):m.summary;
+    const scope=modsSource==='atlas'?(en?m.scopeEn:m.scope):adapted?tr('Аналог Atlas: приближение 4× по C. Исходный мод Horizon не устанавливается.'):tr(m.kind==='native-mod'?'Нужна адаптация нативной сборки.':'WebAssembly-моду нужна новая реализация.');
+    return `<article class="mod-card"><div class="mod-card-title"><span class="mod-icon">${icon(m.icon||'package')}</span><div><h3>${escapeHtml(m.name)}</h3><span class="tag">${tr(adapted?'Аналог Atlas':modsSource==='atlas'?'Rust · Atlas':'Horizon')} ${m.version&&!adapted?escapeHtml(m.version):''}</span></div></div><p>${escapeHtml(description)}</p><small>${escapeHtml(scope)}</small><div class="mod-actions">${installable?(m.installed?`${action(m,m.enabled?'disable':'enable',m.enabled?'Выключить':'Включить',m.enabled?'toggle-right':'toggle-left')}${action(m,'remove','Удалить','trash-2')}`:action(m,'install',adapted?'Установить аналог':'Установить')):`<span class="mod-unavailable">${tr('Нужна адаптация')}</span>`}${modsSource==='horizon'?button('mod-page',tr('Страница'),'arrow-up-right','quiet',`data-mod="${escapeHtml(m.id)}"`):''}</div></article>`;
+  }).join('')}</div>${!items.length?`<div class="empty-state">${tr(modsSource==='horizon'&&!data.horizon.length?'Нажми «Обновить», чтобы загрузить каталог Horizon.':'Моды не найдены.')}</div>`:''}</section>`;
+}
+document.addEventListener('input',event=>{
+  if(event.target.name==='mod-search'){modsSearch=event.target.value.slice(0,100);render();}
+});
 function instancesPage() {
-  return intro('Мои сборки', '', button('new-instance','Новая сборка','plus')) + `<div class="instance-grid">${state.instances.map(instance => `<article class="instance-card" data-instance="${instance.id}" style="--accent:${accent(instance)}"><div class="instance-cover">${icon(AtlasInstanceOptions.icons.includes(instance.icon)?instance.icon:'box')}${instance.id===state.selectedId?'<span class="tag">Выбрана</span>':''}</div><div class="instance-body"><h3>${escapeHtml(instance.name)}</h3>${instance.description?`<p>${escapeHtml(instance.description)}</p>`:''}<div class="instance-card-footer"><small>Atlas 26.3</small><div><button class="bare" data-open="instance" data-id="${instance.id}" aria-label="Открыть папку ${escapeHtml(instance.name)}">${icon('folder-open')}</button>${button('select-instance',instance.id===state.selectedId?'Открыть':'Выбрать','arrow-up-right','secondary',`data-id="${instance.id}"`)}<button class="bare" data-action="instance-menu" data-id="${instance.id}" aria-label="Действия со сборкой ${escapeHtml(instance.name)}" aria-haspopup="menu">${icon('ellipsis-vertical')}</button></div></div></div></article>`).join('')}<button class="instance-new" data-action="new-instance">${icon('plus')}<span>Новая сборка</span></button></div>`;
+  return intro('Мои сборки', '', button('new-instance','Новая сборка','plus')) + `<div class="instance-grid">${state.instances.map(instance => `<article class="instance-card" data-instance="${instance.id}" style="--accent:${accent(instance)}"><div class="instance-cover">${icon(AtlasInstanceOptions.icons.includes(instance.icon)?instance.icon:'box')}${instance.id===state.selectedId?'<span class="tag">Выбрана</span>':''}</div><div class="instance-body"><h3>${escapeHtml(instance.name)}</h3>${instance.description?`<p>${escapeHtml(instance.description)}</p>`:''}<div class="instance-card-footer"><small>Atlas ${escapeHtml(state.version)}</small><div><button class="bare" data-open="instance" data-id="${instance.id}" aria-label="Открыть папку ${escapeHtml(instance.name)}">${icon('folder-open')}</button>${button('select-instance',instance.id===state.selectedId?'Открыть':'Выбрать','arrow-up-right','secondary',`data-id="${instance.id}"`)}<button class="bare" data-action="instance-menu" data-id="${instance.id}" aria-label="Действия со сборкой ${escapeHtml(instance.name)}" aria-haspopup="menu">${icon('ellipsis-vertical')}</button></div></div></div></article>`).join('')}<button class="instance-new" data-action="new-instance">${icon('plus')}<span>Новая сборка</span></button></div>`;
 }
 function filePage() {
   const instance = selected();
@@ -146,10 +169,25 @@ function filePage() {
   return `<div class="section-heading"><h3>${escapeHtml(instance.name)}</h3></div><div class="file-list">${entries.map(([kind,glyph,title,description])=>`<button class="file-row" data-open="${kind}">${icon(glyph)}<div><strong>${title}</strong>${kind==='instance'?`<p>${escapeHtml(description)}</p>`:''}</div>${icon('arrow-up-right')}</button>`).join('')}</div>`;
 }
 function workshopPage() {
-  return intro('Мастерская', '', button('open-source','Открыть исходники','folder-code','primary')) + `<section class="panel"><div class="panel-heading">${icon('braces')}<h3>Atlas 26.3</h3></div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div><span class="tag">${state.sourceAvailable?'Готово':'Не найдены'}</span></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div></section><div class="workshop-actions">${button('open-guide','Инструкция по изменению игры','book-open','secondary')}</div>`;
+  return intro('Мастерская', '', button('open-source','Открыть исходники','folder-code','primary')) + `<section class="panel"><div class="panel-heading">${icon('braces')}<h3>Atlas ${escapeHtml(state.version)}</h3></div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div><span class="tag">${state.sourceAvailable?'Готово':'Не найдены'}</span></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div></section><div class="workshop-actions">${button('open-guide','Инструкция по изменению игры','book-open','secondary')}</div>`;
 }
 function settingsPage() {
-  return intro('Настройки', '') + appearanceSettingsPanel() + memorySettingsPanel() + accountSettingsPanel() + discordSettingsPanel() + `<section class="panel"><div class="panel-heading">${icon('box')}<h3>Клиент и исходники</h3></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div>${button('choose-source','Выбрать папку','folder-code')}</div><div class="settings-row"><div><strong>Скрывать лаунчер во время игры</strong></div><label class="switch"><input type="checkbox" id="close-on-launch" ${state.settings.closeOnLaunch?'checked':''} aria-label="Скрывать лаунчер во время игры"><span class="switch-track"></span></label></div></section><section class="panel"><div class="panel-heading">${icon('hard-drive')}<h3>Папки</h3></div><div class="settings-row"><div><strong>Корневая папка</strong><p class="path">${escapeHtml(state.projectRoot)}</p></div>${button('open-project','Открыть','arrow-up-right')}</div><div class="settings-row"><div><strong>Сборки и настройки</strong><p class="path">${escapeHtml(state.dataRoot)}</p></div><span class="tag">${state.instances.length}</span></div></section>`;
+  return intro('Настройки', '') + updateSettingsPanel() + appearanceSettingsPanel() + memorySettingsPanel() + accountSettingsPanel() + discordSettingsPanel() + `<section class="panel"><div class="panel-heading">${icon('box')}<h3>Клиент и исходники</h3></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div>${button('choose-source','Выбрать папку','folder-code')}</div><div class="settings-row"><div><strong>Скрывать лаунчер во время игры</strong></div><label class="switch"><input type="checkbox" id="close-on-launch" ${state.settings.closeOnLaunch?'checked':''} aria-label="Скрывать лаунчер во время игры"><span class="switch-track"></span></label></div></section><section class="panel"><div class="panel-heading">${icon('hard-drive')}<h3>Папки</h3></div><div class="settings-row"><div><strong>Корневая папка</strong><p class="path">${escapeHtml(state.projectRoot)}</p></div>${button('open-project','Открыть','arrow-up-right')}</div><div class="settings-row"><div><strong>Сборки и настройки</strong><p class="path">${escapeHtml(state.dataRoot)}</p></div><span class="tag">${state.instances.length}</span></div></section>`;
+}
+function updateLabel() {
+  const update=state.update;
+  if(!update)return tr('Автообновление доступно в готовой сборке.');
+  const labels={idle:'Обновления проверяются автоматически.',checking:'Проверка обновлений…',available:'Скачивание обновления',downloading:'Скачивание обновления',ready:'Обновление готово',installing:'Обновление устанавливается.',upToDate:'Установлена последняя версия',error:'Не удалось проверить обновления',disabled:'Автообновление доступно в готовой сборке.'};
+  const suffix=update.status==='downloading'&&Number.isFinite(update.progress)?` · ${Math.round(update.progress*100)}%`:'';
+  return tr(labels[update.status]||labels.idle)+suffix;
+}
+function updateSettingsPanel() {
+  const update=state.update;
+  const working=update?.applying||['checking','downloading','installing'].includes(update?.status);
+  const ready=update?.status==='ready';
+  const blocked=Boolean(state.game?.running||state.game?.busy||installActive());
+  const detail=ready?tr(blocked?'Закрой игру для установки обновления.':'Обновление установится при закрытии лаунчера.'):'';
+  return `<section class="panel"><div class="panel-heading">${icon('download')}<h3>${tr('Обновления')}</h3><span class="tag">atlas-${escapeHtml(state.version)}</span></div><div class="settings-row"><div><strong>${escapeHtml(updateLabel())}${ready?` · ${escapeHtml(update.version)}`:''}</strong>${detail?`<p>${escapeHtml(detail)}</p>`:''}${update?.error?`<p class="form-error">${escapeHtml(update.error)}</p>`:''}</div>${button(ready?'apply-update':'check-updates',tr(ready?'Перезапустить':'Проверить обновления'),ready?'rotate-cw':'refresh-cw','secondary',!update||working||ready&&blocked?'disabled':'')}</div></section>`;
 }
 function discordSettingsPanel() {
   const discord=state.discord||{enabled:false,status:'disabled'};
@@ -169,6 +207,12 @@ function render() {
   applyAppearance();
   document.querySelectorAll('.nav-item[data-page]').forEach(element => element.classList.toggle('active', element.dataset.page===currentPage));
   document.getElementById('support-notice').hidden = state.supportVisible===false;
+  document.getElementById('atlas-version').innerHTML = `<span class="status-dot"></span>Atlas ${escapeHtml(state.version)}`;
+  const updateNotice=document.getElementById('update-notice');
+  updateNotice.hidden=!['downloading','ready'].includes(state.update?.status);
+  updateNotice.innerHTML=state.update?.status==='ready'
+    ? `<span>${tr('Обновление готово')}</span>${button('apply-update',tr('Перезапустить'),'rotate-cw','quiet',state.game?.running||state.game?.busy||state.update.applying||installActive()?'disabled':'')}`
+    : `<span>${escapeHtml(updateLabel())}</span>`;
   document.getElementById('instance-count').textContent = state.instances.length;
   document.getElementById('sidebar-instances').innerHTML = state.instances.map(instance=>`<button class="sidebar-instance ${instance.id===state.selectedId?'selected':''}" data-action="select-instance" data-id="${instance.id}">${cube(instance)}<span>${escapeHtml(instance.name)}</span></button>`).join('');
   const renderer = {home:homePage,instances:instancesPage,workshop:workshopPage,settings:settingsPage,logs:logsPage};
@@ -275,8 +319,12 @@ document.addEventListener('click', async event => {
     render(); return;
   }
   if (control.dataset.tab) { currentTab = control.dataset.tab; render(); return; }
+  if(control.dataset.modsSource){modsSource=control.dataset.modsSource;render();if(modsSource==='horizon'&&!state.mods?.horizon?.length&&!modsBusy){modsBusy=true;render();try{await invoke(()=>window.atlas.refreshMods());}finally{modsBusy=false;render();}}return;}
   if (control.dataset.open) { await invoke(()=>window.atlas.openFolder(control.dataset.open,control.dataset.id||state.selectedId)); return; }
   const action = control.dataset.action;
+  if(action==='refresh-mods'){modsBusy=true;render();try{await invoke(()=>window.atlas.refreshMods());}finally{modsBusy=false;render();}return;}
+  if(action==='mod-page'){await invoke(()=>window.atlas.modPage(control.dataset.mod));return;}
+  if(action==='change-mod'){modsBusy=true;render();try{await invoke(()=>window.atlas.changeMod(state.selectedId,control.dataset.source,control.dataset.mod,control.dataset.modAction),'Моды сборки обновлены.');}finally{modsBusy=false;render();}return;}
   if(control.closest('#context-menu')&&action!=='choose-game-session')closeContextMenu();
   if (action === 'new-instance') {
     openInstanceEditor();
@@ -336,6 +384,8 @@ document.addEventListener('click', async event => {
   else if (action === 'open-logs') await invoke(()=>window.atlas.openFolder('logs'));
   else if (action === 'open-guide') await invoke(()=>window.atlas.openFolder('guide'));
   else if (action === 'refresh-discord') await invoke(()=>window.atlas.refreshDiscord());
+  else if (action === 'check-updates') await invoke(()=>window.atlas.checkUpdates());
+  else if (action === 'apply-update') await invoke(()=>window.atlas.applyUpdate());
 });
 document.addEventListener('change', async event => {
   const element = event.target;

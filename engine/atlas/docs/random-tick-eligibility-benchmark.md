@@ -5,7 +5,7 @@ Run with the pinned prepared client resources:
 ```sh
 flock /tmp/atlas-optimizations-20261015-heavy.lock env CARGO_BUILD_JOBS=2 \
   CARGO_TARGET_DIR=/home/bob/Documents/atlas/target \
-  cargo run --profile fast -p atlas-client --example random_tick_eligibility_bench -- \
+  cargo run --profile fast -p atlas-client-lib --example random_tick_eligibility_bench -- \
   .local/atlas-client/26.3
 ```
 

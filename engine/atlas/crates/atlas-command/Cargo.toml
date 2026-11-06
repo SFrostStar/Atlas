@@ -8,6 +8,7 @@ description = "Commands (Brigadier): the vanilla command tree, argument types, s
 
 [dependencies]
 atlas-client-core = { path = "../atlas-client-core" }
+atlas-core = { path = "../atlas-core" }
 atlas-protocol = { path = "../atlas-protocol" }
 atlas-world = { path = "../atlas-world" }
 

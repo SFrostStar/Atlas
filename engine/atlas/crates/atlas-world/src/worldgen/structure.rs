@@ -34,7 +34,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
-pub use template::{BlockInfo, JigsawInfo, StructureTemplate};
+pub use template::{BlockInfo, EntityInfo, JigsawInfo, StructureTemplate, save_nbt};
 
 /// Private saved-entity metadata predates the Atlas name. Read both names so
 /// existing generated chunks still receive their deferred spawn finalization.
@@ -114,6 +114,15 @@ impl Rotation {
         ];
         let index = order.iter().position(|d| *d == direction).unwrap();
         order[(index + self as usize) % 4]
+    }
+    /// `Rotation.getSerializedName`: the value of `Rotation.CODEC`.
+    pub fn serialized_name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Clockwise90 => "clockwise_90",
+            Self::Clockwise180 => "180",
+            Self::Counterclockwise90 => "counterclockwise_90",
+        }
     }
     pub fn get_rotated(self, other: Self) -> Self {
         Self::ALL[(self as usize + other as usize) % 4]
@@ -398,18 +407,20 @@ impl StructureResources {
         }
         let (namespace, path) = id.split_once(':').unwrap();
         let file = self.dir.join(namespace).join(format!("{path}.nbt"));
-        let loaded = std::fs::read(&file).ok().and_then(|bytes| {
-            let mut raw = Vec::new();
-            flate2::read::GzDecoder::new(bytes.as_slice())
-                .read_to_end(&mut raw)
-                .ok()?;
-            let tag = nbt::read_named(&raw, Limits::templates()).ok()?.0.tag;
-            Some(StructureTemplate::from_nbt(
-                &tag,
-                self.registry,
-                &self.transforms,
-            ))
-        });
+        let loaded = atlas_core::prepared_files::read(&file)
+            .ok()
+            .and_then(|bytes| {
+                let mut raw = Vec::new();
+                flate2::read::GzDecoder::new(bytes.as_slice())
+                    .read_to_end(&mut raw)
+                    .ok()?;
+                let tag = nbt::read_named(&raw, Limits::templates()).ok()?.0.tag;
+                Some(StructureTemplate::from_nbt(
+                    &tag,
+                    self.registry,
+                    &self.transforms,
+                ))
+            });
         // StructureTemplateManager.getOrCreate: missing templates are empty.
         let mut loaded = loaded.unwrap_or_else(StructureTemplate::empty);
         loaded.location = id.as_str().into();

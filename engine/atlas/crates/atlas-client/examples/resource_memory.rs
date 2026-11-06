@@ -9,11 +9,13 @@
 //! and the process RSS (what the allocator holds on to). On macOS it ends
 //! with `footprint`'s physical footprint, the number the OS charges: RSS also
 //! counts freed pages the allocator marked reusable.
+extern crate atlas_client_lib as atlas_client;
 use atlas_client::{
     assets::Assets, biome::Biomes, blocks::BlockFacts, collisions, crafting::Recipes, items::Items,
     light::LightTables, mesher::MeshTables, models, motion::MotionResources,
     vanillagen::VanillaTerrain,
 };
+use atlas_world::loot::PackOverlay;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     sync::atomic::{AtomicUsize, Ordering::Relaxed},
@@ -105,9 +107,9 @@ fn main() -> Result<()> {
     // The game decodes gameplay facts once for both tables (BlockFacts::load_pair).
     let (facts, behaviours) = BlockFacts::load_pair(&root, assets.registry)?;
     step("block facts+behaviours");
-    let items = Items::load(&root, assets.registry, &facts)?;
+    let items = Items::load(&root, assets.registry, &facts, &PackOverlay::NONE)?;
     step("items");
-    let recipes = Recipes::load(&root, &items)?;
+    let recipes = Recipes::load(&root, &items, &PackOverlay::NONE)?;
     step("recipes");
     let biomes = Biomes::load(&root)?;
     step("biomes");

@@ -15,7 +15,7 @@ from integration_env import suite_lock
 
 
 if __name__ == '__main__':
-    subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'atlas-client',
+    subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'atlas-client', '-p', 'atlas-client-lib',
                     '-p', 'atlas-relay', '--bin', 'atlas-client', '--bin', 'atlas-ctl',
                     '--bin', 'atlas-relay'], cwd=lab.ROOT, check=True)
     metadata = json.loads(subprocess.check_output(

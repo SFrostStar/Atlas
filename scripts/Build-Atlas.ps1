@@ -12,7 +12,12 @@ $portableCargo = Join-Path $atlasProject 'tools\cargo\bin\cargo.exe'
 $oldCargoHome = $env:CARGO_HOME
 $oldRustupHome = $env:RUSTUP_HOME
 $oldBuildPath = $env:PATH
+$oldAtlasVersion = $env:ATLAS_VERSION
+$oldAtlasNightly = $env:ATLAS_NIGHTLY
 try {
+    $launcherManifest = Get-Content -LiteralPath (Join-Path $atlasProject 'package.json') -Raw | ConvertFrom-Json
+    $env:ATLAS_VERSION = $launcherManifest.version
+    $env:ATLAS_NIGHTLY = ''
     & (Join-Path $PSScriptRoot 'Generate-Icons.ps1')
     # Upgrade the manifest name in Atlas's own previously prepared resource copy.
     $prepared = Join-Path $atlasProject 'runtime\.local\atlas-client\26.3'
@@ -37,9 +42,9 @@ try {
     Push-Location -LiteralPath $sourcePath
     try {
         if ($CheckOnly) {
-            & $cargoPath check --locked -p atlas-client --bin atlas-client --bin atlas-ctl
+            & $cargoPath check --locked -p atlas-client -p atlas-client-lib --bin atlas-client --bin atlas-ctl
         } else {
-            & $cargoPath build --locked --profile $Profile -p atlas-client --bin atlas-client --bin atlas-ctl
+            & $cargoPath build --locked --profile $Profile -p atlas-client -p atlas-client-lib --bin atlas-client --bin atlas-ctl
         }
         if ($LASTEXITCODE -ne 0) { throw 'Atlas build failed. Read the compiler output above.' }
         if (-not $CheckOnly) {
@@ -63,4 +68,6 @@ try {
     $env:CARGO_HOME = $oldCargoHome
     $env:RUSTUP_HOME = $oldRustupHome
     $env:PATH = $oldBuildPath
+    $env:ATLAS_VERSION = $oldAtlasVersion
+    $env:ATLAS_NIGHTLY = $oldAtlasNightly
 }

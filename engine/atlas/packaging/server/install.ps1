@@ -15,9 +15,14 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $Repo = "atlas-rust/atlas"
-$Asset = "atlas-windows-x64.zip"
-if ($env:PROCESSOR_ARCHITECTURE -ne "AMD64") {
-    throw "No Atlas release for Windows on $env:PROCESSOR_ARCHITECTURE yet: build it from source (docs/server.md)"
+$Fallback = $null
+$Architecture = $env:PROCESSOR_ARCHITEW6432
+if (-not $Architecture) { $Architecture = $env:PROCESSOR_ARCHITECTURE }
+switch ($Architecture) {
+    "AMD64" { $Asset = "atlas-windows-x64.zip" }
+    # A release without an ARM64 build installs the x64 one, which Windows runs under emulation.
+    "ARM64" { $Asset = "atlas-windows-arm64.zip"; $Fallback = "atlas-windows-x64.zip" }
+    default { throw "No Atlas release for Windows on $Architecture yet: build it from source (docs/server.md)" }
 }
 
 $Api = if ($Version -eq "latest") { "https://api.github.com/repos/$Repo/releases/latest" }
@@ -25,6 +30,11 @@ $Api = if ($Version -eq "latest") { "https://api.github.com/repos/$Repo/releases
 $Release = Invoke-RestMethod -Uri $Api -Headers @{ Accept = "application/vnd.github+json" }
 $Tag = $Release.tag_name
 $Item = $Release.assets | Where-Object { $_.name -eq $Asset } | Select-Object -First 1
+if (-not $Item -and $Fallback) {
+    Write-Host "Release $Tag has no ${Asset}: installing $Fallback (x64, under emulation)"
+    $Asset = $Fallback
+    $Item = $Release.assets | Where-Object { $_.name -eq $Asset } | Select-Object -First 1
+}
 if (-not $Item) { throw "Release $Tag has no $Asset" }
 if (-not $Item.digest -or -not $Item.digest.StartsWith("sha256:")) { throw "Release $Tag publishes no SHA-256 for $Asset" }
 $Digest = $Item.digest.Substring(7)

@@ -11,6 +11,7 @@ atlas-client-core = { path = "../atlas-client-core" }
 atlas-core = { path = "../atlas-core" }
 atlas-world = { path = "../atlas-world" }
 serde = { version = "1", features = ["derive"] }
+log = "0.4"
 serde_json = { version = "1.0.151", features = ["raw_value"] }
 
 [features]

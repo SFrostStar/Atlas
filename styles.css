@@ -1,5 +1,24 @@
 @font-face { font-family: Atlas; src: local('Segoe UI Variable Text'); }
 :root { color-scheme: dark; --orange: #ff8a3d; --orange-hover: #ffa363; --bg: #171717; --surface: #202020; --border: #343434; --text: #f5f5f5; --muted: #929292; }
+.mods-section { padding-top: 20px; }
+.mods-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.mods-sources { display: flex; gap: 20px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+.mods-toolbar input { flex: 1; min-width: 120px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); }
+.mods-caption { display: flex; gap: 12px; align-items: baseline; margin: 0 0 16px; }
+.mods-caption span, .mod-card small, .mod-unavailable { color: var(--muted); font-size: 13px; }
+.mods-section > .subtitle, .mods-error { margin-bottom: 18px; font-size: 14px; color: var(--muted); }
+.mods-error { color: var(--orange); }
+.mods-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.mod-card { min-width: 0; display: flex; flex-direction: column; padding: 18px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.mod-card-title { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.mod-icon { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 8px; color: var(--orange); }
+.mod-icon svg { width: 22px; height: 22px; }
+.mod-card-title .tag { display: inline-block; margin-top: 5px; font-size: 11px; }
+.mod-card p { margin-bottom: 8px; font-size: 15px; line-height: 1.45; }
+.mod-card small { line-height: 1.45; }
+.mod-actions { margin-top: auto; padding-top: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mod-actions .button { min-height: 36px; padding: 8px 11px; font-size: 13px; }
+.mod-unavailable { margin-right: auto; }
 html[data-theme="light"] { color-scheme: light; --bg:#f5f4f1; --surface:#fff; --border:#dedbd5; --text:#252522; --muted:#696963; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -210,6 +229,10 @@ dialog::backdrop { background: #080808cc; backdrop-filter: blur(5px); }
 .settings-row > .button { flex-shrink: 0; }
 .support-notice { display:flex; align-items:center; gap:4px; }
 .support-notice[hidden] { display:none; }
+.header-status { display:flex; align-items:center; gap:18px; margin-left:auto; }
+.update-notice { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+.update-notice[hidden] { display:none; }
+.update-notice .button { padding:7px 9px; font-size:13px; min-height:0; }
 .support-link { display:flex; align-items:center; gap:9px; background:transparent; color:var(--text); font-size:14px; padding:8px 10px; border-radius:6px; }
 .support-link svg { color:var(--orange); width:17px; }
 .support-link:hover { background:color-mix(in srgb,var(--orange) 10%,transparent); }

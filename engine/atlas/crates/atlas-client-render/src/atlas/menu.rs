@@ -1,6 +1,7 @@
 use crate::{
     hud::{HudAtlas, HudBatch, rgba},
     lang,
+    text::Text,
 };
 pub struct Button {
     pub x: f32,
@@ -10,6 +11,8 @@ pub struct Button {
     pub enabled: bool,
     pub id: u8,
     pub icon: Option<(&'static str, f32)>,
+    pub trailing: Option<(&'static str, f32)>,
+    pub action: Option<crate::widgets::Action>,
 }
 pub fn buttons(w: f32, h: f32, microsoft_account: bool) -> Vec<Button> {
     let b = |x: f32, y: f32, w: f32, label: &str, enabled: bool, id: u8| Button {
@@ -20,6 +23,8 @@ pub fn buttons(w: f32, h: f32, microsoft_account: bool) -> Vec<Button> {
         enabled,
         id,
         icon: None,
+        trailing: None,
+        action: None,
     };
     let cx = (w / 2.0).floor();
     let y = (h / 4.0).floor() + 48.0;
@@ -199,4 +204,54 @@ pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons:
         notice,
     );
     ui.finish();
+}
+
+impl Button {
+    pub fn does(mut self, action: crate::widgets::Action) -> Self {
+        self.action = Some(action);
+        self
+    }
+    /// `AbstractButton.extractDefaultLabel`: the label centred with a 2 px
+    /// margin, and slid inside the button when it does not fit
+    /// (`AbstractWidget.extractScrollingStringOverContents`), instead of being
+    /// drawn past it over the buttons beside it (so_so's 590 px World Type
+    /// label on Create World, hi_in's Join Server in the Multiplayer footer).
+    /// A button with a `trailing` icon is `SpriteIconButton.TextAndIcon`, whose
+    /// label keeps clear of the icon: see [`Button::draw_label_at`].
+    pub fn draw_label(&self, batch: &mut HudBatch, atlas: &HudAtlas, color: u32) {
+        self.draw_label_at(batch, atlas, color, crate::hud_overlays::now_ms());
+    }
+
+    /// [`Button::draw_label`] at `now_ms`. `SpriteIconButton.TextAndIcon`
+    /// (`extractContents`) hands the label to `acceptScrolling` with `left`
+    /// at the button's x plus 2, `right` at its x plus width minus the
+    /// sprite's width minus 4, and `centerX` at its x plus half its width: the
+    /// label slides inside that box when wider, and one that fits is moved
+    /// left until it ends where the icon's room begins. A button without an
+    /// icon has `right` 2 short of its edge, where `centerX` is the middle of
+    /// the box and nothing moves.
+    pub fn draw_label_at(&self, batch: &mut HudBatch, atlas: &HudAtlas, color: u32, now_ms: i64) {
+        let right = match self.trailing {
+            Some((_, size)) => self.x + self.w - size - 4.0,
+            None => self.x + self.w - 2.0,
+        };
+        let room = if self.action.is_some() && self.enabled {
+            crate::widgets::action_glyph_room()
+        } else {
+            0.0
+        };
+        crate::ui::scrolling_text_around_at(
+            batch,
+            atlas,
+            &Text::literal(&self.label),
+            self.x + (self.w / 2.0).floor(),
+            self.x + 2.0 + room,
+            right,
+            self.y,
+            self.y + 20.0,
+            self.y + 6.0,
+            now_ms,
+            color,
+        );
+    }
 }

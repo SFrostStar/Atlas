@@ -21,14 +21,11 @@ use atlas_core::{
         WorldGenTickContainers,
     },
 };
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 struct RegionBlockQueries {
     fluids: super::fluid_predicate::FluidPredicateBindings,
-    tags: BTreeMap<String, Arc<BTreeSet<BlockStateId>>>,
+    tags: Arc<super::block_feature::BoundTags>,
 }
 
 #[derive(Debug)]

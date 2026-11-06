@@ -1,7 +1,7 @@
 //! Repository tasks, run with `cargo run -p xtask -- TASK`.
 //!
 //! `package BINARY OUTDIR`: a playable Atlas folder with the game binary, atlas-ctl,
-//! atlas-prepare and atlas-server (built beside it: cargo build --release -p atlas-client
+//! atlas-prepare and atlas-server (built beside it: cargo build --release -p atlas-client -p atlas-client-lib
 //! --bins -p atlas-prepare -p atlas-server), the exporters atlas-prepare compiles, its sources (the launcher compares
 //! them to its own), and PLAY.txt. It holds none of Minecraft's files: players prepare those
 //! from their own copy. .github/workflows/release.yml makes the release folders with it.
@@ -16,6 +16,8 @@
 //! `icons`: renders the icon masters in `docs/media/brand` (with `rsvg-convert`, from librsvg)
 //! into every size the platforms and the website use, and packs `packaging/icons/atlas.ico`
 //! and `atlas.icns`. `docs/media/brand/README.md` lists what goes where.
+
+mod mod_api;
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -48,6 +50,7 @@ fn main() -> ExitCode {
         [task, engine, out] if task == "package-server" => {
             package_server(Path::new(engine), Path::new(out))
         }
+        [task] if task == "mod-api" => mod_api::run(),
         [task] if task == "tokens" => tokens(),
         [task] if task == "icons" => icons(),
         _ => Err(USAGE.to_string()),
@@ -294,7 +297,7 @@ fn copy_beside(program: &Path, tools: &[&str], out: &Path) -> Result<(), String>
             .join(program_name(program, tool));
         if !path.is_file() {
             return Err(format!(
-                "{} is missing; build it too: cargo build --release -p atlas-client --bins -p atlas-prepare -p atlas-server",
+                "{} is missing; build it too: cargo build --release -p atlas-client -p atlas-client-lib --bins -p atlas-prepare -p atlas-server",
                 path.display()
             ));
         }

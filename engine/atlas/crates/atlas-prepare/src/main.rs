@@ -15,26 +15,53 @@ const VERSION: &str = match option_env!("ATLAS_VERSION") {
 const HELP: &str = "\
 atlas-prepare: prepare Atlas's resources from your own Minecraft Java Edition
 
-Usage: atlas-prepare [--prepare] [--server-jar PATH] [--minecraft-dir PATH] [--root PATH]
+Usage: atlas-prepare [--prepare] [--server-jar PATH] [--minecraft-dir PATH] [--root PATH] [--output PATH]
+                       [--version-json PATH] [--client-jar PATH] [--libraries-dir PATH] [--assets-dir PATH]
+                       [--java-home PATH] [--complete] [--progress json]
+       atlas-prepare --check [--root PATH] [--output PATH]
+       atlas-prepare --launch-api [--root PATH]
        atlas-prepare compile-exporters [--root PATH]
-       atlas-prepare sounds [--minecraft-dir PATH] [--root PATH]
-       atlas-prepare panorama [--minecraft-dir PATH] [--root PATH]
-       atlas-prepare fonts [--minecraft-dir PATH] [--root PATH]
-       atlas-prepare packs [--minecraft-dir PATH] [--root PATH]
-       atlas-prepare languages [--minecraft-dir PATH] [--root PATH]
+       atlas-prepare sounds [--minecraft-dir PATH] [--version-json PATH] [--assets-dir PATH] [--root PATH] [--output PATH]
+       atlas-prepare panorama [--minecraft-dir PATH] [--version-json PATH] [--assets-dir PATH] [--root PATH] [--output PATH]
+       atlas-prepare fonts [--minecraft-dir PATH] [--version-json PATH] [--assets-dir PATH] [--root PATH] [--output PATH]
+       atlas-prepare packs [--minecraft-dir PATH] [--version-json PATH] [--assets-dir PATH] [--root PATH] [--output PATH]
+       atlas-prepare languages [--minecraft-dir PATH] [--version-json PATH] [--assets-dir PATH] [--root PATH] [--output PATH]
 
   --prepare             Import the pinned game files from your own copy first
   --server-jar PATH     The pinned server jar you downloaded yourself
                         (default: ATLAS_SERVER_JAR, or the copy imported before)
   --minecraft-dir PATH  The official launcher's game directory with your installed copy
                         (default: ATLAS_MINECRAFT_DIR, or the launcher's own)
+  --version-json PATH   The pinned version's JSON, where --minecraft-dir has none
+  --client-jar PATH     The pinned client jar, where --minecraft-dir has none
+  --libraries-dir PATH  The folder of the client's libraries (Maven layout)
+  --assets-dir PATH     The asset store, with indexes/ and objects/
+                        (each of these four replaces what --minecraft-dir would give; an earlier
+                        import beside --root that is still verified is reused instead)
+  --java-home PATH      A Java runtime of the pinned version that your launcher manages, tried
+                        after JAVA_HOME and the PATH, before the official launcher's runtimes
   --root PATH           The Atlas folder to prepare (default: the folder this program is
                         in, else the nearest folder above the current one with research-lock.json)
+  --output PATH         Where the resources go (default: <root>/.local/atlas-client/<version>);
+                        the exporters' scratch files stay in <root>/.local
+  --check               Exit 0 when the resources are complete and current for this preparer,
+                        else 1: each gap on stdout with what it needs, or an error: line on
+                        stderr when it can't check. Runs no Java and reads no game files; it tests
+                        which files are there and their versions, not their contents (on doubt,
+                        prepare again)
+  --complete            Also copy the sounds, then fail unless --check would pass: one command
+                        for resources the game plays with nothing missing
+  --progress json       One JSON object a line on stdout: {\"message\": ...} for each log line,
+                        {\"fraction\": F} as the work advances (0 to 1), {\"error\": ...} on failure
+  --launch-api          Print what this preparer supports as JSON (the Launch API's version, the
+                        pinned Minecraft and Java, the resources' layout, the options) and exit 0
 
 Needs Minecraft played once from the official launcher, and Java of the version
 research-lock.json pins. Releases use a runtime; development or changed exporters need a JDK.
 compile-exporters builds and validates a release bundle from the already imported pinned jars.
-The resources go to <root>/.local/atlas-client/<version>; pass that to atlas-client --resources.
+The resources go to <root>/.local/atlas-client/<version>, or --output; pass that to
+atlas-client --resources. Exit codes: 0 done, 1 failed (or --check found gaps), 2 a refused
+command line (docs/api/launch.md).
 
 atlas-prepare panorama repairs the classic menu background in existing resources without Java.
 atlas-prepare fonts adds the GNU Unifont glyphs (characters the bitmap fonts lack) the same way.
@@ -69,8 +96,14 @@ fn main() -> ExitCode {
         minecraft_dir: None,
         server_jar: None,
         java_home: None,
+        inputs: Default::default(),
+        output: None,
     };
     let mut root = None;
+    let mut check = false;
+    let mut complete = false;
+    let mut json = false;
+    let mut launch_api = false;
     let mut args = std::env::args_os().skip(1).peekable();
     let assets = args.next_if(|a| {
         matches!(
@@ -96,7 +129,7 @@ fn main() -> ExitCode {
             }
         };
         let parsed = match flag.as_str() {
-            "--prepare" | "--server-jar" if assets.is_some() && assets.as_deref() != Some(std::ffi::OsStr::new("compile-exporters")) => {
+            "--prepare" | "--server-jar" | "--check" if assets.is_some() && assets.as_deref() != Some(std::ffi::OsStr::new("compile-exporters")) => {
                 Err(format!("{flag} is for preparing, not for asset copying"))
             }
             "--prepare" if inline.is_none() => {
@@ -105,7 +138,37 @@ fn main() -> ExitCode {
             }
             "--server-jar" => value("--server-jar").map(|v| options.server_jar = Some(v)),
             "--minecraft-dir" => value("--minecraft-dir").map(|v| options.minecraft_dir = Some(v)),
+            "--version-json" => {
+                value("--version-json").map(|v| options.inputs.version_json = Some(v))
+            }
+            "--client-jar" => value("--client-jar").map(|v| options.inputs.client_jar = Some(v)),
+            "--libraries-dir" => {
+                value("--libraries-dir").map(|v| options.inputs.libraries_dir = Some(v))
+            }
+            "--assets-dir" => value("--assets-dir").map(|v| options.inputs.assets_dir = Some(v)),
+            "--java-home" => value("--java-home").map(|v| options.java_home = Some(v)),
             "--root" => value("--root").map(|v| root = Some(v)),
+            "--output" => value("--output").map(|v| options.output = Some(v)),
+            "--check" if inline.is_none() => {
+                check = true;
+                Ok(())
+            }
+            "--complete" if inline.is_none() && assets.is_none() => {
+                complete = true;
+                Ok(())
+            }
+            "--progress" => match value("--progress") {
+                Ok(v) if v.as_os_str() == "json" => {
+                    json = true;
+                    Ok(())
+                }
+                Ok(v) => Err(format!("--progress takes json, not {}", v.display())),
+                Err(e) => Err(e),
+            },
+            "--launch-api" if inline.is_none() => {
+                launch_api = true;
+                Ok(())
+            }
             "-h" | "--help" => {
                 print!("{HELP}");
                 return ExitCode::SUCCESS;
@@ -128,36 +191,174 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
     options.root = root;
-    let log = |line: &str| {
+    if launch_api {
+        return match atlas_prepare::artifacts::Lock::read(&options.root) {
+            Ok(lock) => {
+                println!("{}", atlas_prepare::launch_api::reply(VERSION, &lock));
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if check {
+        if options.import || options.server_jar.is_some() {
+            eprintln!("atlas-prepare: error: --check prepares nothing; leave out --prepare and --server-jar");
+            return ExitCode::from(2);
+        }
+        if json || complete {
+            eprintln!("atlas-prepare: error: --progress and --complete apply to preparing; leave them out with --check");
+            return ExitCode::from(2);
+        }
+        return check_resources(&options);
+    }
+    let print = |line: &str| {
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{line}");
         let _ = out.flush();
     };
+    let log = |line: &str| match json {
+        true => print(&json_line("message", line)),
+        false => print(line),
+    };
+    // Preparing is most of a complete run; the sounds and the check are the rest.
+    let scale = if complete { 0.9 } else { 1.0 };
+    let progress = |fraction: f32| {
+        if json {
+            print(&fraction_line(fraction * scale));
+        }
+    };
     let result = match assets.as_deref().and_then(|a| a.to_str()) {
         Some("compile-exporters") => atlas_prepare::compile_exporters(&options, &log)
             .inspect(|dir| log(&dir.display().to_string())),
-        Some("sounds") => {
-            atlas_prepare::sounds(&options.root, options.minecraft_dir.as_deref(), &log)
+        Some(kind @ ("sounds" | "panorama" | "fonts" | "packs" | "languages")) => {
+            atlas_prepare::add_assets(
+                kind,
+                &options.root,
+                options.output.as_deref(),
+                options.minecraft_dir.as_deref(),
+                &options.inputs,
+                &log,
+            )
         }
-        Some("panorama") => {
-            atlas_prepare::panorama(&options.root, options.minecraft_dir.as_deref(), &log)
-        }
-        Some("fonts") => {
-            atlas_prepare::fonts(&options.root, options.minecraft_dir.as_deref(), &log)
-        }
-        Some("packs") => {
-            atlas_prepare::packs(&options.root, options.minecraft_dir.as_deref(), &log)
-        }
-        Some("languages") => {
-            atlas_prepare::languages(&options.root, options.minecraft_dir.as_deref(), &log)
-        }
-        _ => atlas_prepare::prepare(&options, &log),
+        _ => atlas_prepare::prepare_with_progress(&options, &log, &progress).and_then(
+            |resources| match complete {
+                true => complete_resources(&options, resources, &log),
+                false => Ok(resources),
+            },
+        ),
     };
     match result {
-        Ok(_) => ExitCode::SUCCESS,
+        Ok(_) => {
+            // A plain preparation reported its 1 already.
+            if json && (complete || assets.is_some()) {
+                print(&fraction_line(1.0));
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            if json {
+                print(&json_line("error", &e));
+            }
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `--complete` after preparing: the sounds, then nothing may be missing.
+fn complete_resources(
+    options: &atlas_prepare::Options,
+    resources: PathBuf,
+    log: atlas_prepare::Log,
+) -> Result<PathBuf, String> {
+    atlas_prepare::add_assets(
+        "sounds",
+        &options.root,
+        Some(&resources),
+        options.minecraft_dir.as_deref(),
+        &options.inputs,
+        log,
+    )?;
+    let lacking = atlas_prepare::check(&options.root, &resources)?;
+    if lacking.is_empty() {
+        return Ok(resources);
+    }
+    for line in &lacking {
+        log(line);
+    }
+    Err(format!(
+        "the resources are not complete: {}",
+        lacking.join("; ")
+    ))
+}
+
+/// `{"key": "text"}` on one line: `--progress json`'s `message` and `error` (docs/api/launch.md).
+fn json_line(key: &str, text: &str) -> String {
+    let mut out = format!("{{\"{key}\": ");
+    atlas_prepare::pyjson::write_string(&mut out, text);
+    out.push('}');
+    out
+}
+
+/// `--progress json`'s `{"fraction": F}`, F from 0 to 1 with three decimals.
+fn fraction_line(fraction: f32) -> String {
+    format!("{{\"fraction\": {:.3}}}", fraction.clamp(0.0, 1.0))
+}
+
+/// `--check`: each gap on its own line on stdout, exit 1 when there is one.
+fn check_resources(options: &atlas_prepare::Options) -> ExitCode {
+    let resources = atlas_prepare::artifacts::Lock::read(&options.root).map(|lock| {
+        atlas_prepare::resources_dir(&options.root, &lock.version, options.output.as_deref())
+    });
+    match resources.and_then(|resources| atlas_prepare::check(&options.root, &resources)) {
+        Ok(lacking) if lacking.is_empty() => ExitCode::SUCCESS,
+        Ok(lacking) => {
+            for line in lacking {
+                println!("{line}");
+            }
+            ExitCode::FAILURE
+        }
         Err(e) => {
             eprintln!("error: {e}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `--progress json`'s three lines as docs/api/launch.md promises them: a launcher parses
+    /// them, so a refactor must not change them silently.
+    #[test]
+    fn progress_json_lines_keep_their_shape() {
+        assert_eq!(
+            json_line("message", "Copying \"sounds\"\nnext"),
+            r#"{"message": "Copying \"sounds\"\nnext"}"#
+        );
+        assert_eq!(
+            json_line("error", "no Java 25"),
+            r#"{"error": "no Java 25"}"#
+        );
+        assert_eq!(fraction_line(0.05), r#"{"fraction": 0.050}"#);
+        assert_eq!(fraction_line(1.0), r#"{"fraction": 1.000}"#);
+        for line in [json_line("message", "tab\there, é"), fraction_line(0.9)] {
+            assert!(atlas_prepare::pyjson::loads(&line).is_ok(), "{line}");
+        }
+    }
+
+    /// Every option `--launch-api` promises is one `--help` documents.
+    #[test]
+    fn launch_api_options_are_in_the_help() {
+        for (name, _) in atlas_prepare::launch_api::OPTIONS {
+            assert!(
+                HELP.contains(&format!("  {name} ")),
+                "{name} is not in --help"
+            );
         }
     }
 }

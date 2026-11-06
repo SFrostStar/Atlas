@@ -19,12 +19,16 @@ $client = 'atlas-client'
 $world = 'atlas-world'
 Push-Location (Join-Path $atlasProject 'engine\atlas')
 try {
-  foreach ($filter in @('atlas_loading::tests','packs::windows_overlay_links','audio::tests','zip::tests','title::tests','mobs::shulker::tests')) {
-    & cargo test --locked --profile fast -p $client --features mods --lib $filter
+  foreach ($filter in @('atlas_loading::tests','atlas::loading::cache::tests','audio::tests','zip::tests')) {
+    & cargo test --locked --profile fast -p atlas-client-render --lib $filter
     if ($LASTEXITCODE -ne 0) { throw "Native library test failed: $filter" }
   }
-  foreach ($filter in @('reload_recovery_tests','game::entity_culling::tests','startup_menu::tests','mouse_position_after')) {
-    & cargo test --locked --profile fast -p $client --features mods --bin $client $filter
+  foreach ($filter in @('title::tests','mobs::shulker::tests')) {
+    & cargo test --locked --profile fast -p atlas-client-lib --lib $filter
+    if ($LASTEXITCODE -ne 0) { throw "Native reusable client test failed: $filter" }
+  }
+  foreach ($filter in @('game::packs::tests','game::entity_culling::tests','game::startup_menu::tests','mouse_position_after')) {
+    & cargo test --locked --profile fast -p $client --lib $filter
     if ($LASTEXITCODE -ne 0) { throw "Native client test failed: $filter" }
   }
   & cargo test --locked --profile fast -p $world decoration_is_shared_by_biome_source

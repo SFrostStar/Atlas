@@ -14,7 +14,11 @@ $atlasScratch = Join-Path $atlasProject ('work\setup-build-' + [guid]::NewGuid()
 $atlasOldPath = $env:PATH
 $atlasOldCargo = $env:CARGO_HOME
 $atlasOldRustup = $env:RUSTUP_HOME
+$atlasOldVersion = $env:ATLAS_VERSION
+$atlasOldNightly = $env:ATLAS_NIGHTLY
 try {
+    $env:ATLAS_VERSION = (Get-Content -LiteralPath (Join-Path $atlasProject 'package.json') -Raw | ConvertFrom-Json).version
+    $env:ATLAS_NIGHTLY = ''
     $env:CARGO_HOME = Join-Path $atlasProject 'tools\cargo'
     $env:RUSTUP_HOME = Join-Path $atlasProject 'tools\rustup'
     $atlasLlvm = Get-ChildItem (Join-Path $atlasProject 'tools') -Directory -Filter 'llvm-mingw-*-ucrt-x86_64' | Select-Object -First 1
@@ -22,7 +26,7 @@ try {
     Push-Location $atlasSource
     try { & cargo build --locked --profile fast -p atlas-prepare; if ($LASTEXITCODE -ne 0) {throw 'Cannot build atlas-prepare'} } finally {Pop-Location}
     New-Item -ItemType Directory -Path $atlasBundle,$atlasGameRoot,$atlasScratch -Force | Out-Null
-    foreach ($atlasPart in @('research-lock.json','mods\atlas\src\test\java\dev\atlaslab\parity','crates\atlas-prepare\src\exporters.rs')) {
+    foreach ($atlasPart in @('research-lock.json','ATLAS-UPSTREAM.json','mods\atlas\src\test\java\dev\atlaslab\parity','crates\atlas-prepare\src\exporters.rs')) {
         $atlasTo = Join-Path $atlasGameRoot $atlasPart
         New-Item -ItemType Directory -Path (Split-Path -Parent $atlasTo) -Force | Out-Null
         if (Test-Path -LiteralPath (Join-Path $atlasSource $atlasPart) -PathType Container) {
@@ -55,6 +59,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $RuntimeDirectory $atlasBinary) -Destination (Join-Path $atlasBundle $atlasBinary) -Force
     }
     Copy-Item -LiteralPath $atlasPreparer -Destination (Join-Path $atlasBundle 'atlas-prepare.exe') -Force
+    [IO.File]::WriteAllText((Join-Path $atlasBundle 'atlas-runtime.json'), (@{ version=$env:ATLAS_VERSION } | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     Get-ChildItem -LiteralPath $RuntimeDirectory -Filter 'LICENSE*.txt' -File | Copy-Item -Destination $atlasBundle -Force
     $atlasNotices = @{
         'crates\atlas-theme\fonts\OFL-Geist.txt' = 'LICENSE-Geist.txt'
@@ -71,4 +76,6 @@ try {
     $env:PATH = $atlasOldPath
     $env:CARGO_HOME = $atlasOldCargo
     $env:RUSTUP_HOME = $atlasOldRustup
+    $env:ATLAS_VERSION = $atlasOldVersion
+    $env:ATLAS_NIGHTLY = $atlasOldNightly
 }

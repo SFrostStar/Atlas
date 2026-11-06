@@ -34,6 +34,9 @@ function transformText(text, filename, localPackages) {
   // Mojang's pinned API is an external interface: getHorizonHeight is not Atlas branding.
   source = source.replace(/\bnet\.minecraft\.[\w.$/#]*/g, keep);
   source = source.replace(/\b(?:get|set|has|is)[A-Za-z0-9_$]*Horizon[A-Za-z0-9_$]*\b/g, keep);
+  // Nintendo Switch's Rust target is literally "horizon"; this is an OS API,
+  // not the upstream application's name.
+  source = source.replace(/\btarget_os\s*=\s*"horizon"/g, keep);
   if (path.basename(filename) === 'Cargo.lock') {
     // Only our path package names and references to them change. Registry/git package metadata
     // and their checksums/source URLs remain exactly as Cargo recorded them.

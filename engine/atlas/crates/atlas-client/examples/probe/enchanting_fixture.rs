@@ -8,6 +8,7 @@ use atlas_client::{
     items::{ItemStack, Items},
     stations,
 };
+use atlas_world::loot::PackOverlay;
 use std::{fmt::Write as _, fs, path::Path};
 
 pub fn main() -> atlas_client::Result<()> {
@@ -17,7 +18,7 @@ pub fn main() -> atlas_client::Result<()> {
             .ok_or("usage: enchanting_fixture RESOURCES INPUT OUTPUT")?,
     );
     let input = fs::read_to_string(args.get(2).ok_or("missing INPUT")?)?;
-    let items = Items::tags_only(root)?;
+    let items = Items::tags_only(root, &PackOverlay::NONE)?;
     let e = Enchantments::load(root);
     let mut out = String::new();
     for line in input.lines() {

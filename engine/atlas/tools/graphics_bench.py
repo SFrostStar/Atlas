@@ -170,7 +170,7 @@ def main():
         return
     ctl = Path(args.build).resolve() / "atlas-ctl"
     if not ctl.exists():
-        sys.exit(f"{ctl} missing: cargo build --release -p atlas-client --bins")
+        sys.exit(f"{ctl} missing: cargo build --release -p atlas-client -p atlas-client-lib --bins")
     cwd = ROOT / ".local/graphics-bench"
     shutil.rmtree(cwd / "saves" / WORLD, ignore_errors=True)
     cwd.mkdir(parents=True, exist_ok=True)

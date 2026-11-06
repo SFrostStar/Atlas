@@ -1,19 +1,26 @@
 [workspace]
-exclude = ["launcher", "crates/atlas-telemetry-server", "crates/atlas-mod-registry", "third_party/wgpu-hal"]
+exclude = ["launcher", "crates/atlas-telemetry-server", "crates/atlas-mod-registry", "third_party/wgpu-hal", "third_party/naga", "third_party/libmimalloc-sys"]
 members = [
     "crates/atlas-memory",
     "crates/atlas-core",
     "crates/atlas-dualsense",
+    "crates/atlas-narrator",
     "crates/atlas-threads",
     "crates/atlas-hdr",
     "crates/atlas-world",
     "crates/atlas-client",
+    "crates/atlas-client-lib",
     "crates/atlas-client-core",
     "crates/atlas-client-input",
     "crates/atlas-client-render",
+    "crates/atlas-cosmetics",
     "crates/atlas-command",
     "crates/atlas-items",
     "crates/atlas-server-files",
+    "crates/atlas-anticheat",
+    "crates/atlas-chat-filter",
+    # The Model Context Protocol, shared by atlas-ctl, atlas-server and the launcher.
+    "crates/atlas-mcp",
     "crates/atlas-server",
     "crates/atlas-bots",
     "crates/atlas-assets",
@@ -24,26 +31,16 @@ members = [
     "crates/atlas-bench",
     "crates/atlas-friends",
     "crates/atlas-relay",
-    "crates/atlas-mod-sdk",
     "crates/atlas-mods",
-    "crates/atlas-mods/tests/guest",
-    "crates/atlas-mods/tests/ui_guest",
+    "crates/atlas-mod-api-gen",
+    "crates/atlas-mod-api-gen/dispatch-tests",
     "crates/cargo-atlas-mod",
     "crates/atlas-port-pack",
     "crates/atlas-shaders",
+    "crates/atlas-optifine",
     "crates/atlas-shader-api",
     "crates/atlas-release-sign",
-    "crates/atlas-mod-sdk/examples/coords-hud",
-    "crates/atlas-mod-sdk/examples/predator-missile",
-    "crates/atlas-mod-sdk/examples/welcome",
-    "crates/atlas-mod-sdk/examples/beacons",
-    "mods/official/fps-overlay",
-    "mods/official/keystrokes",
-    "mods/official/far-view",
-    "mods/official/minimap",
-    "mods/official/zoom",
     "xtask",
-    "mods/official/recipes",
 ]
 resolver = "2"
 
@@ -66,9 +63,18 @@ large_enum_variant = "allow"
 # UHD 620/630) crashes on it with an access violation (#746). It also fixes the
 # Metal backend's lookup of the CoreGraphics HDR colour space names, which handed
 # CoreGraphics a symbol's address as the string and crashed HDR output on macOS.
-# Drop this and the folder once a wgpu release has both fixes.
+# And gfx-rs/wgpu#10714: on Windows, Vulkan waits for the acquire fence only in
+# FIFO (VSync), where it was meant to pace frames; with VSync off it made every
+# frame wait for the GPU to finish the one before (#4604).
+# Drop this and the folder once a wgpu release has these fixes.
 [patch.crates-io]
 wgpu-hal = { path = "third_party/wgpu-hal" }
+# naga 30.0.1, with the fixes to its GLSL frontend that shader packs need (THIRD_PARTY_NOTICES.md).
+naga = { path = "third_party/naga" }
+# libmimalloc-sys 0.1.49 whose mimalloc v3 counts bits without POPCNT when MSVC builds it: the
+# game died before main on CPUs without it (Core 2, #7264; THIRD_PARTY_NOTICES.md). Drop this and
+# the folder once a libmimalloc-sys release has microsoft/mimalloc#1291's fix.
+libmimalloc-sys = { path = "third_party/libmimalloc-sys" }
 
 # Line tables keep file:line in backtraces; full debug info made every
 # example and test binary hundreds of megabytes and slow to link.

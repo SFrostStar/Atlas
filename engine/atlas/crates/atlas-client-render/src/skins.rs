@@ -32,45 +32,14 @@ pub const TEXTURE_URIS: [&str; 2] = [
 
 /// `java.util.Base64.getDecoder().decode`.
 pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity(text.len() / 4 * 3);
-    let (mut bits, mut shift) = (0u32, 18i32);
-    let bytes: Vec<char> = text.chars().collect();
-    let mut i = 0;
-    while i < bytes.len() {
-        let c = bytes[i];
-        i += 1;
-        let b = match c {
-            'A'..='Z' => c as u32 - 'A' as u32,
-            'a'..='z' => c as u32 - 'a' as u32 + 26,
-            '0'..='9' => c as u32 - '0' as u32 + 52,
-            '+' => 62,
-            '/' => 63,
-            '=' => {
-                if shift == 6 && (i == bytes.len() || bytes[i] != '=') || shift == 18 {
-                    return None;
-                }
-                if shift == 6 {
-                    i += 1;
-                }
-                break;
-            }
-            _ => return None,
-        };
-        bits |= b << shift;
-        shift -= 6;
-        if shift < 0 {
-            out.extend([(bits >> 16) as u8, (bits >> 8) as u8, bits as u8]);
-            shift = 18;
-            bits = 0;
-        }
-    }
-    match shift {
-        6 => out.push((bits >> 16) as u8),
-        0 => out.extend([(bits >> 16) as u8, (bits >> 8) as u8]),
-        12 => return None,
-        _ => {}
-    }
-    (i >= bytes.len()).then_some(out)
+    use base64::{
+        Engine,
+        engine::general_purpose::{STANDARD, STANDARD_NO_PAD},
+    };
+    STANDARD
+        .decode(text)
+        .or_else(|_| STANDARD_NO_PAD.decode(text))
+        .ok()
 }
 
 /// `unpackTextures(property)`: the textures of a `textures` property's
@@ -128,6 +97,50 @@ pub fn profile_skin_url(profile: &serde_json::Value) -> Option<String> {
     let (value, signature) = parse_profile(profile).textures?;
     unpack(&value, signature, &TEXTURE_URIS).skin
 }
+
+/// The textures of a Minecraft services `/minecraft/profile` answer: the
+/// `ACTIVE` skin and cape (`MinecraftProfileResponse`). Unsigned, like the
+/// local player's own textures, and only URLs under the allowed domains count.
+pub fn services_profile_textures(profile: &serde_json::Value) -> Textures {
+    let active = |key: &str| {
+        profile
+            .get(key)?
+            .as_array()?
+            .iter()
+            .find(|t| t.get("state").and_then(|s| s.as_str()) == Some("ACTIVE"))
+    };
+    let skin_entry = active("skins");
+    let skin = skin_entry
+        .and_then(|t| t.get("url"))
+        .and_then(|u| u.as_str())
+        .filter(|url| {
+            TEXTURE_URIS
+                .iter()
+                .any(|u| url.starts_with(&u.replace("{textureId}", "")))
+        })
+        .map(str::to_owned);
+    let slim = skin_entry
+        .and_then(|t| t.get("variant"))
+        .and_then(|v| v.as_str())
+        .is_some_and(|v| v.eq_ignore_ascii_case("slim"));
+    let cape = active("capes")
+        .and_then(|t| t.get("url"))
+        .and_then(|u| u.as_str())
+        .filter(|url| {
+            TEXTURE_URIS
+                .iter()
+                .any(|u| url.starts_with(&u.replace("{textureId}", "")))
+        })
+        .map(str::to_owned);
+    Textures {
+        skin,
+        slim,
+        cape,
+        elytra: None,
+        signed: false,
+    }
+}
+
 /// `profile_skin_url` on a block entity's `profile` NBT (`SkullBlockEntity`):
 /// the same `properties` list, held as a compound. A name-only profile (a
 /// string tag) has no properties and no skin URL.
@@ -143,6 +156,12 @@ pub fn profile_skin_url_nbt(profile: &atlas_world::nbt::Tag) -> Option<String> {
             .flatten()
     })?;
     unpack(&value, Signature::Unsigned, &TEXTURE_URIS).skin
+}
+
+/// `ResolvableProfile.skinPatch().body()` of a skull's `profile` NBT: the
+/// `texture` id that replaces its skin.
+pub fn profile_texture_nbt(profile: &atlas_world::nbt::Tag) -> Option<String> {
+    nbt_text(profile.get("texture"))
 }
 
 /// The profile's uuid as u128: `id` as an int array (block entity NBT) or a
@@ -454,6 +473,11 @@ pub fn head_skin(
     downloads: &mut Downloader,
     atlas: impl Fn(&str) -> bool,
 ) -> String {
+    if let Some(texture) = profile.get("texture").and_then(|t| t.as_str())
+        && let Some(sprite) = patch_skin(texture, downloads, &atlas)
+    {
+        return sprite;
+    }
     let p = parse_profile(profile);
     let property = p.textures.or_else(|| {
         let key = p.dynamic.as_ref()?;
@@ -468,7 +492,10 @@ pub fn head_skin(
     {
         let location = skin_location(&hash);
         match downloads.state(Kind::Skin, &url) {
-            Download::Ready if atlas(&location) => return location,
+            Download::Ready if atlas(&location) => {
+                downloads.drawn(&location);
+                return location;
+            }
             // Its slot was evicted: offer the image again.
             Download::Ready => {
                 downloads.again(&location);
@@ -477,6 +504,68 @@ pub fn head_skin(
         }
     }
     crate::tab_list::default_skin(p.id).to_owned()
+}
+
+/// `PlayerSkin.Patch.apply` for a head: the sprite of a profile's `texture`
+/// override (`ClientAsset.ResourceTexture`, a resource pack's
+/// `<namespace>:textures/<path>.png`), which replaces the downloaded or
+/// default skin. Vanilla textures are in the atlas already; another
+/// namespace's loads into a skin slot, and `None` answers until it is there
+/// (or when the packs lack it).
+pub fn patch_skin(
+    texture: &str,
+    downloads: &mut Downloader,
+    atlas: impl Fn(&str) -> bool,
+) -> Option<String> {
+    let (namespace, path) = texture.split_once(':').unwrap_or(("minecraft", texture));
+    if !valid_texture_id(namespace, path) {
+        return None;
+    }
+    if namespace == "minecraft" && atlas(path) {
+        return Some(path.to_owned());
+    }
+    let location = format!("patch/{namespace}/{path}");
+    if atlas(&location) {
+        downloads.drawn(&location);
+        return Some(location);
+    }
+    downloads.resource(&location, namespace, path);
+    None
+}
+
+/// `Identifier`'s characters (`isValidNamespace`, `isValidPath`), and no
+/// `.`, `..` or empty segment (`FileUtil.decomposePath`, as the packs read
+/// it): a server's `texture` never names a file outside the packs.
+fn valid_texture_id(namespace: &str, path: &str) -> bool {
+    let segment = |s: &str| !s.is_empty() && s != "." && s != "..";
+    !namespace.is_empty()
+        && namespace
+            .chars()
+            .all(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '-' | '.'))
+        && path
+            .chars()
+            .all(|c| matches!(c, 'a'..='z' | '0'..='9' | '_' | '-' | '.' | '/'))
+        && segment(namespace)
+        && path.split('/').all(segment)
+}
+
+/// A `width`x`height` RGBA image as the 64x64 skin it maps onto: each texel
+/// the nearest of the image's at the same normalised UV.
+fn resample_64(width: u32, height: u32, rgba: &[u8]) -> Option<Vec<u8>> {
+    let (w, h) = (width as usize, height as usize);
+    if w == 0 || h == 0 || rgba.len() < w * h * 4 {
+        return None;
+    }
+    let mut out = vec![0u8; 64 * 64 * 4];
+    for y in 0..64 {
+        for x in 0..64 {
+            let (sx, sy) = (x * w / 64, y * h / 64);
+            let s = (sy * w + sx) * 4;
+            let d = (y * 64 + x) * 4;
+            out[d..d + 4].copy_from_slice(&rgba[s..s + 4]);
+        }
+    }
+    Some(out)
 }
 
 /// `MinecraftProfileTexture.getHash`: the base name of the URL's path.
@@ -554,6 +643,39 @@ pub fn offline_cape() -> Option<&'static [u8]> {
     .as_deref()
 }
 
+/// The skin the launcher gives an offline name (`ATLAS_OFFLINE_SKIN`, a
+/// PNG's path, and `ATLAS_OFFLINE_SKIN_MODEL`, `classic` or `slim`;
+/// launcher/src/skins.rs): its 64x64 RGBA as `process_legacy_skin` lays it
+/// out, and whether it is slim. Read once.
+pub fn offline_skin() -> Option<&'static (Vec<u8>, bool)> {
+    static SKIN: std::sync::OnceLock<Option<(Vec<u8>, bool)>> = std::sync::OnceLock::new();
+    SKIN.get_or_init(|| {
+        let path = std::env::var_os("ATLAS_OFFLINE_SKIN").filter(|p| !p.is_empty())?;
+        let model = std::env::var("ATLAS_OFFLINE_SKIN_MODEL").unwrap_or_default();
+        read_offline_skin(std::path::Path::new(&path), &model)
+            .inspect_err(|e| eprintln!("Atlas: no offline skin ({}): {e}", path.display()))
+            .ok()
+    })
+    .as_ref()
+}
+fn read_offline_skin(path: &std::path::Path, model: &str) -> Result<(Vec<u8>, bool), String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let (w, h, rgba) = crate::hud::decode_bytes(&bytes).map_err(|e| e.to_string())?;
+    let skin = process_legacy_skin(w, h, &rgba).ok_or("not a 64x64 or 64x32 skin")?;
+    Ok((skin, model == "slim"))
+}
+
+/// The signed-in account's own profile properties (`Minecraft.profileFuture`:
+/// `fetchProfile(id, true)`, so its `textures` property is signed), or empty
+/// without an answer. Blocks on the network.
+pub fn fetch_own_properties(id: u128) -> Vec<(String, String, Option<String>)> {
+    crate::auth::discovery()
+        .ok()
+        .and_then(|doc| resolve_profile(&NameOrId::Id(id), &doc))
+        .map(|p| p.properties)
+        .unwrap_or_default()
+}
+
 /// Where a texture download stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Download {
@@ -587,12 +709,16 @@ pub fn lookup(
     ];
     for (kind, url) in urls {
         let Some(url) = url else { continue };
-        // registerTexture computes the hash first; a bad URL fails the lookup.
+        // registerTexture computes the hash first: a bad URL, even a cape's,
+        // fails the whole lookup.
         let hash = texture_hash(url)?;
         if kind == Kind::Skin {
             skin = Some(skin_location(&hash));
         }
         match download(kind, url) {
+            // `SkinManager.registerTextures` joins the skin, cape and elytra
+            // futures with `allOf`: any one failing fails the profile's
+            // `PlayerSkin`, and `createLookup` then shows the default skin.
             Download::Failed => return None,
             Download::Pending => state = Download::Pending,
             Download::Ready => {}
@@ -681,11 +807,34 @@ pub struct Downloader {
     /// atlas uploads again (`again`); the disk cache backs anything dropped.
     images: std::collections::HashMap<String, Vec<u8>>,
     image_order: std::collections::VecDeque<String>,
+    /// Skins and capes drawn from the atlas since `take_drawn`.
+    drawn: std::collections::HashSet<String>,
+    /// The resource packs' root, where a profile's `texture` patch is read.
+    resource_root: std::path::PathBuf,
+    /// How each `patch/` texture of the resource packs loaded, by location.
+    resources: std::collections::HashMap<String, Download>,
+    /// When each failed texture download was last tried, so it can be retried:
+    /// a transient network error must not pin a player to the default skin for
+    /// the rest of the session.
+    failed: std::collections::HashMap<(Kind, String), std::time::Instant>,
+    /// How long a failed texture download waits before it is tried again.
+    retry_after: std::time::Duration,
 }
 /// `images` is bounded only so a long session on a busy server does not grow
 /// without end; the disk cache holds everything it drops.
 const MAX_SKIN_IMAGES: usize = 1024;
 impl Downloader {
+    /// The decoded 64×64 RGBA image an atlas location holds, when it is
+    /// still in memory (3D skin layers builds its geometry from it, and the
+    /// disk cache backs whatever was dropped).
+    pub fn image(&self, location: &str) -> Option<&[u8]> {
+        self.images.get(location).map(Vec::as_slice)
+    }
+    /// Keeps a decoded image under `location` for the images read back later
+    /// (a launcher's offline skin, which skips `queue`).
+    pub fn remember_image(&mut self, location: &str, rgba: &[u8]) {
+        self.remember(location.to_owned(), rgba.to_vec());
+    }
     pub fn new(root: std::path::PathBuf) -> Self {
         let (send, done) = std::sync::mpsc::channel();
         Self {
@@ -697,9 +846,53 @@ impl Downloader {
             queued: Default::default(),
             images: Default::default(),
             image_order: Default::default(),
+            drawn: Default::default(),
+            resource_root: Default::default(),
+            resources: Default::default(),
+            failed: Default::default(),
+            retry_after: std::time::Duration::from_secs(60),
         }
     }
-    /// How the download of `url` stands, starting it the first time.
+    /// The resource packs changed (or were first loaded) at `root`: patch
+    /// textures load again from there.
+    pub fn set_resource_root(&mut self, root: std::path::PathBuf) {
+        for location in std::mem::take(&mut self.resources).into_keys() {
+            self.images.remove(&location);
+            self.image_order.retain(|l| *l != location);
+        }
+        self.resource_root = root;
+    }
+    /// `ClientAsset.ResourceTexture`: loads `<namespace>:textures/<path>.png`
+    /// from the resource packs into a skin slot as `location`, once. A
+    /// texture of another size is sampled as the model's normalised UVs would
+    /// sample it (nearest texel) into the 64x64 slot.
+    fn resource(&mut self, location: &str, namespace: &str, path: &str) {
+        match self.resources.get(location) {
+            Some(Download::Failed) => return,
+            Some(_) => {
+                self.again(location);
+                return;
+            }
+            None => {}
+        }
+        let file = self
+            .resource_root
+            .join(format!("assets/{namespace}/textures/{path}.png"));
+        let image = std::fs::read(file)
+            .ok()
+            .and_then(|b| crate::hud::decode_bytes(&b).ok())
+            .and_then(|(w, h, rgba)| resample_64(w, h, &rgba));
+        let state = match image {
+            Some(rgba) => {
+                self.queue(location.to_owned(), rgba);
+                Download::Ready
+            }
+            None => Download::Failed,
+        };
+        self.resources.insert(location.to_owned(), state);
+    }
+    /// How the download of `url` stands, starting it the first time. A
+    /// failure is permanent for `retry_after`, then tried again.
     pub fn state(&mut self, kind: Kind, url: &str) -> Download {
         while let Ok((key, image)) = self.done.try_recv() {
             let state = match image {
@@ -709,9 +902,13 @@ impl Downloader {
                         Kind::Cape => self.queue(cape_location(&key.1), rgba),
                         Kind::Elytra => {}
                     }
+                    self.failed.remove(&key);
                     Download::Ready
                 }
-                None => Download::Failed,
+                None => {
+                    self.failed.insert(key.clone(), std::time::Instant::now());
+                    Download::Failed
+                }
             };
             self.states.insert(key, state);
         }
@@ -719,33 +916,56 @@ impl Downloader {
             return Download::Failed;
         };
         let key = (kind, hash);
-        if let Some(state) = self.states.get(&key) {
-            return *state;
+        if let Some(state) = self.states.get(&key).copied() {
+            let due = self
+                .failed
+                .get(&key)
+                .is_none_or(|at| at.elapsed() >= self.retry_after);
+            if state != Download::Failed || !due {
+                return state;
+            }
+            self.states.remove(&key);
+            self.failed.remove(&key);
         }
         self.states.insert(key.clone(), Download::Pending);
         let digest: String = skin_location(&key.1)["skins/".len()..].to_owned();
-        let file = self
-            .root
-            .join(if digest.len() > 2 { &digest[..2] } else { "xx" })
-            .join(&digest);
-        let (url, send) = (url.to_owned(), self.send.clone());
+        let (url, send, root) = (url.to_owned(), self.send.clone(), self.root.clone());
         std::thread::spawn(move || {
-            let bytes = std::fs::read(&file).ok().or_else(|| {
-                let body = http_get(&url)?;
-                let _ = std::fs::create_dir_all(file.parent()?);
-                let _ = std::fs::write(&file, &body);
-                Some(body)
-            });
-            let image = bytes
-                .and_then(|b| crate::hud::decode_bytes(&b).ok())
-                .and_then(|(w, h, rgba)| match kind {
-                    Kind::Skin => process_legacy_skin(w, h, &rgba),
-                    Kind::Cape => process_cape(w, h, &rgba),
-                    Kind::Elytra => Some(rgba),
-                });
+            let image = Self::load_texture(&root, kind, &digest, &url, http_get);
             let _ = send.send((key, image));
         });
         Download::Pending
+    }
+    /// One texture's pixels: the disk cache's body if it decodes, else a fetch
+    /// (`SkinTextureDownloader.downloadSkin`). Only a body that decodes is
+    /// written to the cache: an error page or a half image must not be what a
+    /// later start reads instead of fetching again.
+    fn load_texture(
+        root: &std::path::Path,
+        kind: Kind,
+        digest: &str,
+        url: &str,
+        fetch: impl FnOnce(&str) -> Option<Vec<u8>>,
+    ) -> Option<Vec<u8>> {
+        let file = root
+            .join(if digest.len() > 2 { &digest[..2] } else { "xx" })
+            .join(digest);
+        let decode = |bytes: &[u8]| -> Option<Vec<u8>> {
+            let (w, h, rgba) = crate::hud::decode_bytes(bytes).ok()?;
+            match kind {
+                Kind::Skin => process_legacy_skin(w, h, &rgba),
+                Kind::Cape => process_cape(w, h, &rgba),
+                Kind::Elytra => Some(rgba),
+            }
+        };
+        if let Some(image) = std::fs::read(&file).ok().and_then(|b| decode(&b)) {
+            return Some(image);
+        }
+        let body = fetch(url)?;
+        let image = decode(&body)?;
+        let _ = std::fs::create_dir_all(file.parent()?);
+        let _ = std::fs::write(&file, &body);
+        Some(image)
     }
     /// Keeps a decoded skin for `again`, dropping the oldest past the bound.
     fn remember(&mut self, location: String, rgba: Vec<u8>) {
@@ -770,6 +990,15 @@ impl Downloader {
     /// its image for upload again, from memory or the disk cache.
     pub fn again(&mut self, location: &str) -> bool {
         if self.queued.contains(location) {
+            return true;
+        }
+        if location.starts_with("patch/") {
+            let Some(image) = self.images.get(location).cloned() else {
+                // Dropped from memory: read from the packs again.
+                self.resources.remove(location);
+                return false;
+            };
+            self.queue(location.to_owned(), image);
             return true;
         }
         let (digest, process): (_, fn(u32, u32, &[u8]) -> Option<Vec<u8>>) =
@@ -801,6 +1030,83 @@ impl Downloader {
         }
         std::mem::take(&mut self.ready)
     }
+    /// A skin or cape in the atlas drawn this frame: `SkinSlots` keeps its slot.
+    pub fn drawn(&mut self, location: &str) {
+        if !self.drawn.contains(location) {
+            self.drawn.insert(location.to_owned());
+        }
+    }
+    /// The skins and capes drawn since the last call.
+    pub fn take_drawn(&mut self) -> std::collections::HashSet<String> {
+        std::mem::take(&mut self.drawn)
+    }
+}
+
+/// Which downloaded skins and capes hold the atlas's skin slots
+/// (`hud::SKIN_SLOTS`). Vanilla's `SkinManager.TextureCache.getOrLoad`
+/// registers a texture per skin and keeps it. Here the slots are shared: a
+/// new skin takes a free slot, else the least recently drawn skin's, but
+/// never one drawn in the last frame. With every slot drawn, the new skin
+/// waits (its player keeps the default skin) instead of pushing out one in
+/// use, which then came back by pushing out another, so players vanished
+/// for a frame and heads swapped textures as the slots went round.
+pub struct SkinSlots {
+    capacity: usize,
+    /// Stored locations and their slot, the least recently drawn first.
+    slots: Vec<(String, usize)>,
+    /// Drawn in the last frame, or stored since: kept from eviction.
+    kept: std::collections::HashSet<String>,
+}
+impl SkinSlots {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            capacity,
+            slots: Vec::new(),
+            kept: Default::default(),
+        }
+    }
+    /// The atlas was replaced (a resource pack reload): every slot is blank,
+    /// so no skin counts as stored and each uploads again.
+    pub fn forget(&mut self) {
+        self.slots.clear();
+        self.kept.clear();
+    }
+    /// Whether `location` is in a slot.
+    pub fn contains(&self, location: &str) -> bool {
+        self.slots.iter().any(|(l, _)| l == location)
+    }
+    /// A new frame: the skins `drawn` in the last one
+    /// (`Downloader::take_drawn`) become the most recently drawn, and keep
+    /// their slots through this frame's `place`s.
+    pub fn next_frame(&mut self, drawn: std::collections::HashSet<String>) {
+        let (recent, old): (Vec<_>, Vec<_>) = std::mem::take(&mut self.slots)
+            .into_iter()
+            .partition(|(l, _)| drawn.contains(l));
+        self.slots = old;
+        self.slots.extend(recent);
+        self.kept = drawn;
+    }
+    /// A slot for `location`: its own, a free one, else the least recently
+    /// drawn one not kept, with the location it held. `None` while every
+    /// slot is kept.
+    pub fn place(&mut self, location: String) -> Option<(usize, Option<String>)> {
+        if let Some((_, slot)) = self.slots.iter().find(|(l, _)| *l == location) {
+            return Some((*slot, None));
+        }
+        let (slot, evicted) = if self.slots.len() < self.capacity {
+            (self.slots.len(), None)
+        } else {
+            let i = self
+                .slots
+                .iter()
+                .position(|(l, _)| !self.kept.contains(l))?;
+            let (old, slot) = self.slots.remove(i);
+            (slot, Some(old))
+        };
+        self.kept.insert(location.clone());
+        self.slots.push((location, slot));
+        Some((slot, evicted))
+    }
 }
 
 /// A GET over HTTP or HTTPS (textures.minecraft.net serves both; vanilla
@@ -825,60 +1131,81 @@ fn http_get(url: &str) -> Option<Vec<u8>> {
 
 /// SHA-1 (FIPS 180-4).
 pub fn sha1(data: &[u8]) -> [u8; 20] {
-    let mut h: [u32; 5] = [
-        0x6745_2301,
-        0xEFCD_AB89,
-        0x98BA_DCFE,
-        0x1032_5476,
-        0xC3D2_E1F0,
-    ];
-    let mut msg = data.to_vec();
-    msg.push(0x80);
-    while msg.len() % 64 != 56 {
-        msg.push(0);
-    }
-    msg.extend((data.len() as u64 * 8).to_be_bytes());
-    for block in msg.as_chunks::<64>().0 {
-        let mut w = [0u32; 80];
-        for (i, word) in block.as_chunks::<4>().0.iter().enumerate() {
-            w[i] = u32::from_be_bytes(*word);
-        }
-        for i in 16..80 {
-            w[i] = (w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]).rotate_left(1);
-        }
-        let [mut a, mut b, mut c, mut d, mut e] = h;
-        for (i, wi) in w.iter().enumerate() {
-            let (f, k) = match i {
-                0..=19 => ((b & c) | (!b & d), 0x5A82_7999),
-                20..=39 => (b ^ c ^ d, 0x6ED9_EBA1),
-                40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1B_BCDC),
-                _ => (b ^ c ^ d, 0xCA62_C1D6),
-            };
-            let t = a
-                .rotate_left(5)
-                .wrapping_add(f)
-                .wrapping_add(e)
-                .wrapping_add(k)
-                .wrapping_add(*wi);
-            e = d;
-            d = c;
-            c = b.rotate_left(30);
-            b = a;
-            a = t;
-        }
-        for (x, y) in h.iter_mut().zip([a, b, c, d, e]) {
-            *x = x.wrapping_add(y);
-        }
-    }
-    let mut out = [0u8; 20];
-    for (i, x) in h.iter().enumerate() {
-        out[i * 4..i * 4 + 4].copy_from_slice(&x.to_be_bytes());
-    }
-    out
+    use sha1::{Digest, Sha1};
+    Sha1::digest(data).into()
 }
 
 #[cfg(test)]
 mod tests {
+    /// A profile's `texture` names a pack texture, never a file outside the
+    /// packs: bad characters and `..` segments draw nothing.
+    #[test]
+    fn a_texture_patch_stays_inside_the_packs() {
+        use super::valid_texture_id;
+        assert!(valid_texture_id("ethereal", "entity/plush_blank"));
+        assert!(valid_texture_id("minecraft", "entity/player/wide/steve"));
+        assert!(!valid_texture_id("ethereal", "../../../secret"));
+        assert!(!valid_texture_id("..", "entity/x"));
+        assert!(!valid_texture_id("ethereal", "entity//x"));
+        assert!(!valid_texture_id("Ethereal", "entity/x"));
+        assert!(!valid_texture_id("ethereal", "entity\\x"));
+        assert!(!valid_texture_id("", "entity/x"));
+    }
+
+    /// A pack reload swaps the atlas: its skin slots are blank, so a forgotten
+    /// table holds nothing and hands out slots from the start again, even for
+    /// skins drawn in the last frame.
+    #[test]
+    fn a_new_atlas_forgets_every_skin_slot() {
+        use super::SkinSlots;
+        let mut slots = SkinSlots::new(2);
+        assert_eq!(slots.place("skins/a".into()), Some((0, None)));
+        assert_eq!(slots.place("skins/b".into()), Some((1, None)));
+        assert_eq!(slots.place("skins/c".into()), None);
+        slots.forget();
+        assert!(!slots.contains("skins/a"));
+        assert!(!slots.contains("skins/b"));
+        assert_eq!(slots.place("skins/c".into()), Some((0, None)));
+        assert_eq!(slots.place("skins/a".into()), Some((1, None)));
+    }
+
+    /// The launcher's offline skin: a 64x64 or legacy 64x32 PNG laid out as
+    /// a downloaded skin, slim only for the `slim` model; anything else is
+    /// refused and the player keeps their default skin.
+    #[test]
+    fn offline_skins_read_like_downloaded_ones() {
+        let png = |w: u32, h: u32| {
+            let rgba: Vec<u8> = (0..w * h * 4).map(|i| (i % 251) as u8).collect();
+            let mut out = Vec::new();
+            let mut encoder = png::Encoder::new(&mut out, w, h);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&rgba)
+                .unwrap();
+            (out, rgba)
+        };
+        let dir = std::env::temp_dir().join(format!("atlas-offline-skin-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("steve.png");
+        for (h, model, slim) in [(64, "slim", true), (32, "classic", false), (64, "", false)] {
+            let (bytes, rgba) = png(64, h);
+            std::fs::write(&file, bytes).unwrap();
+            let (skin, is_slim) = super::read_offline_skin(&file, model).unwrap();
+            assert_eq!(skin, super::process_legacy_skin(64, h, &rgba).unwrap());
+            assert_eq!(skin.len(), 64 * 64 * 4);
+            assert_eq!(is_slim, slim);
+        }
+        std::fs::write(&file, png(32, 32).0).unwrap();
+        assert!(super::read_offline_skin(&file, "slim").is_err());
+        std::fs::write(&file, b"not a png").unwrap();
+        assert!(super::read_offline_skin(&file, "slim").is_err());
+        assert!(super::read_offline_skin(&dir.join("missing.png"), "").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// `MinecraftProfileTexture.getMetadata("model")`: `slim` marks a slim
     /// skin; no metadata is the wide (classic) model.
     #[test]
@@ -942,6 +1269,36 @@ mod tests {
         assert_eq!(p.dynamic, Some(NameOrId::Name("Notch".into())));
     }
 
+    #[test]
+    fn services_profile_answers_give_the_active_skin_and_cape() {
+        let profile = serde_json::json!({
+            "skins": [
+                {"state": "INACTIVE", "url": "https://textures.minecraft.net/texture/old"},
+                {"state": "ACTIVE", "url": "https://textures.minecraft.net/texture/skin1", "variant": "CLASSIC"}
+            ],
+            "capes": [{"state": "ACTIVE", "url": "http://textures.minecraft.net/texture/cape1"}]
+        });
+        let t = super::services_profile_textures(&profile);
+        assert_eq!(
+            t.skin.as_deref(),
+            Some("https://textures.minecraft.net/texture/skin1")
+        );
+        assert_eq!(
+            t.cape.as_deref(),
+            Some("http://textures.minecraft.net/texture/cape1")
+        );
+        assert!(!t.signed);
+        let elsewhere = serde_json::json!({"skins": [{"state": "ACTIVE", "url": "https://evil.example/texture/x"}]});
+        assert_eq!(
+            super::services_profile_textures(&elsewhere),
+            super::Textures::default()
+        );
+        assert_eq!(
+            super::services_profile_textures(&serde_json::json!({})),
+            super::Textures::default()
+        );
+    }
+
     /// `getByName` and `getProfileById` answer from the services the
     /// discovery document names; a profile resolves through both.
     #[test]
@@ -997,6 +1354,63 @@ mod tests {
             "session": {"endpoints": {"getProfileById": {"uri": format!("{base}/session/minecraft/profile/{{profileId}}")}}},
         }});
         assert!(super::resolve_profile(&super::NameOrId::Name("Notch".into()), &doc).is_none());
+    }
+
+    /// More skins drawn every frame than there are slots (#3829): a frame's
+    /// uploads used to push out skins drawn the frame before, which then
+    /// uploaded again and pushed out others, so the drawn skins went missing
+    /// in turn. Those drawn keep their slots; the rest wait.
+    #[test]
+    fn skins_drawn_last_frame_keep_their_slots() {
+        let mut d = super::Downloader::new(std::env::temp_dir().join("atlas-test-skin-slots"));
+        let skins: Vec<String> = (0..6).map(|i| format!("skins/{i}")).collect();
+        for (i, s) in skins.iter().enumerate() {
+            d.remember(s.clone(), vec![i as u8]);
+        }
+        let mut slots = super::SkinSlots::new(4);
+        let mut last: Option<Vec<String>> = None;
+        for frame in 0..8 {
+            // draw_tab_list: the downloads that finished go to the atlas.
+            slots.next_frame(d.take_drawn());
+            let mut uploads = 0;
+            for (location, _) in d.take_ready() {
+                if slots.place(location).is_some() {
+                    uploads += 1;
+                }
+            }
+            // update_remote_skins: every skin is drawn, from its slot, or
+            // asked for again while it has none.
+            let mut shown = Vec::new();
+            for s in &skins {
+                if slots.contains(s) {
+                    d.drawn(s);
+                    shown.push(s.clone());
+                } else {
+                    d.again(s);
+                }
+            }
+            if frame >= 2 {
+                assert_eq!(uploads, 0, "frame {frame} uploaded again");
+                assert_eq!(Some(&shown), last.as_ref(), "frame {frame} lost a skin");
+            }
+            // The first frame asks for the skins; from the next, four show.
+            assert_eq!(shown.len(), if frame == 0 { 0 } else { 4 });
+            last = Some(shown);
+        }
+        // A skin no longer drawn gives up its slot to a waiting one.
+        let mut slots = super::SkinSlots::new(2);
+        slots.next_frame(Default::default());
+        assert_eq!(slots.place("skins/a".into()), Some((0, None)));
+        assert_eq!(slots.place("skins/b".into()), Some((1, None)));
+        assert_eq!(slots.place("skins/c".into()), None);
+        slots.next_frame(["skins/b".to_owned()].into());
+        assert_eq!(
+            slots.place("skins/c".into()),
+            Some((0, Some("skins/a".into())))
+        );
+        // Stored this frame, kept through it.
+        assert_eq!(slots.place("skins/d".into()), None);
+        assert!(slots.contains("skins/b") && slots.contains("skins/c"));
     }
 
     /// A skin evicted from the atlas re-uploads (`again`), once per ask.
@@ -1141,5 +1555,159 @@ mod tests {
             texture_hash("http://textures.minecraft.net/texture/abc.png?x=1").unwrap(),
             "abc"
         );
+    }
+
+    /// `SkinManager.registerTextures` waits on the skin, cape and elytra
+    /// together (`CompletableFuture.allOf`): a cape or elytra that cannot be
+    /// fetched, or whose URL has no hash, fails the profile, and the player
+    /// shows the default skin, as the skin's own failure does.
+    #[test]
+    fn a_failed_cape_or_elytra_shows_the_default_skin() {
+        let textures = super::Textures {
+            skin: Some("https://textures.minecraft.net/texture/skin1".into()),
+            cape: Some("https://textures.minecraft.net/texture/cape1".into()),
+            elytra: Some("https://textures.minecraft.net/texture/elytra1".into()),
+            signed: true,
+            slim: false,
+        };
+        let all_ready = super::lookup(&textures, true, |_, _| super::Download::Ready);
+        assert_eq!(all_ready, Some(super::skin_location("skin1")));
+        for failing in [super::Kind::Skin, super::Kind::Cape, super::Kind::Elytra] {
+            let skin = super::lookup(&textures, true, |kind, _| {
+                if kind == failing {
+                    super::Download::Failed
+                } else {
+                    super::Download::Ready
+                }
+            });
+            assert_eq!(skin, None, "{failing:?} failed");
+        }
+        let bad_cape_url = super::Textures {
+            cape: Some("no-scheme".into()),
+            ..textures.clone()
+        };
+        assert_eq!(
+            super::lookup(&bad_cape_url, true, |_, _| super::Download::Ready),
+            None
+        );
+    }
+
+    /// A 1x1 PNG of `rgba`.
+    fn png(rgba: [u8; 4]) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut encoder = png::Encoder::new(&mut out, 1, 1);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(&rgba).unwrap();
+        writer.finish().unwrap();
+        out
+    }
+
+    /// A downloaded body reaches the disk cache only if it decodes; a broken
+    /// cached file is fetched again and replaced. A failed fetch writes nothing.
+    #[test]
+    fn the_texture_cache_holds_only_what_decodes() {
+        let root =
+            std::env::temp_dir().join(format!("atlas-test-skin-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let body = png([7, 8, 9, 255]);
+        let file = root.join("ab").join("abcdef");
+        let load = |fetched: Option<&[u8]>| {
+            let fetched = fetched.map(<[u8]>::to_vec);
+            super::Downloader::load_texture(
+                &root,
+                super::Kind::Elytra,
+                "abcdef",
+                "https://example/texture/abc.png",
+                |_| fetched.clone(),
+            )
+        };
+        assert_eq!(load(Some(&body)), Some(vec![7, 8, 9, 255]));
+        assert_eq!(std::fs::read(&file).unwrap(), body);
+        // From then on the cache answers; no fetch is needed.
+        assert_eq!(load(None), Some(vec![7, 8, 9, 255]));
+        // A broken file is fetched again and replaced, not kept.
+        std::fs::write(&file, b"<html>not a png</html>").unwrap();
+        assert_eq!(load(Some(&body)), Some(vec![7, 8, 9, 255]));
+        assert_eq!(std::fs::read(&file).unwrap(), body);
+        // A body that does not decode is not cached at all.
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(load(Some(b"<html>not a png</html>")), None);
+        assert!(!file.exists());
+    }
+
+    fn wait_state(
+        d: &mut super::Downloader,
+        kind: super::Kind,
+        url: &str,
+        want: super::Download,
+    ) -> super::Download {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let state = d.state(kind, url);
+            if state == want || std::time::Instant::now() > deadline {
+                return state;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
+    /// A texture download that failed is tried again after the wait, instead of
+    /// pinning the player to the default skin for the rest of the session.
+    #[test]
+    fn a_failed_download_is_retried_after_the_wait() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let body = png([1, 2, 3, 4]);
+        let served = std::sync::Arc::new(AtomicUsize::new(0));
+        let count = served.clone();
+        std::thread::spawn(move || {
+            for (i, stream) in listener.incoming().take(2).enumerate() {
+                let mut stream = stream.unwrap();
+                let mut line = String::new();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                reader.read_line(&mut line).unwrap();
+                while reader.read_line(&mut String::new()).unwrap() > 2 {}
+                count.fetch_add(1, Ordering::SeqCst);
+                if i == 0 {
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        )
+                        .unwrap();
+                } else {
+                    let head = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    stream.write_all(head.as_bytes()).unwrap();
+                    stream.write_all(&body).unwrap();
+                }
+            }
+        });
+        let root =
+            std::env::temp_dir().join(format!("atlas-test-skin-retry-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut d = super::Downloader::new(root);
+        let url = format!("{base}/texture/retry.png");
+        assert_eq!(d.state(super::Kind::Elytra, &url), super::Download::Pending);
+        assert_eq!(
+            wait_state(&mut d, super::Kind::Elytra, &url, super::Download::Failed),
+            super::Download::Failed
+        );
+        // Within the wait the failure stands: no request goes out.
+        assert_eq!(d.state(super::Kind::Elytra, &url), super::Download::Failed);
+        assert_eq!(served.load(Ordering::SeqCst), 1);
+        // After it, the download is started again and takes the good answer.
+        d.retry_after = std::time::Duration::ZERO;
+        assert_eq!(d.state(super::Kind::Elytra, &url), super::Download::Pending);
+        assert_eq!(
+            wait_state(&mut d, super::Kind::Elytra, &url, super::Download::Ready),
+            super::Download::Ready
+        );
+        assert_eq!(served.load(Ordering::SeqCst), 2);
     }
 }

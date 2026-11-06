@@ -3,7 +3,7 @@
 Run with the pinned prepared client resources:
 
 ```sh
-CARGO_BUILD_JOBS=6 cargo run --profile fast -p atlas-client --example portal_scan_bench -- \
+CARGO_BUILD_JOBS=6 cargo run --profile fast -p atlas-client-lib --example portal_scan_bench -- \
   .local/atlas-client/26.3
 ```
 

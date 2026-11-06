@@ -3,6 +3,7 @@
 //! from `pack.mcmeta` `language` sections, and a process-wide current
 //! language used by every screen.
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, HashMap},
     sync::{
         Arc, RwLock,
@@ -34,6 +35,15 @@ pub struct Language {
 pub const DEFAULT: &str = "en_us";
 
 static CURRENT: RwLock<Option<Arc<Language>>> = RwLock::new(None);
+/// A language that only the calling thread sees, and the keys it was asked for and did not have
+/// (`scoped`).
+struct Scope {
+    language: Arc<Language>,
+    missed: Vec<String>,
+}
+thread_local! {
+    static SCOPE: RefCell<Option<Scope>> = const { RefCell::new(None) };
+}
 /// The current language's `bidirectional`, read for every drawn string.
 static BIDIRECTIONAL: AtomicBool = AtomicBool::new(false);
 
@@ -57,11 +67,276 @@ impl ResourceSource for Bundled {
             "assets/atlas/lang/en_us.json" => {
                 include_str!("../../atlas-client/assets/atlas/lang/en_us.json")
             }
+            "assets/atlas/lang/zh_cn.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/zh_cn.json")
+            }
             "assets/atlas/lang/ru_ru.json" => {
                 include_str!("../../atlas-client/assets/atlas/lang/ru_ru.json")
             }
+            "assets/atlas/lang/pl_pl.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/pl_pl.json")
+            }
             "assets/atlas/lang/uk_ua.json" => {
                 include_str!("../../atlas-client/assets/atlas/lang/uk_ua.json")
+            }
+            "assets/atlas/lang/hi_in.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/hi_in.json")
+            }
+            "assets/atlas/lang/id_id.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/id_id.json")
+            }
+            "assets/atlas/lang/tr_tr.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/tr_tr.json")
+            }
+            "assets/atlas/lang/ko_kr.json" | "assets/atlas/lang/ko.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ko_kr.json")
+            }
+            "assets/atlas/lang/hr_hr.json" | "assets/atlas/lang/hr.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/hr_hr.json")
+            }
+            "assets/atlas/lang/pt_pt.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/pt_pt.json")
+            }
+            "assets/atlas/lang/ur_pk.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ur_pk.json")
+            }
+            "assets/atlas/lang/fa_ir.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/fa_ir.json")
+            }
+            "assets/atlas/lang/he_il.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/he_il.json")
+            }
+            "assets/atlas/lang/hu_hu.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/hu_hu.json")
+            }
+            "assets/atlas/lang/ro_ro.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ro_ro.json")
+            }
+            "assets/atlas/lang/da_dk.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/da_dk.json")
+            }
+            "assets/atlas/lang/fi_fi.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/fi_fi.json")
+            }
+            "assets/atlas/lang/no_no.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/no_no.json")
+            }
+            "assets/atlas/lang/bg_bg.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/bg_bg.json")
+            }
+            "assets/atlas/lang/sk_sk.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/sk_sk.json")
+            }
+            "assets/atlas/lang/lt_lt.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/lt_lt.json")
+            }
+            "assets/atlas/lang/it_it.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/it_it.json")
+            }
+            "assets/atlas/lang/nl_nl.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/nl_nl.json")
+            }
+            "assets/atlas/lang/vi_vn.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/vi_vn.json")
+            }
+            "assets/atlas/lang/th_th.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/th_th.json")
+            }
+            "assets/atlas/lang/ja_jp.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ja_jp.json")
+            }
+            "assets/atlas/lang/ar_sa.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ar_sa.json")
+            }
+            "assets/atlas/lang/pt_br.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/pt_br.json")
+            }
+            "assets/atlas/lang/cs_cz.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/cs_cz.json")
+            }
+            "assets/atlas/lang/sv_se.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/sv_se.json")
+            }
+            "assets/atlas/lang/el_gr.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/el_gr.json")
+            }
+            "assets/atlas/lang/ca_es.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ca_es.json")
+            }
+            "assets/atlas/lang/et_ee.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/et_ee.json")
+            }
+            "assets/atlas/lang/lv_lv.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/lv_lv.json")
+            }
+            "assets/atlas/lang/sl_si.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/sl_si.json")
+            }
+            "assets/atlas/lang/sr_cs.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/sr_cs.json")
+            }
+            "assets/atlas/lang/is_is.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/is_is.json")
+            }
+            "assets/atlas/lang/af_za.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/af_za.json")
+            }
+            "assets/atlas/lang/ms_my.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ms_my.json")
+            }
+            "assets/atlas/lang/be_by.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/be_by.json")
+            }
+            "assets/atlas/lang/sr_sp.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/sr_sp.json")
+            }
+            "assets/atlas/lang/az_az.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/az_az.json")
+            }
+            "assets/atlas/lang/uz_uz.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/uz_uz.json")
+            }
+            "assets/atlas/lang/kk_kz.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/kk_kz.json")
+            }
+            "assets/atlas/lang/ka_ge.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ka_ge.json")
+            }
+            "assets/atlas/lang/hy_am.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/hy_am.json")
+            }
+            "assets/atlas/lang/bs_ba.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/bs_ba.json")
+            }
+            "assets/atlas/lang/mk_mk.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/mk_mk.json")
+            }
+            "assets/atlas/lang/sq_al.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/sq_al.json")
+            }
+            "assets/atlas/lang/cy_gb.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/cy_gb.json")
+            }
+            "assets/atlas/lang/ga_ie.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ga_ie.json")
+            }
+            "assets/atlas/lang/eu_es.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/eu_es.json")
+            }
+            "assets/atlas/lang/gl_es.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/gl_es.json")
+            }
+            "assets/atlas/lang/fil_ph.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/fil_ph.json")
+            }
+            "assets/atlas/lang/ta_in.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ta_in.json")
+            }
+            "assets/atlas/lang/mn_mn.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/mn_mn.json")
+            }
+            "assets/atlas/lang/lo_la.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/lo_la.json")
+            }
+            "assets/atlas/lang/so_so.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/so_so.json")
+            }
+            "assets/atlas/lang/fy_nl.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/fy_nl.json")
+            }
+            "assets/atlas/lang/gd_gb.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/gd_gb.json")
+            }
+            "assets/atlas/lang/lb_lu.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/lb_lu.json")
+            }
+            "assets/atlas/lang/ky_kg.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ky_kg.json")
+            }
+            "assets/atlas/lang/kn_in.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/kn_in.json")
+            }
+            "assets/atlas/lang/mt_mt.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/mt_mt.json")
+            }
+            "assets/atlas/lang/eo_uy.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/eo_uy.json")
+            }
+            "assets/atlas/lang/haw_us.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/haw_us.json")
+            }
+            "assets/atlas/lang/ig_ng.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ig_ng.json")
+            }
+            "assets/atlas/lang/la_la.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/la_la.json")
+            }
+            "assets/atlas/lang/tt_ru.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/tt_ru.json")
+            }
+            "assets/atlas/lang/yi_de.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/yi_de.json")
+            }
+            "assets/atlas/lang/yo_ng.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/yo_ng.json")
+            }
+            "assets/atlas/lang/ba_ru.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/ba_ru.json")
+            }
+            "assets/atlas/lang/br_fr.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/br_fr.json")
+            }
+            "assets/atlas/lang/cv_cu.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/cv_cu.json")
+            }
+            "assets/atlas/lang/fo_fo.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/fo_fo.json")
+            }
+            "assets/atlas/lang/fur_it.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/fur_it.json")
+            }
+            "assets/atlas/lang/li_li.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/li_li.json")
+            }
+            "assets/atlas/lang/lmo.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/lmo.json")
+            }
+            "assets/atlas/lang/oc_fr.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/oc_fr.json")
+            }
+            "assets/atlas/lang/sah_sah.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/sah_sah.json")
+            }
+            "assets/atlas/lang/se_no.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/se_no.json")
+            }
+            "assets/atlas/lang/szl.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/szl.json")
+            }
+            "assets/atlas/lang/vec_it.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/vec_it.json")
+            }
+            "assets/atlas/lang/de_de.json" | "assets/atlas/lang/de_at.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/de_de.json")
+            }
+            // Swiss German writes "ss" for "ß", as vanilla's de_ch does.
+            "assets/atlas/lang/de_ch.json" => {
+                let de = include_str!("../../atlas-client/assets/atlas/lang/de_de.json");
+                return Some(de.replace('ß', "ss").into_bytes());
+            }
+            "assets/atlas/lang/fr_fr.json"
+            | "assets/atlas/lang/fr_ca.json"
+            | "assets/atlas/lang/fr_ch.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/fr_fr.json")
+            }
+            "assets/atlas/lang/es_es.json"
+            | "assets/atlas/lang/es_ar.json"
+            | "assets/atlas/lang/es_cl.json"
+            | "assets/atlas/lang/es_ec.json"
+            | "assets/atlas/lang/es_mx.json"
+            | "assets/atlas/lang/es_uy.json"
+            | "assets/atlas/lang/es_ve.json" => {
+                include_str!("../../atlas-client/assets/atlas/lang/es_es.json")
             }
             _ => return None,
         };
@@ -113,6 +388,36 @@ pub fn apply_deprecated(map: &mut HashMap<String, String>, json: &[u8]) {
     }
 }
 
+/// `Language.loadFromJson` for one `lang/<code>.json`: its entries go into `map` in file order.
+/// A file that is plain JSON reads as before; any other goes through Gson's lenient reader
+/// (`#`, `//` and `/* */` comments, unquoted or single-quoted names and values, raw control
+/// characters in strings, `=` or `=>` and `;`), which vanilla reads lang files with (expected
+/// from `Language.loadFromJson`, Gson). A file that is not JSON even so adds nothing; a value
+/// that is not a string, number or boolean (`GsonHelper.convertToString`) ends the file there.
+fn read_lang_file(bytes: &[u8], map: &mut HashMap<String, String>) {
+    use atlas_world::datafix::json::{Json, parse_lenient};
+    if let Ok(entries) = serde_json::from_slice::<HashMap<String, String>>(bytes) {
+        map.extend(entries);
+        return;
+    }
+    let text = String::from_utf8_lossy(bytes);
+    // Gson's JsonReader skips a leading byte order mark.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    let utf16: Vec<u16> = text.encode_utf16().collect();
+    let Some(Json::Obj(entries)) = parse_lenient(&utf16) else {
+        return;
+    };
+    for (key, value) in entries {
+        let value = match value {
+            Json::Str(s) => String::from_utf16_lossy(&s),
+            Json::Num(n) => n,
+            Json::Bool(b) => b.to_string(),
+            Json::Null | Json::Arr(_) | Json::Obj(_) => break,
+        };
+        map.insert(String::from_utf16_lossy(&key), value);
+    }
+}
+
 impl Language {
     /// ClientLanguage.loadFrom: en_us first, then the selected language, each
     /// from every namespace and every source in priority order (later sources
@@ -138,9 +443,7 @@ impl Language {
                     else {
                         continue;
                     };
-                    if let Ok(entries) = serde_json::from_slice::<HashMap<String, String>>(&bytes) {
-                        map.extend(entries);
-                    }
+                    read_lang_file(&bytes, &mut map);
                 }
             }
         }
@@ -223,7 +526,49 @@ pub fn set(language: Language) {
     *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(language));
 }
 pub fn current() -> Option<Arc<Language>> {
+    if let Some(language) = SCOPE.with(|s| s.borrow().as_ref().map(|s| s.language.clone())) {
+        return Some(language);
+    }
     CURRENT.read().unwrap_or_else(|e| e.into_inner()).clone()
+}
+/// Runs `f` with `language` as the current language of this thread only, and returns what it
+/// returned with the keys `get` and `get_or` looked up and `language` did not have, in the order
+/// asked and without repeats. Nothing is set process-wide, so a test can draw a screen in another
+/// language while the tests beside it read theirs. Scopes nest: the inner one wins, and the outer
+/// one's misses do not include the inner one's. For tests: `bidirectional` stays the process-wide
+/// language's.
+pub fn scoped<R>(language: Language, f: impl FnOnce() -> R) -> (R, Vec<String>) {
+    /// Puts the outer scope back, also when `f` panics.
+    struct Restore(Option<Scope>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SCOPE.with(|s| *s.borrow_mut() = self.0.take());
+        }
+    }
+    let outer = SCOPE.with(|s| {
+        s.borrow_mut().replace(Scope {
+            language: Arc::new(language),
+            missed: Vec::new(),
+        })
+    });
+    let _restore = Restore(outer);
+    let result = f();
+    let missed = SCOPE.with(|s| {
+        s.borrow_mut()
+            .as_mut()
+            .map(|s| std::mem::take(&mut s.missed))
+    });
+    (result, missed.unwrap_or_default())
+}
+/// `key` was asked for in a `scoped` language that has no text for it.
+fn missed(key: &str) {
+    SCOPE.with(|s| {
+        if let Some(scope) = s.borrow_mut().as_mut()
+            && !scope.missed.iter().any(|m| m == key)
+        {
+            scope.missed.push(key.to_owned());
+        }
+    });
 }
 /// `ClientLanguage.defaultRightToLeft` of the current language.
 pub fn bidirectional() -> bool {
@@ -236,13 +581,19 @@ pub fn code() -> String {
 pub fn get(key: &str) -> String {
     current()
         .and_then(|l| l.get(key).map(str::to_owned))
-        .unwrap_or_else(|| key.to_owned())
+        .unwrap_or_else(|| {
+            missed(key);
+            key.to_owned()
+        })
 }
 /// The translation, or `fallback` when the key is missing.
 pub fn get_or(key: &str, fallback: &str) -> String {
     current()
         .and_then(|l| l.get(key).map(str::to_owned))
-        .unwrap_or_else(|| fallback.to_owned())
+        .unwrap_or_else(|| {
+            missed(key);
+            fallback.to_owned()
+        })
 }
 pub fn has(key: &str) -> bool {
     current().is_some_and(|l| l.get(key).is_some())
@@ -269,11 +620,242 @@ mod tests {
         assert_eq!(en.get("atlas.options.controller"), Some("Controller"));
         let ru = Language::load(&[&empty], "ru_ru");
         assert_eq!(ru.get("atlas.options.controller"), Some("Геймпад"));
+        // Every bundled string carries both languages: a key added to one file
+        // and forgotten in the other shows as a key name on screen.
+        for key in en.map().keys() {
+            assert!(ru.get(key).is_some(), "{key} has no ru_ru value");
+        }
+        assert_eq!(en.get("atlas.pages.mods"), Some("Mods"));
+        assert_eq!(ru.get("atlas.pages.mods"), Some("Моды"));
+        let zh = Language::load(&[&empty], "zh_cn");
+        assert_eq!(zh.get("atlas.options.controller"), Some("手柄"));
+        assert_eq!(zh.get("atlas.pages.mods"), Some("模组"));
+        assert_eq!(zh.get("Preset"), Some("预设"));
+        assert_eq!(zh.get("%s chunks"), Some("%s 个区块"));
+        // Not every bundle is complete: the en_us layer is in every map, so a
+        // missing key falls back to English (`atlas.mods.not_built` is not
+        // in ru_ru either).
+        assert_eq!(zh.get("LOD Distance"), Some("LOD 距离"));
+        assert_eq!(ru.get("atlas.mods.not_built"), Some(" (Not built)"));
+        let pl = Language::load(&[&empty], "pl_pl");
+        assert_eq!(pl.get("atlas.options.controller"), Some("Kontroler"));
+        assert_eq!(pl.get("atlas.options.vibration"), Some("Wibracje"));
         let uk = Language::load(&[&empty], "uk_ua");
         assert_eq!(
             uk.get("atlas.options.on_screen_keyboard"),
             Some("Екранна клавіатура")
         );
+        let tr = Language::load(&[&empty], "tr_tr");
+        assert_eq!(tr.get("atlas.options.controller"), Some("Kontrolcü"));
+        let es = Language::load(&[&empty], "es_es");
+        assert_eq!(es.get("atlas.options.controller"), Some("Mando"));
+        // German and French, and their regional variants on the same file
+        // (Swiss German without "ß").
+        let de = Language::load(&[&empty], "de_de");
+        assert_eq!(de.get("atlas.osk.close"), Some("Schließen"));
+        let fr = Language::load(&[&empty], "fr_fr");
+        assert_eq!(fr.get("atlas.osk.close"), Some("Fermer"));
+        for (code, base) in [("de_at", &de), ("fr_ca", &fr), ("fr_ch", &fr)] {
+            let variant = Language::load(&[&empty], code);
+            assert_eq!(variant.map(), base.map(), "{code}");
+        }
+        let de_ch = Language::load(&[&empty], "de_ch");
+        assert_eq!(de_ch.get("atlas.osk.close"), Some("Schliessen"));
+        assert!(de_ch.map().values().all(|v| !v.contains('ß')));
+        assert_eq!(de_ch.len(), de.len());
+        let es_ve = Language::load(&[&empty], "es_ve");
+        assert_eq!(
+            es_ve.get("atlas.options.on_screen_keyboard"),
+            Some("Teclado en pantalla")
+        );
+    }
+
+    #[test]
+    fn a_scoped_language_is_the_calling_threads_and_reports_what_it_lacks() {
+        let empty = Mem(HashMap::new());
+        let outside = code();
+        let ((german, english_only, fallback, elsewhere), missed) =
+            scoped(Language::load(&[&empty], "de_de"), || {
+                (
+                    get("atlas.osk.close"),
+                    get("atlas.no_such_key"),
+                    get_or("atlas.no_fallback", "English"),
+                    // Another thread keeps the process-wide language.
+                    std::thread::spawn(code).join().unwrap(),
+                )
+            });
+        assert_eq!(german, "Schließen");
+        assert_eq!(english_only, "atlas.no_such_key");
+        assert_eq!(fallback, "English");
+        assert_eq!(elsewhere, outside);
+        assert_eq!(missed, ["atlas.no_such_key", "atlas.no_fallback"]);
+        // The scope ends with its closure.
+        assert_eq!(code(), outside);
+    }
+
+    #[test]
+    fn scopes_nest_and_end_when_their_closure_panics() {
+        let empty = Mem(HashMap::new());
+        let outside = code();
+        let (inner, missed) = scoped(Language::load(&[&empty], "fr_fr"), || {
+            let (inner, inner_missed) = scoped(Language::load(&[&empty], "pl_pl"), || {
+                (code(), get("atlas.inner_miss"))
+            });
+            assert_eq!(inner_missed, ["atlas.inner_miss"]);
+            assert_eq!(code(), "fr_fr");
+            inner.0
+        });
+        assert_eq!(inner, "pl_pl");
+        assert!(missed.is_empty());
+        let panicked = std::panic::catch_unwind(|| {
+            scoped(Language::load(&[&Mem(HashMap::new())], "de_de"), || {
+                panic!("a test failed inside a scope")
+            })
+        });
+        assert!(panicked.is_err());
+        assert_eq!(code(), outside);
+    }
+
+    /// `crates/atlas-client/assets/atlas/lang`, where Atlas's own strings live.
+    fn bundled_dir() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../atlas-client/assets/atlas/lang")
+    }
+    /// The keys of a flat bundled file in file order, duplicates included (a map
+    /// would keep only the last of two equal keys). One `"key": "value"` per line.
+    fn file_keys(body: &str) -> Vec<String> {
+        body.lines()
+            .filter(|line| line.starts_with("  \""))
+            .map(|line| {
+                serde_json::Deserializer::from_str(line.trim_start())
+                    .into_iter::<String>()
+                    .next()
+                    .and_then(Result::ok)
+                    .unwrap_or_else(|| panic!("no key on line {line}"))
+            })
+            .collect()
+    }
+    /// The fields the code fills in (`%s`, `%d`, `%1$s`, `%.2f`, `%%`), sorted. A
+    /// percent sign that starts none of them ("100% is") is plain text.
+    fn placeholders(text: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut rest = text;
+        while let Some(at) = rest.find('%') {
+            rest = &rest[at + 1..];
+            let spec = rest
+                .find(|c: char| !(c.is_ascii_digit() || c == '$' || c == '.'))
+                .unwrap_or(rest.len());
+            let after = rest[spec..].chars().next();
+            if after.is_some_and(|c| matches!(c, 's' | 'd' | 'f' | '%')) {
+                let end = spec + 1;
+                found.push(format!("%{}", &rest[..end]));
+                rest = &rest[end..];
+            }
+        }
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn bundled_files_are_served_and_have_no_stale_or_repeated_keys() {
+        let dir = bundled_dir();
+        let en_body = std::fs::read_to_string(dir.join("en_us.json")).unwrap();
+        let en: HashMap<String, String> = serde_json::from_str(&en_body).unwrap();
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let name = entry.file_name().into_string().unwrap();
+            let Some(code) = name.strip_suffix(".json") else {
+                continue;
+            };
+            seen += 1;
+            // A file that Bundled::read does not name is never loaded.
+            let path = format!("assets/atlas/lang/{name}");
+            assert!(
+                Bundled.read(&path).is_some(),
+                "{name} is not served by Bundled"
+            );
+            let body = std::fs::read_to_string(entry.path()).unwrap();
+            let map: HashMap<String, String> = serde_json::from_str(&body)
+                .unwrap_or_else(|e| panic!("{name} is not a flat string map: {e}"));
+            let keys = file_keys(&body);
+            assert_eq!(
+                keys.len(),
+                map.len(),
+                "{name} repeats a key or has a multi-line entry"
+            );
+            for (key, value) in &map {
+                // Stale: the code no longer asks for it, or it was renamed in en_us only.
+                let english = en
+                    .get(key)
+                    .unwrap_or_else(|| panic!("{code}: {key} is not in en_us.json"));
+                // A translation keeps the fields the code fills in.
+                assert_eq!(
+                    placeholders(value),
+                    placeholders(english),
+                    "{code}: {key} changes the placeholders of the English text"
+                );
+                assert!(!value.trim().is_empty(), "{code}: {key} is empty");
+            }
+        }
+        assert!(
+            seen >= 7,
+            "found {seen} bundled lang files in {}",
+            dir.display()
+        );
+    }
+
+    #[test]
+    fn every_atlas_key_the_code_names_is_in_en_us() {
+        fn rust_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    rust_files(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let en: HashMap<String, String> = serde_json::from_str(
+            &std::fs::read_to_string(bundled_dir().join("en_us.json")).unwrap(),
+        )
+        .unwrap();
+        let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut files = Vec::new();
+        for krate in [
+            "atlas-client",
+            "atlas-client-render",
+            "atlas-client-core",
+        ] {
+            rust_files(&crates.join(krate).join("src"), &mut files);
+        }
+        assert!(files.len() > 100, "found only {} sources", files.len());
+        let mut found = 0;
+        for file in files {
+            let text = std::fs::read_to_string(&file).unwrap();
+            for (at, _) in text.match_indices("\"atlas.") {
+                let rest = &text[at + 1..];
+                let Some(end) = rest.find('"') else { continue };
+                let key = &rest[..end];
+                // A key is `atlas.<group>.<name>`: lower-case letters, digits and `_`
+                // between the dots. A key built at run time has a brace; a file name
+                // has one dot; the server addresses that look like keys are listed.
+                const NOT_KEYS: &[&str] = &["atlas.bunchy7s.dev"];
+                let key_like = key
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.".contains(&b));
+                if key.matches('.').count() < 2 || !key_like || NOT_KEYS.contains(&key) {
+                    continue;
+                }
+                found += 1;
+                assert!(
+                    en.contains_key(key),
+                    "{} names {key}, which is not in en_us.json",
+                    file.display()
+                );
+            }
+        }
+        assert!(found > 50, "found only {found} key names");
     }
 
     #[test]
@@ -320,5 +902,166 @@ mod tests {
             langs.iter().map(|l| l.code.as_str()).collect::<Vec<_>>(),
             ["en_us", "fr_fr"]
         );
+    }
+
+    fn read(body: &str) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        read_lang_file(body.as_bytes(), &mut map);
+        map
+    }
+    fn entries(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn a_plain_json_lang_file_reads_as_before() {
+        let body = "{\"a\": \"Apple \\\"quoted\\\" \\u00e9\", \"b\": \"\", \"a\": \"Again\"}";
+        let strict: HashMap<String, String> = serde_json::from_str(body).unwrap();
+        assert_eq!(read(body), strict);
+        assert_eq!(read(body), entries(&[("a", "Again"), ("b", "")]));
+    }
+
+    #[test]
+    fn lang_files_read_with_comments() {
+        let want = entries(&[("a", "Apple"), ("b", "Banana # not a comment // either")]);
+        for body in [
+            "# header\n{\n# a comment\n\"a\": \"Apple\",\n\"b\": \"Banana # not a comment // either\"\n}\n",
+            "// header\n{\"a\": \"Apple\", // after\n\"b\": \"Banana # not a comment // either\"}",
+            "/* header\n over lines */{\"a\": /* inline */ \"Apple\", \"b\": \"Banana # not a comment // either\"}",
+        ] {
+            assert_eq!(read(body), want, "{body}");
+        }
+    }
+
+    #[test]
+    fn lang_files_read_unquoted_and_single_quoted_names_and_values() {
+        assert_eq!(
+            read("{a: 'Apple', 'b': \"Banana\", c: Cherry}"),
+            entries(&[("a", "Apple"), ("b", "Banana"), ("c", "Cherry")])
+        );
+        // A single-quoted string may hold a double quote, and the reverse.
+        assert_eq!(
+            read("{'a': 'say \"hi\"', \"b\": \"it's\"}"),
+            entries(&[("a", "say \"hi\""), ("b", "it's")])
+        );
+    }
+
+    #[test]
+    fn lang_files_read_raw_control_characters_in_strings() {
+        assert_eq!(
+            read("{\"a\": \"tab\there\", \"b\": \"two\nlines\"}"),
+            entries(&[("a", "tab\there"), ("b", "two\nlines")])
+        );
+    }
+
+    #[test]
+    fn lang_files_read_gson_separators_and_a_byte_order_mark() {
+        assert_eq!(
+            read("\u{feff}{\"a\" = \"Apple\"; \"b\" => \"Banana\"}"),
+            entries(&[("a", "Apple"), ("b", "Banana")])
+        );
+        // A trailing comma before `}` is not JSON even to Gson's lenient reader.
+        assert_eq!(read("{# c\n\"a\": \"Apple\",}"), HashMap::new());
+    }
+
+    #[test]
+    fn numbers_and_booleans_read_as_their_text() {
+        // GsonHelper.convertToString: a primitive reads as its text.
+        assert_eq!(
+            read("{\"a\": 1.50, \"b\": true, \"c\": -2e3}"),
+            entries(&[("a", "1.50"), ("b", "true"), ("c", "-2e3")])
+        );
+    }
+
+    #[test]
+    fn a_value_that_is_no_text_ends_the_file_there() {
+        assert_eq!(
+            read("# c\n{\"a\": \"Apple\", \"b\": [\"x\"], \"c\": \"Cherry\"}"),
+            entries(&[("a", "Apple")])
+        );
+        assert_eq!(read("{\"a\": null, \"b\": \"Banana\"}"), HashMap::new());
+    }
+
+    #[test]
+    fn a_lang_file_that_is_not_json_adds_nothing() {
+        for body in [
+            "# c\n{\"a\": \"Apple\"",
+            "[\"a\"]",
+            "\"a\"",
+            "",
+            "{\"a\": \"Apple\"} {",
+        ] {
+            assert_eq!(read(body), HashMap::new(), "{body:?}");
+        }
+    }
+
+    #[test]
+    fn a_pack_lang_file_with_comments_layers_over_english() {
+        let base = Mem(HashMap::from([(
+            "assets/minecraft/lang/en_us.json".into(),
+            br#"{"a":"Apple","b":"Banana"}"#.to_vec(),
+        )]));
+        let pack = Mem(HashMap::from([(
+            "assets/minecraft/lang/fr_fr.json".into(),
+            b"{\n# Fruits\n\"a\": \"Pomme\"\n}\n".to_vec(),
+        )]));
+        let sources: [&dyn ResourceSource; 2] = [&base, &pack];
+        let fr = Language::load(&sources, "fr_fr");
+        assert_eq!(fr.get("a"), Some("Pomme"));
+        assert_eq!(fr.get("b"), Some("Banana"));
+    }
+
+    /// Every lang file of a downloaded pack, e.g. BACAP Language Pack:
+    /// `ATLAS_LANG_PACK_DIR=<pack>/assets/minecraft/lang cargo test -p atlas-client-core
+    /// lang::tests::every_lang_file_of_a_pack_reads -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "needs a downloaded pack in ATLAS_LANG_PACK_DIR"]
+    fn every_lang_file_of_a_pack_reads() {
+        let Ok(dir) = std::env::var("ATLAS_LANG_PACK_DIR") else {
+            return;
+        };
+        let mut failed = Vec::new();
+        let mut paths: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        paths.sort();
+        for path in paths {
+            let bytes = std::fs::read(&path).unwrap();
+            let strict = serde_json::from_slice::<HashMap<String, String>>(&bytes).is_ok();
+            let mut map = HashMap::new();
+            read_lang_file(&bytes, &mut map);
+            // An independent count: the distinct `"name":` that start a line.
+            let text = String::from_utf8_lossy(&bytes);
+            let names: std::collections::HashSet<&str> = text
+                .lines()
+                .filter_map(|line| {
+                    let rest = line.trim_start().strip_prefix('"')?;
+                    let mut escaped = false;
+                    let end = rest.char_indices().find_map(|(i, c)| {
+                        let close = c == '"' && !escaped;
+                        escaped = c == '\\' && !escaped;
+                        close.then_some(i)
+                    })?;
+                    rest[end + 1..]
+                        .trim_start()
+                        .starts_with(':')
+                        .then(|| &rest[..end])
+                })
+                .collect();
+            println!(
+                "{}: strict {strict}, {} keys, {} names",
+                path.display(),
+                map.len(),
+                names.len()
+            );
+            if map.is_empty() || map.len() != names.len() {
+                failed.push(path);
+            }
+        }
+        assert!(failed.is_empty(), "{failed:?}");
     }
 }

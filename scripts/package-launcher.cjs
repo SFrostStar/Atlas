@@ -13,6 +13,7 @@ const path = require('node:path');
       /^\/\./,
       /^\/[^/]+\.(lnk|cmd|md|png)$/i,
       /^\/(options(?:of)?\.txt|(?:atlas|horizon)-(?:extras|graphics|player|controller)\.txt|(?:atlas|horizon)-shaders\.toml)$/i,
+      /^\/(atlas-ports\.json|mod-catalog\.json|(?:atlas|horizon)-mods\.txt)$/i,
       /^\/(accounts.*|launcher\.json|session\.json|control\.json|credentials\.json|tokens\.json)$/i,
       /^\/[^/]+\.(log|tmp|bak|dmp|stackdump)$/i,
     ],

@@ -10,6 +10,7 @@ PRIVATE_DIRS = {"data", "work", "runtime", "bundle", "node_modules", "target", "
                 "logs", "run", "minecraft", "decompiled", "auth-sessions",
                 ".atlas-cache", ".horizon-cache"}
 PRIVATE_NAMES = {"options.txt", "optionsof.txt", "accounts.json", "launcher.json",
+                 "atlas-ports.json", "atlas-runtime.json", "atlas-mods.txt", "mod-catalog.json",
                  "session.json", "control.json", "credentials.json", "tokens.json",
                  "servers.dat", "usercache.json", "ops.json", "whitelist.json",
                  "banned-players.json", "banned-ips.json", "server.properties"}

@@ -1,11 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
-const {GameInstallManager,safeUrl,relative}=require('../lib/game-install.cjs');
+const {GameInstallManager,safeUrl,relative,prepared}=require('../lib/game-install.cjs');
 const hash=b=>crypto.createHash('sha1').update(b).digest('hex');
 function fixture(t,overrides={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'atlas-installer-test-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const bundle=path.join(root,'bundle','game'),source=path.join(bundle,'game-root');fs.mkdirSync(source,{recursive:true});
  for(const name of ['atlas-client.exe','atlas-ctl.exe','atlas-prepare.exe','libc++.dll','libunwind.dll','libwinpthread-1.dll'])fs.writeFileSync(path.join(bundle,name),'original payload');
+ fs.writeFileSync(path.join(bundle,'atlas-runtime.json'),JSON.stringify({version:require('../package.json').version}));
  const bodies=new Map();const item=(url,data)=>{const body=Buffer.from(data);bodies.set(url,body);return {url,sha1:hash(body),size:body.length}};
  const client=item('https://piston-data.mojang.com/client','client'),server=item('https://piston-data.mojang.com/server','server');
  const asset=item('https://resources.download.minecraft.net/aa/asset','sound');
@@ -20,12 +21,13 @@ function fixture(t,overrides={}){
  fs.writeFileSync(path.join(source,'research-lock.json'),JSON.stringify({minecraft:pins}));
  let requests=0;const updates=[];
  const manager=new GameInstallManager({projectRoot:root,dataRoot:path.join(root,'data'),onChange:s=>updates.push(s),fetch:async url=>{requests++;const body=bodies.get(url);return new Response(body||'missing',{status:body?200:404});},runPreparer:async({args})=>{
+  assert.ok(args.includes('--complete'),'the new preparer must verify complete resources including sounds');
   const preparing=manager.snapshot();
   assert.equal(preparing.phase,'prepare');
   assert.equal(preparing.progress,null,'native preparation has indeterminate progress');
   for(const key of ['completed','total','bytesDone','bytesTotal'])assert.equal(preparing[key],0,`preparation must clear stale download ${key}`);
   const preparation=args[args.indexOf('--root')+1],result=path.join(preparation,'.local','atlas-client','26.3');
-  fs.mkdirSync(path.join(result,'assets'),{recursive:true});fs.mkdirSync(path.join(result,'data'),{recursive:true});fs.writeFileSync(path.join(result,'facts.json'),'{}');fs.writeFileSync(path.join(result,'atlas-resources.json'),JSON.stringify({schema:7,minecraft:'26.3'}));
+  fs.mkdirSync(path.join(result,'assets'),{recursive:true});fs.mkdirSync(path.join(result,'data'),{recursive:true});fs.writeFileSync(path.join(result,'facts.json'),'{}');fs.writeFileSync(path.join(result,'atlas-resources.json'),JSON.stringify({schema:7,minecraft:'26.3'}));fs.writeFileSync(path.join(result,'atlas-prepare.json'),JSON.stringify({output_version:3}));
  },...overrides});
  return {root,manager,updates,bodies,get requests(){return requests}};
 }
@@ -41,6 +43,32 @@ test('first-run installs bundled client, verified official resources and Java, t
 test('unsafe URLs and path traversal are rejected before fetch',()=>{
  for(const url of ['http://piston-data.mojang.com/a','https://evil.example/a','https://piston-data.mojang.com.evil/a','https://user:pass@piston-data.mojang.com/a'])assert.throws(()=>safeUrl(url));
  for(const p of ['../x','/x','C:/x','x\\y','a//b'])assert.throws(()=>relative(p));
+});
+
+test('the upgraded engine rejects old prepared output even when its schema is unchanged',async t=>{
+ const f=fixture(t);await f.manager.start();
+ const resources=f.manager.inspect().resourcesPath;
+ assert.equal(prepared(resources,'26.3'),true);
+ fs.writeFileSync(path.join(resources,'atlas-prepare.json'),JSON.stringify({output_version:2}));
+ assert.equal(f.manager.inspect().ready,false);
+ fs.unlinkSync(path.join(resources,'atlas-prepare.json'));
+ assert.equal(f.manager.inspect().ready,false);
+ fs.writeFileSync(path.join(resources,'atlas-prepare.json'),JSON.stringify({output_version:3}));
+ assert.equal(f.manager.inspect().ready,true);
+});
+
+test('manual portable upgrades replace old game binaries and preserve existing worlds',async t=>{
+ const f=fixture(t);await f.manager.start();
+ const runtime=path.join(f.root,'runtime'),world=path.join(f.root,'data/instances/test/saves/World/level.dat');
+ fs.mkdirSync(path.dirname(world),{recursive:true});fs.writeFileSync(world,'private world');
+ fs.writeFileSync(path.join(runtime,'atlas-client.exe'),'old game');
+ fs.writeFileSync(path.join(runtime,'atlas-runtime.json'),JSON.stringify({version:'0.1.0'}));
+ assert.equal(f.manager.inspect().missingRuntime,true);
+ const requests=f.requests;await f.manager.start();
+ assert.equal(fs.readFileSync(path.join(runtime,'atlas-client.exe'),'utf8'),'original payload');
+ assert.equal(fs.readFileSync(world,'utf8'),'private world');
+ assert.equal(f.manager.inspect().ready,true);
+ assert.equal(f.requests,requests,'current resource output is reused during binary upgrades');
 });
 test('corrupt download fails checksum and never publishes resources',async t=>{
  const f=fixture(t);f.bodies.set('https://piston-data.mojang.com/client',Buffer.from('broken'));

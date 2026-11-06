@@ -1,5 +1,6 @@
 //! Compare the old two-parse loading path with catalog construction from shared facts.
 //! Run: cargo run -p atlas-client --profile fast --example model_states_bench -- 15
+extern crate atlas_client_lib as atlas_client;
 use atlas_client::{Result, models::StateModels, sprites::Sprites};
 use atlas_core::position::BlockPos;
 use atlas_world::{

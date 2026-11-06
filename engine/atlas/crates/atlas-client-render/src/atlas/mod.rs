@@ -12,7 +12,7 @@ pub const NAME: &str = "Atlas";
 pub const NOTICE: &str = "Not affiliated with Mojang or Microsoft";
 
 pub fn version_label() -> String {
-    format!("{NAME} {}", atlas_core::VANILLA_VERSION)
+    format!("{NAME} 1.0.0")
 }
 
 /// Original bundled artwork, independent of downloaded Minecraft resources.

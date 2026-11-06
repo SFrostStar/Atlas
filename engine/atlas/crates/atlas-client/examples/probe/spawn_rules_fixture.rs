@@ -14,6 +14,7 @@ use atlas_client::{
     },
 };
 use atlas_core::random::{LegacyRandom, RandomSource};
+use atlas_world::loot::PackOverlay;
 use atlas_world::{chunk::BlockState, registry::BlockStateId};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -118,7 +119,7 @@ fn parse_state(spec: &str) -> BlockState {
         .collect();
     BlockState {
         name: name.to_owned(),
-        properties,
+        properties: properties.into(),
     }
 }
 
@@ -147,7 +148,7 @@ pub fn main() -> atlas_client::Result<()> {
     let registry = assets.registry;
     let facts = BlockFacts::load(root, registry)?;
     let data = MobData::load(root, &facts);
-    let items = Items::tags_only(root)?;
+    let items = Items::tags_only(root, &PackOverlay::NONE)?;
     let types = MobTypes::load(root)?;
     let mut out = String::new();
     for raw in input.lines() {

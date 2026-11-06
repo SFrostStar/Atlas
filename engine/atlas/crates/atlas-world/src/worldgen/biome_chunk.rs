@@ -28,6 +28,10 @@ impl<E: std::fmt::Display> std::fmt::Display for BiomeFillError<E> {
 }
 impl<E: std::error::Error + 'static> std::error::Error for BiomeFillError<E> {}
 impl<T: Clone> BiomeChunk<T> {
+    /// The heap bytes of its quart cells.
+    pub fn heap_bytes(&self) -> usize {
+        self.sections.capacity() * std::mem::size_of::<[T; 64]>()
+    }
     /// A chunk's biome values use the same supported vertical bounds as terrain.
     /// Each section stores a dense 4×4×4 array; palette/network codecs are separate.
     pub fn new(
@@ -187,6 +191,9 @@ impl<T: Clone> BiomeRegion<T> {
     }
     pub fn quart_at_block(&self, block: BlockPos) -> [i32; 3] {
         self.zoom.quart_at_block(block)
+    }
+    pub fn zoom(&self) -> BiomeZoom {
+        self.zoom
     }
     /// Distinct values currently stored anywhere in the chunk. The result is
     /// sorted by biome identity; callers must not use this order as registry order.

@@ -37,6 +37,11 @@ impl Game<'_> {
         let Some(switcher) = &mut self.gamemode_switcher else {
             return;
         };
+        // GameModeSwitcherScreen: `GameNarrator.NO_TITLE`; its slots are no
+        // widgets, so it says how to navigate.
+        atlas_client::widgets::begin_screen(|| {
+            atlas_client::widgets::ScreenInfo::new("gamemode_switcher", "")
+        });
         switcher.hover(w, h, (self.cursor.0 as i32, self.cursor.1 as i32));
         let selected = switcher.selected;
         let atlas = &self.gui.atlas;

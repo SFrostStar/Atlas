@@ -18,7 +18,7 @@ It also times the install and the world's load with the mod against the same wor
 Prints one JSON line per step and a summary; exits 1 when a step fails.
 
 Needs the launcher (launcher/target/debug/atlas-launcher, built with
-`--features gpui/runtime_shaders` on macOS), the game and atlas-ctl
+`--features gpui_platform/runtime_shaders` on macOS), the game and atlas-ctl
 (target/fast/atlas-client, target/fast/atlas-ctl, or --bin DIR) and the prepared resources in
 .local/atlas-client/26.3. Downloads from Modrinth.
 """
