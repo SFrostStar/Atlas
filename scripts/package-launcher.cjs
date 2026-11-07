@@ -9,7 +9,7 @@ const path = require('node:path');
     icon: path.join(root, 'assets/atlas-launcher.ico'), out, overwrite: true,
     asar: true, prune: true,
     ignore: [
-      /^\/(engine|data|dist|docs|scripts|tests|work|tools|runtime|bundle)(\/|$)/,
+      /^\/(engine|data|dist|docs|scripts|tests|work|tools|runtime|bundle|website)(\/|$)/,
       /^\/\./,
       /^\/[^/]+\.(lnk|cmd|md|png)$/i,
       /^\/(options(?:of)?\.txt|(?:atlas|horizon)-(?:extras|graphics|player|controller)\.txt|(?:atlas|horizon)-shaders\.toml)$/i,

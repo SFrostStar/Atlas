@@ -15,6 +15,8 @@
 Нативный клиент Minecraft: Java Edition 26.3 с собственным лаунчером.
 Разрабатывается **[SFrostStar](https://github.com/SFrostStar)** на основе **[Horizon](https://github.com/horizon-rust/horizon)**.
 
+[**Сайт Atlas / Atlas website**](https://sfroststar.github.io/Atlas/)
+
 </div>
 
 ![Мир Atlas](assets/atlas-landscape.png)

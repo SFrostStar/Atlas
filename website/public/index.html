@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101214">
+  <meta name="description" content="Atlas — независимый клиент Minecraft на Rust. Свой лаунчер, сборки и нативные моды. Скачать для Windows и посмотреть исходный код.">
+  <meta property="og:title" content="Atlas — Minecraft на Rust">
+  <meta property="og:description" content="Знакомый Minecraft. Другая основа. Независимый клиент и лаунчер на основе Horizon.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://sfroststar.github.io/Atlas/">
+  <meta property="og:image" content="https://sfroststar.github.io/Atlas/assets/landscape.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src https://api.github.com; base-uri 'self'; form-action 'none'; object-src 'none'">
+  <title>Atlas — Minecraft на Rust</title>
+  <link rel="canonical" href="https://sfroststar.github.io/Atlas/">
+  <link rel="icon" type="image/png" href="./assets/icon.png">
+  <link rel="preload" as="image" href="./assets/night.png" fetchpriority="high">
+  <link rel="preload" as="font" href="./assets/manrope-cyrillic.woff2" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">К содержимому</a>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.104.768-.244.768-.542v-2.09c-3.13.68-3.791-1.328-3.791-1.328-.512-1.3-1.25-1.646-1.25-1.646-1.022-.7.077-.686.077-.686 1.13.08 1.725 1.16 1.725 1.16 1.004 1.722 2.633 1.224 3.275.936.101-.728.393-1.224.715-1.506-2.498-.284-5.124-1.25-5.124-5.561 0-1.229.44-2.233 1.16-3.02-.117-.285-.503-1.43.11-2.98 0 0 .945-.303 3.095 1.153a10.78 10.78 0 0 1 5.638 0c2.148-1.456 3.091-1.153 3.091-1.153.615 1.55.23 2.695.113 2.98.722.787 1.158 1.791 1.158 3.02 0 4.322-2.63 5.274-5.136 5.553.404.35.764 1.04.764 2.097v3.07c0 .3.203.651.773.54A11.252 11.252 0 0 0 12 .75Z"/></symbol>
+    <symbol id="download-icon" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="windows" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="m2 4 9-1v8H2V4Zm11-1.2L22 1v10h-9V2.8ZM2 13h9v8l-9-1v-7Zm11 0h9v10l-9-1.8V13Z"/></symbol>
+  </svg>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#" aria-label="Atlas"><img src="./assets/icon.png" width="27" height="27" alt=""><span>Atlas</span></a>
+      <nav aria-label="Навигация" data-i18n-aria="navigation">
+        <a href="#about" data-i18n="navAbout">О проекте</a>
+        <a href="#download" data-i18n="navDownload">Установка</a>
+      </nav>
+      <div class="language-switch" role="group" aria-label="Язык" data-i18n-aria="language">
+        <button type="button" data-language="ru" aria-pressed="true" lang="ru">RU</button>
+        <button type="button" data-language="en" aria-pressed="false" lang="en">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-scene" aria-hidden="true"><img src="./assets/night.png" width="1672" height="941" alt="" fetchpriority="high"><span class="comet"></span></div>
+      <div class="hero-content">
+        <h1 id="hero-title"><span>Atlas</span></h1>
+        <p class="hero-title" data-i18n="heroTitle">Знакомый Minecraft. Другая основа.</p>
+        <p class="hero-description" data-i18n="heroDescription">Независимый клиент на Rust и свой лаунчер. На основе Horizon, с характером Atlas.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" data-download href="https://github.com/SFrostStar/Atlas/releases/download/atlas-1.0.0/Atlas-1.0.0-Windows-x64.zip"><svg aria-hidden="true"><use href="#download-icon"/></svg><span data-i18n="download">Скачать лаунчер</span></a>
+          <a class="button button-secondary" href="https://github.com/SFrostStar/Atlas"><svg class="filled-icon" aria-hidden="true"><use href="#github"/></svg><span data-i18n="viewSource">Смотреть код</span></a>
+        </div>
+        <p class="release-info"><svg aria-hidden="true"><use href="#windows"/></svg><span>Windows x64</span><span class="release-divider" aria-hidden="true"></span><span data-version>v1.0.0</span><span class="release-size" data-size>251 MB</span></p>
+      </div>
+      <a class="scroll-cue" href="#about"><span data-i18n="explore">Чуть ближе к Atlas</span><span class="scroll-line" aria-hidden="true"></span></a>
+    </section>
+
+    <section class="about section-wrap" id="about" aria-labelledby="about-title">
+      <div class="section-intro"><h2 id="about-title" data-i18n="aboutTitle">Твой мир.<br>Твоя сборка.</h2><p data-i18n="aboutDescription">Minecraft на нативной основе Rust. Atlas объединяет игру и лаунчер: меньше возни с файлами, больше места для своих идей.</p></div>
+      <div class="world-view"><img src="./assets/landscape.png" width="1672" height="941" loading="lazy" alt="Горная долина Minecraft на закате" data-i18n-alt="landscapeAlt"><div class="world-caption"><span data-i18n="worldCaption">Начинается с одного мира.</span><img src="./assets/icon.png" width="34" height="34" alt=""></div></div>
+      <div class="features">
+        <article><span class="feature-line" aria-hidden="true"></span><h3 data-i18n="instancesTitle">Всё по сборкам</h3><p data-i18n="instancesText">Отдельные миры, ресурспаки и настройки. Переключайся между сборками в лаунчере.</p></article>
+        <article><span class="feature-line" aria-hidden="true"></span><h3 data-i18n="modsTitle">Место для модов</h3><p data-i18n="modsText">Выбирай совместимые нативные моды в каталоге Atlas и устанавливай в свою сборку.</p></article>
+        <article><span class="feature-line" aria-hidden="true"></span><h3 data-i18n="updatesTitle">Проект развивается</h3><p data-i18n="updatesText">Открытый код и обновления с GitHub. Можно следить за изменениями — или заглянуть внутрь.</p></article>
+      </div>
+    </section>
+
+    <section class="download-section section-wrap" id="download" aria-labelledby="download-title">
+      <div class="download-heading"><h2 id="download-title" data-i18n="downloadTitle">Увидимся в игре.</h2><p data-i18n="downloadDescription">Portable-версия для Windows. Скачай, распакуй и начни со своей первой сборки.</p><a class="button button-primary" data-download href="https://github.com/SFrostStar/Atlas/releases/download/atlas-1.0.0/Atlas-1.0.0-Windows-x64.zip"><svg aria-hidden="true"><use href="#download-icon"/></svg><span data-i18n="download">Скачать лаунчер</span></a><a class="release-link" href="https://github.com/SFrostStar/Atlas/releases/latest"><span data-i18n="allReleases">Релизы и подробности</span><svg aria-hidden="true"><use href="#arrow"/></svg></a></div>
+      <ol class="install-steps">
+        <li><span class="step-number">1</span><div><h3 data-i18n="stepOneTitle">Распакуй архив</h3><p data-i18n="stepOneText">Полностью извлеки ZIP в отдельную папку.</p></div></li>
+        <li><span class="step-number">2</span><div><h3 data-i18n="stepTwoTitle">Открой Atlas Launcher.exe</h3><p data-i18n="stepTwoText">Создай профиль и свою первую сборку.</p></div></li>
+        <li><span class="step-number">3</span><div><h3 data-i18n="stepThreeTitle">Нажми «Играть»</h3><p data-i18n="stepThreeText">Если нужны игровые файлы, лаунчер предложит их скачать.</p></div></li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="site-footer section-wrap">
+    <div class="footer-top"><a class="brand" href="#" aria-label="Atlas"><img src="./assets/icon.png" width="25" height="25" alt=""><span>Atlas</span></a><p><span data-i18n="madeBy">Разрабатывает</span> <a href="https://github.com/SFrostStar">SFrostStar</a></p><a href="https://github.com/SFrostStar/Atlas" class="footer-github"><svg class="filled-icon" aria-hidden="true"><use href="#github"/></svg>GitHub</a></div>
+    <div class="footer-bottom"><p><span data-i18n="basedOn">На основе</span> <a href="https://github.com/horizon-rust/horizon">Horizon</a><span data-i18n="legal">. Неофициальный проект, не связанный с Mojang или Microsoft.</span></p><span data-i18n="footerNote">Сделано для своих миров.</span></div>
+  </footer>
+</body>
+</html>
