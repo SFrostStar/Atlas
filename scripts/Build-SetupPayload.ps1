@@ -62,6 +62,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $atlasBundle 'atlas-runtime.json'), (@{ version=$env:ATLAS_VERSION } | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     Get-ChildItem -LiteralPath $RuntimeDirectory -Filter 'LICENSE*.txt' -File | Copy-Item -Destination $atlasBundle -Force
     $atlasNotices = @{
+        'crates\atlas-client-render\src\atlas\assets\LICENSE-AppleSkin.txt' = 'LICENSE-AppleSkin.txt'
         'crates\atlas-theme\fonts\OFL-Geist.txt' = 'LICENSE-Geist.txt'
         'crates\atlas-theme\fonts\OFL-PixelifySans.txt' = 'LICENSE-PixelifySans.txt'
         'crates\atlas-theme\icons\pixel\LICENSE-pixelarticons.txt' = 'LICENSE-Pixelarticons.txt'
@@ -71,6 +72,8 @@ try {
     foreach ($atlasNotice in $atlasNotices.GetEnumerator()) {
         Copy-Item -LiteralPath (Join-Path $atlasSource $atlasNotice.Key) -Destination (Join-Path $atlasBundle $atlasNotice.Value) -Force
     }
+    Copy-Item -LiteralPath (Join-Path $atlasSource 'MOD-PORT-NOTICES.md') -Destination $atlasBundle -Force
+    Copy-Item -LiteralPath (Join-Path $atlasSource 'mod-port-licenses') -Destination $atlasBundle -Recurse -Force
     Write-Host 'Atlas first-run payload ready in bundle/game. No Minecraft jars or prepared resources are included.'
 } finally {
     $env:PATH = $atlasOldPath

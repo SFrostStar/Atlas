@@ -58,6 +58,10 @@ test('additional windows get distinct data homes and sockets without copying sav
   fs.writeFileSync(path.join(base, 'options.txt'), 'lang:ru_ru\n');
   fs.writeFileSync(path.join(base, 'atlas-extras.txt'), 'noAi:true\ndynamicLights:true\n');
   fs.writeFileSync(path.join(base, 'accounts.json'), 'secret must not be copied');
+  fs.mkdirSync(path.join(base,'config','mentionsound'),{recursive:true});
+  fs.writeFileSync(path.join(base,'config','gammautils.json'),'{"gamma":{"value":15}}');
+  fs.writeFileSync(path.join(base,'config','mentionsound','sound.wav'),'notification-sound');
+  fs.writeFileSync(path.join(base,'config','unrelated-private.json'),'private config must not be copied');
   fs.mkdirSync(path.join(base, 'saves', 'My World'));
   fs.writeFileSync(path.join(base, 'resourcepacks', 'pack.zip'), 'pack-data');
   await manager.launch('atlas');
@@ -71,6 +75,9 @@ test('additional windows get distinct data homes and sockets without copying sav
   assert.equal(extra.isolated, true);
   assert.deepEqual(fs.readdirSync(path.join(extra.home, 'saves')), []);
   assert.equal(fs.existsSync(path.join(extra.home, 'accounts.json')), false);
+  assert.equal(fs.readFileSync(path.join(extra.home,'config','gammautils.json'),'utf8'),'{"gamma":{"value":15}}');
+  assert.equal(fs.readFileSync(path.join(extra.home,'config','mentionsound','sound.wav'),'utf8'),'notification-sound');
+  assert.equal(fs.existsSync(path.join(extra.home,'config','unrelated-private.json')),false);
   assert.equal(fs.readFileSync(path.join(extra.home, 'options.txt'), 'utf8'), 'lang:ru_ru\n');
   assert.match(fs.readFileSync(path.join(extra.home, 'atlas-extras.txt'), 'utf8'), /noAi:true/);
   assert.equal(fs.readFileSync(path.join(extra.home, 'resourcepacks', 'pack.zip'), 'utf8'), 'pack-data');

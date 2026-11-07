@@ -1850,7 +1850,7 @@ impl Game<'_> {
         use atlas_core::geometry::trig::Mth;
         let deg = |d: f32| d.to_radians();
         let base = to_world
-            * atlas_client::first_person::two_handed_map_base(self.pitch, inverse_height, attack);
+            * atlas_client::first_person::two_handed_map_base(self.atlas_port_map_pitch(self.pitch), inverse_height, attack);
         let swing = (attack.sqrt() * std::f32::consts::PI).msin();
         let m = base
             * glam::Mat4::from_rotation_x(deg(swing * 20.0))

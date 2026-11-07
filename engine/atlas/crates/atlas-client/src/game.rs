@@ -3768,6 +3768,7 @@ impl Game<'_> {
     /// Suffocating is a full collision cube that is also a full render cube,
     /// as `in_wall` has it.
     fn closest_space_nudge(&self) -> [Option<f64>; 2] {
+        if self.atlas_visual_no_push_out(){return [None;2];}
         match self.player.as_ref() {
             Some(p) if !p.spectator && self.riding.is_none() => {
                 closest_space_nudge(p, &self.world, self.res.facts())
@@ -7851,6 +7852,9 @@ impl Game<'_> {
         self.update_totem_ready();
         self.tick_command_extras();
         self.native_tick();
+        self.atlas_utility_tick();
+        self.atlas_actions_tick();
+        self.atlas_visual_tick();
         self.tell_native_now();
         self.tick_world(running)
     }
@@ -8219,9 +8223,9 @@ impl Game<'_> {
     /// The options `MouseHandler.turnPlayer` reads.
     fn look_options(&self) -> LookOptions {
         LookOptions {
-            sensitivity: f64::from(self.settings.sensitivity),
-            smooth_camera: self.smooth_camera,
-            scoping: self.scoping(),
+            sensitivity: self.atlas_zoom_sensitivity(f64::from(self.settings.sensitivity)),
+            smooth_camera: self.smooth_camera||self.atlas_zoom_cinematic(),
+            scoping: self.scoping()&&!self.atlas_zoom_overrides_spyglass(),
             invert_x: self.settings.invert_x,
             invert_y: self.settings.invert_y,
         }
@@ -8230,6 +8234,7 @@ impl Game<'_> {
     /// An agent moving the mouse (`mouse-move`) counts as a grabbed pointer in
     /// an active window, as it cannot grab the real one.
     fn apply_mouse_look(&mut self) {
+        self.mouse.set_cinematic_divisor(self.atlas_zoom_cinematic_divisor());
         let look = self.look_options();
         let time = self.started.elapsed().as_secs_f64();
         let pointer = self.captured || self.agent_pointer;
@@ -8976,7 +8981,9 @@ impl Game<'_> {
                 // The rows draw in one pass here, so a mod's `player_health`
                 // layer stands for the armor, food and air rows too.
                 self.gui_layer("minecraft:player_health", &mut batch, |g, batch| {
+                    g.appleskin_underlay(batch, &inputs);
                     hud_layout::paint(batch, &g.gui.atlas, &draws);
+                    g.appleskin_overlay(batch, &inputs);
                 });
                 bar_height = self
                     .health_hud
@@ -9114,7 +9121,7 @@ impl Game<'_> {
     /// playing with no screen, nor while the server pack prompt hides the
     /// open screen (`hud_layers` draws `Playing` then). Client only,
     /// read-only: what a mod draws is its own.
-    fn fire_screen_render_post(&self, batch: &mut HudBatch) {
+    fn fire_screen_render_post(&mut self, batch: &mut HudBatch) {
         let screen = self.screen;
         if screen == Screen::Playing || self.server_packs.prompt.is_some() || self.book.is_some() {
             return;
@@ -9123,6 +9130,8 @@ impl Game<'_> {
         debug_assert_eq!(self.slot_count(), self.slots().len());
         let view = self.screen_view(batch, screen);
         self.native_screen_render_post(batch, &view);
+        self.atlas_actions_draw(batch);
+        self.atlas_visual_screen_render(batch);
     }
     /// `native_screen_render_post` (`ScreenEvent.Render.Post`) for the title's
     /// own screen (`title`, `world_select`, `world_create`, `multiplayer`…),
@@ -9130,7 +9139,7 @@ impl Game<'_> {
     /// screen of the game's own is over the title (Options draws and fires
     /// its own), nor while a dialog, a prompt or a connect or load hides it.
     /// Client only, read-only: what a mod draws is its own.
-    fn fire_title_screen_render_post(&self, batch: &mut HudBatch) {
+    fn fire_title_screen_render_post(&mut self, batch: &mut HudBatch) {
         if self.screen != Screen::Playing || self.screen_over_playing() || self.remote_loading() {
             return;
         }
@@ -9138,6 +9147,8 @@ impl Game<'_> {
             return;
         };
         self.native_screen_render_post(batch, &view);
+        self.atlas_actions_draw(batch);
+        self.atlas_visual_screen_render(batch);
     }
     /// `CreativeModeInventoryScreen.hasPermissions` (`canUseGameMasterBlocks`
     /// and the Operator Items Tab option) given to `tryRefreshInvalidatedTabs`,
@@ -11281,6 +11292,7 @@ impl Game<'_> {
         let mut see_through = std::mem::take(&mut self.see_through_vertices);
         see_through.clear();
         self.name_tag_geometry(camera, alpha, &mut out, &mut see_through);
+        self.atlas_visual_world_geometry(camera,alpha as f32,&mut out,&mut see_through);
         self.test_instance_marker_geometry(camera, &mut out, &mut see_through);
         self.debug_renderer_geometry(camera, &mut out);
         self.text_display_geometry(camera, alpha, &mut out, &mut see_through);
@@ -14404,6 +14416,7 @@ impl Game<'_> {
             .inverse()
             * glam::Mat4::from_rotation_x(sway_x.to_radians())
             * glam::Mat4::from_rotation_y(sway_y.to_radians());
+        let to_world=to_world*self.atlas_hand_bob_correction(a);
         let eye = self.eye_position().unwrap_or_default();
         let light = self.world.light(
             eye[0].floor() as i32,
@@ -14466,6 +14479,8 @@ impl Game<'_> {
             } else {
                 to_world * native_hooks::hand_pose_matrix(pose)
             };
+            let to_world=to_world*self.atlas_actions_hand_adjustment(hand);
+            let packed=if self.atlas_actions_hand_selected(hand){0xf0f0}else{packed};
             // The main hand on its arm, the off hand on the other one.
             let left = self.settings.main_hand_left != (hand == Hand::Off);
             let Some(stack) = item else {
@@ -14490,7 +14505,7 @@ impl Game<'_> {
                 // the map, unless the player is invisible.
                 if !self.own_invisible() {
                     runs.push((out.len() as u32, 0));
-                    for (arm, pose) in map_arm_poses(hold, left, self.pitch, inverse_height, attack)
+                    for (arm, pose) in map_arm_poses(hold, left, self.atlas_port_map_pitch(self.pitch), inverse_height, attack)
                     {
                         self.first_person_arm(arm, to_world * pose, packed, &mut out);
                     }
@@ -14586,8 +14601,8 @@ impl Game<'_> {
                 }
                 _ => ItemPose::Swing,
             };
-            let mut m = to_world
-                * atlas_client::first_person::item_pose(left, inverse_height, attack, pose);
+            let targeted=self.mob_hit().is_some();
+            let mut m=to_world*self.atlas_actions_item_pose(left,inverse_height,attack,pose,targeted);
             // PvP & HUD's shield size (100% is vanilla's), toward the hand holding it.
             let shield_size = self.settings.extras.pvp.tweaks.shield_size;
             if shield_size != 100 && &*stack.item == "minecraft:shield" {
@@ -14617,6 +14632,7 @@ impl Game<'_> {
                 eye[1].floor() as i32,
                 eye[2].floor() as i32,
             );
+            let light=if self.atlas_actions_hand_selected(hand){0xff}else{light};
             self.submit_item_world(
                 &state,
                 m,
@@ -16514,7 +16530,7 @@ impl Game<'_> {
             }),
             ticks: self.texture_clock(),
             darkness: self.darkness_lighting(alpha as f32),
-            night_vision: self.night_vision_intensity(alpha as f32),
+            night_vision: self.atlas_actions_night_vision(self.night_vision_intensity(alpha as f32)).max(if self.atlas_visual_no_fluid().is_some_and(|c|c.fluid_night_vision)&&self.camera_fluid(camera.to_array())!=atlas_client::camera::CameraFluid::None{1.0}else{0.0}),
             block_flicker: self.fog.block_light_flicker,
             boss_darken: self
                 .boss_overlay
@@ -16542,8 +16558,12 @@ impl Game<'_> {
             },
             chunk_fade: self.settings.chunk_fade,
         };
+        let atlas_chunk_config=if title{None}else{self.atlas_actions_chunk_config()};
+        let atlas_gamma=self.atlas_actions_gamma(self.settings.gamma);
         let result = match self.renderer.as_mut() {
             Some(renderer) => {
+                renderer.atlas_chunk_animation=atlas_chunk_config;
+                renderer.gamma=atlas_gamma;
                 renderer.set_pass_timing(self.debug || self.gpu_passes);
                 atlas_client::spans::time("renderer", || renderer.render(&frame))
             }
@@ -17917,6 +17937,9 @@ impl Game<'_> {
                 self.mapped_key_event(key, false, false)?;
                 return Ok(());
             }
+            if let WindowEvent::MouseInput {state,button,..}=&event {
+                if self.atlas_visual_screen_mouse(glfw_button(*button),*state==ElementState::Pressed)||self.atlas_actions_mouse(glfw_button(*button),*state==ElementState::Pressed){return Ok(());}
+            }
             // ScreenEvent.MouseButtonPressed.Pre / MouseButtonReleased.Pre:
             // the open screen hears of the press before anything reads it, and
             // a cancelled one goes no further — no hotbar key, no slot, no
@@ -18078,6 +18101,7 @@ impl Game<'_> {
                         }) * wheel_sensitivity
                     };
                     let d = scaled(raw_y) as f32;
+                    if self.atlas_visual_screen_scroll(d)||self.atlas_actions_scroll(d){return Ok(());}
                     // ScreenEvent.MouseScrolled.Pre: the open screen hears of
                     // the wheel before anything scrolls, and a cancelled turn
                     // scrolls nothing — no bundle, no list, slider or
@@ -19042,6 +19066,7 @@ impl Game<'_> {
     }
     /// The loop ended: close the pads' output, save the world, write the perf report.
     pub(super) fn shut_down(&mut self) {
+        if self.atlas_port_on("atlas-gammautils"){self.atlas_actions_close();}
         self.pad_close_output();
         if let Err(e) = self.save_for_exit() {
             log::warn!("Atlas: failed to save the world on exit: {e}");

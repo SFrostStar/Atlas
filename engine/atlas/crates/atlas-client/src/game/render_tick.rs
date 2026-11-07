@@ -144,12 +144,19 @@ impl Game<'_> {
             spectator: self.spectator(),
             fire_resistance: self.potions.effects.get("fire_resistance").is_some()
                 || self.settings.extras.pvp.tweaks.clear_lava,
-            full_water_vision: self.settings.extras.pvp.tweaks.clear_water,
-            night_vision: self.fog_night_vision(),
+            full_water_vision: self.settings.extras.pvp.tweaks.clear_water||self.atlas_visual_no_fluid().is_some_and(|c|c.max_water_vision),
+            night_vision: if fog_type!=FogType::Atmospheric&&self.atlas_visual_no_fluid().is_some_and(|c|c.fluid_night_vision){1.0}else{self.fog_night_vision()},
         };
         let mut fog = atlas_client::fog::setup_fog(tables, &self.fog, &input);
-        if !self.settings.atlas.fog {
+        let no_fluid=self.atlas_visual_no_fluid().is_some_and(|c|match fog_type {
+            FogType::Water=>c.no_water_fog,FogType::Lava=>c.no_lava_fog,FogType::PowderSnow=>c.no_powder_snow_fog,_=>false,
+        });
+        if !self.settings.atlas.fog||no_fluid {
             atlas_client::fog::clear_distance_fog(&mut fog, &input);
+        }
+        if no_fluid {
+            (fog.render_distance_start,fog.render_distance_end)=(1e9,2e9);
+            (fog.environmental_start,fog.environmental_end)=(1e9,2e9);
         }
         if self.title.is_none() {
             fog.color =
@@ -325,7 +332,7 @@ impl Game<'_> {
         let in_water =
             fog_type(&self.world, self.res.facts(), eye, &self.near_plane()) == FogType::Water;
         let water =
-            (in_water && !spectator).then(|| (self.eye_brightness(eye), self.yaw, self.pitch));
+            (in_water && !spectator && !self.atlas_visual_no_fluid().is_some_and(|c|c.no_water_overlay)).then(|| (self.eye_brightness(eye), self.yaw, self.pitch));
         // Hud.extractCameraOverlays; the spyglass scope (and its easing) is
         // drawn on the HUD by draw_spyglass.
         let fx = &self.screen_fx;
@@ -361,6 +368,7 @@ impl Game<'_> {
             block_overlay,
             water,
             on_fire: self.camera_type.first_person()
+                && !self.atlas_visual_no_fluid().is_some_and(|c|c.no_fire_overlay)
                 && !self.spectator()
                 && self.player.as_ref().is_some_and(|p| p.fire_ticks > 0),
             fire_lower: f32::from(self.settings.extras.pvp.tweaks.fire_lower) / 100.0,

@@ -2712,6 +2712,9 @@ impl Game<'_> {
     /// completes and lists them as the game's own; a name the game already
     /// has keeps that command's behaviour. API 35.
     pub(super) fn native_commands(&mut self, commands: &mut Vec<&'static str>) {
+        for (id,name) in [("atlas-friendlist","friend"),("atlas-radarmod","radar"),("atlas-totempops","totempops"),("atlas-rwjoiner","rwjoin"),("atlas-rwjoiner","rw"),("atlas-noshakehand","noshakehand"),("atlas-viewmodel","viewmodel"),("atlas-gammautils","gamma"),("atlas-gammautils","nightvision"),("atlas-gammautils","gammautils:gamma"),("atlas-gammautils","gammautils:nightvision")] {
+            if self.atlas_port_on(id){commands.push(name);}
+        }
         mod_api::dispatch_commands(self, mod_api::mods(), commands);
     }
     /// Player FOV scale, after vanilla effects and before zoom and easing.
@@ -3044,10 +3047,18 @@ impl Game<'_> {
     /// and after each click.
     pub(super) fn native_settings(&mut self, mod_id: &str, buttons: &mut Vec<String>) {
         mod_api::dispatch_settings(self, mod_api::mods(), mod_id, buttons);
+        self.atlas_utility_settings(mod_id, buttons);
+        self.atlas_armor_settings(mod_id, buttons);
+        self.atlas_visual_settings(mod_id, buttons);
+        self.atlas_actions_settings(mod_id, buttons);
     }
     /// Button `button` of mod `mod_id`'s settings page was clicked.
     pub(super) fn native_settings_click(&mut self, mod_id: &str, button: usize) {
         mod_api::dispatch_settings_click(self, mod_api::mods(), mod_id, button);
+        self.atlas_utility_settings_click(mod_id, button);
+        self.atlas_armor_settings_click(mod_id, button);
+        self.atlas_visual_settings_click(mod_id, button);
+        self.atlas_actions_settings_click(mod_id, button);
     }
     /// The player did `event` on mod `mod_id`'s panel (`native_panel_items`):
     /// act on it when it is yours. API 2.
@@ -3746,7 +3757,8 @@ impl Game<'_> {
         // left down, right down, left up sends no drag while right is still held.
         self.drag_button = pressed.then_some(button);
     }
-    pub(super) fn screen_mouse_dragged(&self, previous: (f32, f32)) -> bool {
+    pub(super) fn screen_mouse_dragged(&mut self, previous: (f32, f32)) -> bool {
+        if let Some(button)=self.drag_button {if self.atlas_actions_drag(super::glfw_button(button),self.cursor.0-previous.0,self.cursor.1-previous.1){return true;}}
         if self.pad_synthetic_input() || self.cursor == previous {
             return false;
         }
@@ -3803,7 +3815,13 @@ impl Game<'_> {
     /// control socket's `key` command both ask before a screen acts on a key.
     /// False when no screen of the hooks' is open, and for a key with no
     /// vanilla name.
-    pub(super) fn screen_key_pressed(&self, key: KeyCode, repeat: bool) -> bool {
+    pub(super) fn screen_key_pressed(&mut self, key: KeyCode, repeat: bool) -> bool {
+        if self.has_control_down_with_quirk(){
+            use atlas_client::clipboard::EditShortcut;
+            let shortcut=match key{KeyCode::KeyA=>Some(EditShortcut::SelectAll),KeyCode::KeyC=>Some(EditShortcut::Copy),KeyCode::KeyV=>Some(EditShortcut::Paste),KeyCode::KeyX=>Some(EditShortcut::Cut),_=>None};
+            if let Some(shortcut)=shortcut&&self.atlas_visual_screen_shortcut(shortcut){return true;}
+        }
+        if self.atlas_visual_screen_key(key,true,self.modifiers.control_key(),self.modifiers.shift_key())||self.atlas_actions_screen_key(key,self.modifiers.control_key(),self.modifiers.shift_key()){return true;}
         let Some(name) = keybinds::key_name(key) else {
             return false;
         };
@@ -3841,7 +3859,8 @@ impl Game<'_> {
     /// characters are gone and every other one stays, control characters
     /// included (a text box reads Backspace, Delete and the like as keys).
     /// `None` when none of them is left to type.
-    pub(super) fn screen_text_typed(&self, text: &str) -> Option<String> {
+    pub(super) fn screen_text_typed(&mut self, text: &str) -> Option<String> {
+        if self.atlas_visual_screen_char(text)||self.atlas_actions_screen_char(text){return None;}
         let Some(screen) = self.screen_view_now() else {
             return Some(text.to_owned());
         };
@@ -3864,6 +3883,7 @@ impl Game<'_> {
         let Some(text) = text else {
             return;
         };
+        if self.atlas_visual_screen_char(text)||self.atlas_actions_screen_char(text){return;}
         let Some(screen) = self.screen_view_now() else {
             return;
         };
@@ -9106,8 +9126,8 @@ impl Game<'_> {
     pub(super) fn close_mod_screen(&mut self) {
         self.native_mod_screen = None;
         if self.screen == Screen::Mod {
-            self.screen = Screen::Playing;
-            self.capture(true);
+            self.screen = self.atlas_ports.return_screen.take().unwrap_or(Screen::Playing);
+            self.capture(self.screen==Screen::Playing&&self.title.is_none());
         }
     }
     /// The open menu's title (the block's name, or the one it was given),
@@ -10218,6 +10238,8 @@ impl Game<'_> {
         if repeat {
             return;
         }
+        self.atlas_utility_key(key, pressed);
+        if pressed { self.atlas_actions_key(key); }
         if let Some(name) = keybinds::key_name(key) {
             if pressed {
                 self.native_panel_key(name);
@@ -10233,6 +10255,7 @@ impl Game<'_> {
         button: i32,
         hand: atlas_client::first_person::Hand,
     ) -> Option<bool> {
+        if button==2&&self.atlas_actions_middle_click(){return Some(false);}
         let key_mapping = match button {
             0 => "key.attack",
             1 => "key.use",
@@ -10244,17 +10267,20 @@ impl Game<'_> {
     }
     /// A mouse button while playing, for `native_key`.
     pub(super) fn native_mouse_event(&mut self, button: MouseButton, pressed: bool) {
+        if pressed&&self.native_playing(){self.atlas_actions_mouse_pearl(super::glfw_button(button));}
         let name = keybinds::mouse_name(button);
         self.native_key(&name, pressed);
     }
     /// Wheel steps while playing: whether a native mod took them.
     pub(super) fn native_wheel_event(&mut self, steps: f32) -> bool {
+        if self.atlas_utility_wheel(steps) {return true;}
         let mut claimed = false;
         self.native_wheel(steps, &mut claimed);
         claimed
     }
     /// A native mod's command.
     pub(super) fn client_mod_command(&mut self, command: &str) -> bool {
+        if self.atlas_utility_command(command)||self.atlas_visual_command(command)||self.atlas_actions_command(command) {return true;}
         let mut ran = false;
         self.native_command(command, &mut ran);
         ran
@@ -10262,12 +10288,14 @@ impl Game<'_> {
     /// The zoom in effect while playing (a native mod's); the spyglass's own
     /// view wins.
     pub(super) fn native_zoom_now(&self) -> Option<NativeZoom> {
-        if !self.native_playing() || self.scoping() {
+        if !self.native_playing() {
             return None;
         }
         let mut zoom = None;
         self.native_zoom(&mut zoom);
-        self.atlas_port_zoom(&mut zoom);
+        // Zoomify owns its easing and scroll range, including combination with spyglasses.
+        if zoom.is_none() {self.atlas_port_zoom(&mut zoom);if zoom.is_some(){return zoom;}}
+        if self.scoping() {return None;}
         // As the WebAssembly runtime clamped a mod's zoom.
         let z = zoom?;
         let factor = finite(z.factor, 1.0, 10.0);

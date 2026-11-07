@@ -191,7 +191,7 @@ impl Game<'_> {
             .amplifier("haste")
             .max(effects.amplifier("conduit_power"));
         let fatigue = effects.amplifier("mining_fatigue");
-        let duration = swing_duration(animation, dig_speed, fatigue);
+        let duration = self.atlas_actions_swing_duration(swing_duration(animation, dig_speed, fatigue));
         if self.swing.start_if_able(hand, animation, duration) {
             self.swings_started += 1;
         }

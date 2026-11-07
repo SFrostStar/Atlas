@@ -1374,7 +1374,7 @@ impl Menu {
 
     // ---- Slot ----
 
-    fn may_place(&self, env: &Env, s: usize, stack: &ItemStack) -> bool {
+    pub fn may_place(&self, env: &Env, s: usize, stack: &ItemStack) -> bool {
         match self.slots[s].role {
             Role::Plain | Role::CreativeDisplay => true,
             Role::Armor(eq) => env
@@ -1459,7 +1459,7 @@ impl Menu {
         stack.item.ends_with("_banner")
     }
 
-    fn may_pickup(&self, env: &Env, s: usize) -> bool {
+    pub fn may_pickup(&self, env: &Env, s: usize) -> bool {
         match self.slots[s].role {
             Role::Inert | Role::Hidden => false,
             // AnvilMenu.mayPickup: the levels to pay, and a price.
@@ -1557,7 +1557,7 @@ impl Menu {
     }
 
     /// `Slot.getMaxStackSize(stack)`.
-    fn slot_max(&self, env: &Env, s: usize, stack: &ItemStack) -> u32 {
+    pub fn slot_max(&self, env: &Env, s: usize, stack: &ItemStack) -> u32 {
         let own = match self.slots[s].role {
             Role::Armor(_)
             | Role::MountEquip(_)

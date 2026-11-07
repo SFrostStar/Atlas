@@ -1927,13 +1927,21 @@ impl ChatScreen {
         blink_ms: u64,
         background: i32,
     ) -> Vec<Draw> {
+        self.draw_redacted(m,mouse,blink_ms,background,None,false)
+    }
+    /// A display-only password mask; the sent value and selection remain the original text.
+    pub fn draw_redacted(&mut self,m:&Measure,mouse:(i32,i32),blink_ms:u64,background:i32,mask:Option<&str>,hide_suggestions:bool)->Vec<Draw>{
         let (w, h) = (self.width, self.height);
         let mut out = Vec::new();
         if self.layout.anchor_to_bottom {
             d::fill(&mut out, 2, h - 14, w - 2, h - 2, background);
         }
-        let format = |s: &str, o: usize| self.format(s, o);
+        let format = |s: &str, o: usize| match mask {
+            Some(mask)=>Text::literal(mask.chars().skip(o).take(s.chars().count()).collect::<String>()),
+            None=>self.format(s,o),
+        };
         self.input.draw(&mut out, m, blink_ms, Some(&format));
+        if hide_suggestions{return out;}
         if let Some(mut l) = self.suggestions.take() {
             self.draw_list(&mut out, m, &mut l, mouse);
             self.suggestions = Some(l);

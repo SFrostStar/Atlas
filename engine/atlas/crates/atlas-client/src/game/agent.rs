@@ -531,6 +531,7 @@ impl Game<'_> {
             "pointer_grabbed": self.captured || self.agent_pointer,
             "player": player,
             "selected": self.selected + 1,
+            "client_zoom": self.native_zoom_now().map(|z|json!({"factor":z.factor,"turn":z.turn,"smooth":z.smooth})),
             "held": self.held().map(|s| self.stack_value(s)),
             "looking_at": self.looking_at(),
             "busy": self.agent.task.as_ref().map(|t| t.name),

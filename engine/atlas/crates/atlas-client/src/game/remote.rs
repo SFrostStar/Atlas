@@ -1298,6 +1298,7 @@ impl Game<'_> {
     /// (a proxy's reconfiguration too), but the chat: joining clears it and a
     /// reconfiguration keeps it (`ChatComponent.storeState`).
     fn hud_disconnected(&mut self) {
+        self.atlas_visual_disconnect();
         self.tab_list.reset();
         self.boss_overlay.reset();
         self.adv.toasts.clear();
@@ -2111,6 +2112,7 @@ impl Game<'_> {
         let mut w = atlas_protocol::buf::Writer::new();
         w.varint(id);
         w.string(&command);
+        if self.atlas_actions_suppress_suggestions(&format!("/{command}")){return;}
         self.send(S::Unknown(
             atlas_protocol::ids::play::serverbound::COMMAND_SUGGESTION,
             w.data,
@@ -3177,6 +3179,9 @@ impl Game<'_> {
             // thread, after all preceding packets (especially teleports).
             C::Ping(p) => self.send(S::Pong(p)),
             // A native mod's server half to its client half.
+            C::CustomPayload(p) if p.channel.starts_with("appleskin:") => {
+                self.appleskin_payload(&p.channel, &p.data);
+            }
             C::CustomPayload(p) if p.channel == atlas_protocol::mod_net::CHANNEL => {
                 self.remote_native_net(&p.data);
             }
@@ -3206,6 +3211,7 @@ impl Game<'_> {
                 self.debug_charts.ping.log(delay);
             }
             C::Login(p) => {
+                self.appleskin_reset();
                 self.test_highlights.clear();
                 self.forget_synced_recipes();
                 self.level.hardcore = p.hardcore;
@@ -3250,6 +3256,12 @@ impl Game<'_> {
                 // and ClientPacketListener.broadcastClientInformation sends it
                 // again only when an option changes it.
                 self.remote_chat_login();
+                if self.atlas_port_on("atlas-appleskin") {
+                    self.send(S::CustomPayload(atlas_protocol::packets::configuration::CustomPayload {
+                        channel: "minecraft:register".into(),
+                        data: b"appleskin:saturation\0appleskin:exhaustion\0appleskin:natural_regeneration".to_vec(),
+                    }));
+                }
             }
             C::Respawn(p) => {
                 if let Some(r) = self.remote.as_ref() {
@@ -4134,6 +4146,7 @@ impl Game<'_> {
                 }
             }
             C::EntityEvent(p) => {
+                self.atlas_visual_entity_status(p.id as u32,p.event as u8);
                 if p.event == super::fireworks::FIREWORK_EXPLODE_EVENT {
                     self.remote_firework_explosion(p.id);
                 }
@@ -4742,6 +4755,7 @@ impl Game<'_> {
                     return Ok(());
                 }
                 if p.overlay {
+                    self.atlas_visual_overlay(&text.plain());
                     self.say_system_queued(&text);
                     self.titles.set_overlay(text, false);
                 } else if self.chat_line(text.clone(), atlas_client::chat::ChatSource::Server) {
@@ -5109,7 +5123,7 @@ impl Game<'_> {
             // ClientPacketListener.setActionBarText, setTitleText,
             // setSubtitleText, setTitlesAnimation and handleTitlesClear.
             C::BossEvent(p) => self.apply_boss_event(&p),
-            C::SetActionBarText(p) => self.titles.set_overlay(remote_text(&p.text), false),
+            C::SetActionBarText(p) => {let text=remote_text(&p.text);self.atlas_visual_overlay(&text.plain());self.titles.set_overlay(text,false);},
             C::SetTitleText(p) => self.titles.set_title(remote_text(&p.text)),
             C::SetSubtitleText(p) => self.titles.set_subtitle(remote_text(&p.text)),
             C::SetTitlesAnimation(p) => self.titles.set_times(p.fade_in, p.stay, p.fade_out),
@@ -5961,6 +5975,9 @@ impl Game<'_> {
         // Client mods tick on any server, single player's own included.
         self.native_net.to_server = 0;
         self.native_tick();
+        self.atlas_utility_tick();
+        self.atlas_actions_tick();
+        self.atlas_visual_tick();
         self.tell_native_now();
         // Far tiles the samplers asked for (`lod_net`).
         if let Some(r) = &self.remote {
@@ -7930,6 +7947,7 @@ impl Game<'_> {
                 && (self.predict_item_on_block(stack, &hit, hand)
                     || self.predict_map_on_banner(stack, &hit))
             {
+                if self.atlas_visual_crystal() && &*stack.item=="minecraft:end_crystal" {self.use_delay=0;}
                 // Item.useOn succeeded here (InteractionResult.SUCCESS):
                 // this hand swings and the click ends, so the other hand
                 // (a shield, a torch) is never tried.
@@ -8926,6 +8944,17 @@ impl Game<'_> {
         }
     }
 
+    /// MiddleClickPearl uses the item directly, never a block/entity interaction.
+    pub(super) fn atlas_pearl_use(&mut self, slot: usize) {
+        if slot>=9 {return;}
+        let selected=self.selected;
+        self.selected=slot;
+        self.remote_send_carried();
+        self.remote_use_item(Hand::Main);
+        self.selected=selected;
+        self.remote_send_carried();
+    }
+
     fn remote_queued_keys(&mut self) {
         // handleKeybinds' keybind polls: the queued presses act now, in tick
         // order, so no packet goes out between CLIENT_TICK_END and a pong.
@@ -9021,16 +9050,19 @@ impl Game<'_> {
             // VehicleEntity.hurtServer, ItemFrame and ArmorStand hurtServer,
             // a painting broken or an EndCrystal hurtServer: the server decides.
             self.send(S::Attack(play::Attack { id: hit.id }));
+            if self.atlas_visual_crystal(){self.crystals.retain(|c|c.id!=hit.id as u32);}
             self.reset_attack_strength();
         } else if let Some((i, distance)) = self.mob_hit()
             && self.before_block(distance)
         {
+            if self.remote_player_name(self.mobs[i].id).is_some_and(|name|self.atlas_visual_friend(name)){return false;}
             // Minecraft.startAttack: an item's attack_range must hold the hit.
             if self.held_range_allows(distance) {
                 self.send(S::Attack(play::Attack {
                     id: self.mobs[i].id as i32,
                 }));
                 self.pvp_attacked(self.mobs[i].id as i32);
+                self.atlas_visual_attacked(self.mobs[i].id);
                 self.remote_player_attack(i);
                 self.reset_attack_strength();
             }

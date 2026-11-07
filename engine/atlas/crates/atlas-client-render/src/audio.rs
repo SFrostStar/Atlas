@@ -268,7 +268,7 @@ fn decode(path: &Path) -> Option<(Vec<f32>, u32)> {
     let file = fs::File::open(path).ok()?;
     let stream = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
-    hint.with_extension("ogg");
+    hint.with_extension(path.extension().and_then(|s| s.to_str()).unwrap_or("ogg"));
     let probed = symphonia::default::get_probe()
         .format(
             &hint,
@@ -1338,6 +1338,31 @@ impl Audio {
         let capture = self.capture.take();
         self.play(event, at, volume, pitch);
         self.capture = capture;
+    }
+    /// A user-selected notification file. Decode off the render thread, as MentionSound does.
+    /// These channels own their short lifetime independently of positional world sounds.
+    pub fn play_external(&mut self, path: &Path, volume: f32) -> bool {
+        if !volume.is_finite() || !fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() <= 64*1024*1024) {
+            return false;
+        }
+        if !self.backend.live { return true; }
+        let Some(channel)=self.backend.create(false) else {return false;};
+        self.backend.set_relative(channel,true);
+        self.backend.set_volume(channel,volume.max(0.0));
+        let mixer=self.backend.mixer.clone();
+        let file=path.to_owned();
+        std::thread::spawn(move || {
+            let decoded=decode(&file).map(|(s,r)|(Arc::new(s),r));
+            if decoded.is_some() {
+                attach(&mixer,channel,decoded,false);
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    if mixer.lock().map_or(true,|m|m.channels.get(&channel).is_none_or(|c|c.state==State::Stopped)) {break;}
+                }
+            }
+            if let Ok(mut m)=mixer.lock() {m.channels.remove(&channel);}
+        });
+        true
     }
     /// `AbstractWidget.playButtonClickSound`: an unseeded, relative UI sound.
     pub fn play_button_click(&mut self) {

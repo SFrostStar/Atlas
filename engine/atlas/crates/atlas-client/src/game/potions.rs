@@ -2018,6 +2018,7 @@ impl Game<'_> {
     /// `Hud.extractEffects`: icons top-right, beneficial row then harmful row;
     /// every screen but the inventories keeps them.
     pub(super) fn draw_effect_icons(&self, batch: &mut HudBatch) {
+        if self.atlas_gamma_hud_effects(batch){return;}
         if self.potions.effects.list.is_empty() || self.screen_shows_active_effects(batch) {
             return;
         }
@@ -2039,6 +2040,7 @@ impl Game<'_> {
         origin: (f32, f32),
         image_width: i32,
     ) -> Option<[(String, u32); 2]> {
+        if let Some(result)=self.atlas_gamma_inventory_effects(batch,origin,image_width){return result;}
         let panels = inventory_effects::panels(
             batch.width as i32,
             [origin.0 as i32, origin.1 as i32],

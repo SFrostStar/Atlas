@@ -1047,7 +1047,8 @@ impl Game<'_> {
         if message.is_empty() || !self.chat_abilities().allows(&message) {
             return;
         }
-        self.ui.chat.add_recent(&message);
+        if message.starts_with(".viewmodel")&&self.atlas_actions_command(&message){return;}
+        if !self.atlas_actions_suppress_history(&message){self.ui.chat.add_recent(&message);}
         // On a server (single player's own included) the server runs it,
         // unless a client mod owns the command.
         if self.remote.is_some() {
@@ -1375,13 +1376,16 @@ impl Game<'_> {
         let Some(mut screen) = self.ui.chat_screen.take() else {
             return;
         };
+        let masked=self.atlas_actions_mask_chat(screen.value());
+        let redacted=masked!=screen.value();
+        let hide_suggestions=self.atlas_actions_suppress_suggestions(screen.value());
         // ChatScreen.updateNarrationState: the restricted prompt is
         // `displayMode.showRestrictedPrompt`, the abilities' restrictions.
         let in_bed = self.ui.in_bed_chat && self.sleeping.is_some();
         atlas_client::widgets::begin_screen(|| {
             super::screen_info::chat(
                 in_bed,
-                screen.value(),
+                &masked,
                 screen.abilities.any_restriction(),
                 &super::screen_info::tr,
             )
@@ -1403,7 +1407,7 @@ impl Game<'_> {
             .ui
             .chat_opened
             .map_or(0, |t| t.elapsed().as_millis() as u64);
-        let draws = screen.draw(&m, mouse, blink, background);
+        let draws = screen.draw_redacted(&m,mouse,blink,background,redacted.then_some(masked.as_str()),hide_suggestions);
         atlas_client::screen_draw::paint(batch, &self.gui.atlas, &draws);
         self.ui.chat_screen = Some(screen);
         if in_bed {

@@ -153,6 +153,7 @@ pub struct MouseLook {
     accumulated_dy: f64,
     pub scroll: ScrollWheelHandler,
     last_handle_movement_time: f64,
+    cinematic_divisor:f64,
 }
 
 impl Default for MouseLook {
@@ -168,11 +169,14 @@ impl Default for MouseLook {
             scroll: ScrollWheelHandler::default(),
             // Double.MIN_VALUE
             last_handle_movement_time: 4.9e-324,
+            cinematic_divisor:1.0,
         }
     }
 }
 
 impl MouseLook {
+    /// Optional camera smoothing strength. One preserves the vanilla camera.
+    pub fn set_cinematic_divisor(&mut self,divisor:f64){self.cinematic_divisor=if divisor.is_finite(){divisor.clamp(0.01,10.0)}else{1.0};}
     /// `setIgnoreFirstMove`.
     pub fn set_ignore_first_move(&mut self) {
         self.ignore_first_move = true;
@@ -243,9 +247,9 @@ impl MouseLook {
         let (xo, yo) = if look.smooth_camera {
             (
                 self.smooth_turn_x
-                    .get_new_delta_value(self.accumulated_dx * sens, mousea * sens),
+                    .get_new_delta_value(self.accumulated_dx * sens, mousea * sens/self.cinematic_divisor),
                 self.smooth_turn_y
-                    .get_new_delta_value(self.accumulated_dy * sens, mousea * sens),
+                    .get_new_delta_value(self.accumulated_dy * sens, mousea * sens/self.cinematic_divisor),
             )
         } else if look.scoping {
             self.smooth_turn_x.reset();

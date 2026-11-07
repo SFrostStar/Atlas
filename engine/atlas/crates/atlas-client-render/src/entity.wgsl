@@ -278,6 +278,19 @@ fn crumbling_uv(uv: vec2<f32>, packed_origin: vec2<f32>, sprite_size: vec2<f32>,
 @fragment fn fs_entity(in: Out, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     return entity_color(in, front);
 }
+// World-space labels use the same TrueType coverage marker as the GUI.
+// Sample pixel art normally; only marked glyphs use coverage interpolation.
+fn atlas_texel(uv: vec2<f32>) -> vec4<f32> {
+    let nearest = textureSample(atlas, atlas_sampler, uv);
+    if uv.x < 4.0 { return nearest; }
+    let size = vec2<f32>(textureDimensions(atlas));
+    let p = (uv - vec2(4.0, 0.0)) * size - vec2(0.5);
+    let base = vec2<i32>(floor(p));
+    let f = fract(p);
+    let a = mix(textureLoad(atlas, base, 0), textureLoad(atlas, base + vec2(1, 0), 0), f.x);
+    let b = mix(textureLoad(atlas, base + vec2(0, 1), 0), textureLoad(atlas, base + vec2(1, 1), 0), f.x);
+    return mix(a, b, f.y);
+}
 fn entity_color(in: Out, front: bool) -> vec4<f32> {
     var uv = in.uv;
     if in.overlay == 6u { uv.y = in.wrap.x + fract(in.uv.y) * in.wrap.y; }
@@ -285,7 +298,7 @@ fn entity_color(in: Out, front: bool) -> vec4<f32> {
         // Each crack's stage sprite origin comes in its light bytes (breaking::stage_light).
         uv = crumbling_uv(in.uv, in.wrap, globals.crumbling_sprite.zw, textureDimensions(atlas));
     }
-    let texel = textureSample(atlas, atlas_sampler, uv);
+    let texel = atlas_texel(uv);
     var tint = select(in.back_color, in.color, front);
     if in.overlay == 38u {
         // RenderPipelines.ENTITY_CUTOUT_DISSOLVE (entity.fsh's DISSOLVE): gone where the vertex

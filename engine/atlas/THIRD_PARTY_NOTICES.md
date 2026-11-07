@@ -218,3 +218,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
+# AppleSkin 3.0.10
+
+Atlas's optional AppleSkin port adapts squeek502's AppleSkin 3.0.10 for
+Minecraft 26.3 (the Fabric release supplied by SFrostStar).
+Source: https://github.com/squeek502/AppleSkin . License: Unlicense.
+The HUD/tooltip algorithms and original icons are adapted to Rust and Atlas's
+renderer; the original notice is retained in
+`crates/atlas-client-render/src/atlas/assets/LICENSE-AppleSkin.txt`.
+
+
+## Optional Atlas mod ports (supplied Java reference versions)
+
+The optional native ports retain their upstream authorship and license provenance in
+[MOD-PORT-NOTICES.md](MOD-PORT-NOTICES.md). That file records the exact archive
+versions and SHA-256 fingerprints, metadata/embedded-license differences, changes in
+Atlas, and retained verbatim notices in `mod-port-licenses/`.
+
+These notices supplement the existing engine, dependency and AppleSkin notices;
+they do not replace any original copyright or license.

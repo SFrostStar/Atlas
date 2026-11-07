@@ -2745,9 +2745,11 @@ impl Game<'_> {
         let mut component = None;
         self.native_tooltip_component(stack, &mut component);
         let component = tooltip_component_size(component);
-        let extra = bundle_extra + component.map_or(0.0, |size| size[1] + 2.0);
+        let apple = self.appleskin_tooltip_size(stack);
+        let native_extra = component.map_or(0.0, |size| size[1] + 2.0);
+        let extra = bundle_extra + native_extra + apple.map_or(0.0, |size| size[1]+2.0);
         let min_width = (if probe.is_some() { 96.0_f32 } else { 0.0 })
-            .max(component.map_or(0.0, |size| size[0]));
+            .max(component.map_or(0.0, |size| size[0])).max(apple.map_or(0.0, |size| size[0]));
         let atlas = &self.gui.atlas;
         let (x, y, w, h) = Self::tooltip_geometry(
             atlas,
@@ -2772,6 +2774,9 @@ impl Game<'_> {
                 [x, y + text_h + bundle_extra + 2.0],
                 size,
             );
+        }
+        if apple.is_some() {
+            self.appleskin_tooltip_draw(batch, stack, x, y+text_h+bundle_extra+native_extra+2.0);
         }
     }
     /// `ClientBundleTooltip.extractSelectedItemTooltip`: the selected item's

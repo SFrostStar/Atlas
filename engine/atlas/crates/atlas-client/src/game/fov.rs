@@ -84,7 +84,8 @@ impl Game<'_> {
         let first_person = self.camera_type.first_person();
         let effect = self.fov_effect_scale();
         let target = self.fov_player().map_or(1.0, |player| {
-            let base = field_of_view_modifier(&player, first_person, effect);
+            let mut base = field_of_view_modifier(&player, first_person, effect);
+            if self.scoping()&&self.atlas_zoom_overrides_spyglass(){base/=0.1;}
             let mut modifier = base;
             self.native_compute_fov_modifier(&player, base, &mut modifier);
             valid_fov_modifier(modifier, base)
@@ -179,11 +180,18 @@ impl Game<'_> {
             self.fov_effect_scale(),
             self.death_time(),
             self.camera_fluid(camera),
-        )
+        ) / self.atlas_zoom_hand_factor()
     }
     /// The pose `GameRenderer.renderLevel` multiplies into the projection:
     /// `bobHurt`, then `bobView` with the View Bobbing option.
     pub(super) fn bob_matrix(&self, partial: f32) -> glam::Mat4 {
+        self.bob_matrix_with_view(partial,self.settings.view_bobbing)
+    }
+    pub(super) fn atlas_hand_bob_correction(&self,partial:f32)->glam::Mat4 {
+        if self.atlas_port_hand_bobbing(){glam::Mat4::IDENTITY}
+        else {self.bob_matrix(partial).inverse()*self.bob_matrix_with_view(partial,false)}
+    }
+    fn bob_matrix_with_view(&self,partial:f32,view_bobbing:bool)->glam::Mat4 {
         let Some(p) = self.player.as_ref() else {
             return glam::Mat4::IDENTITY;
         };
@@ -197,11 +205,11 @@ impl Game<'_> {
             }),
             player: Some((
                 self.avatar.backwards_interpolated_walk_distance(partial),
-                self.avatar.interpolated_bob(partial),
+                self.avatar.interpolated_bob(partial)*self.atlas_zoom_bob_scale(),
             )),
         };
         let tilt = self.settings.file.double("damageTiltStrength");
-        glam::Mat4::from_cols_array(&bob_matrix(&state, tilt, self.settings.view_bobbing).m)
+        glam::Mat4::from_cols_array(&bob_matrix(&state, tilt, view_bobbing).m)
             * self.native_shake_matrix(partial)
     }
     /// `AbstractClientPlayer.tick` and `aiStep` (`ClientAvatarState.tick`,

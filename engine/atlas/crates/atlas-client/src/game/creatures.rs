@@ -6993,6 +6993,8 @@ impl Game<'_> {
                 continue;
             }
             let is_player = &*mob.kind.id == "minecraft:player";
+            let atlas_friend=is_player&&self.remote_player_name(mob.id).is_some_and(|n|self.atlas_visual_friend(n));
+            let skinning=skinning&&!atlas_friend;
             let d = glam::DVec3::new(mob.position.x, mob.position.y, mob.position.z) - camera;
             // Entity.shouldRenderAtSqrDistance: 64 times the bounding box's
             // mean edge, scaled by the view scale. RemotePlayer's box counts
@@ -7247,6 +7249,9 @@ impl Game<'_> {
                     out.truncate(entity_start);
                     continue;
                 }
+            }
+            if atlas_friend {
+                for vertex in &mut out[entity_start..] {vertex.color=(vertex.color&0x00ff_ffff)|0x6600_0000;}
             }
             // Glowing outlines and a guardian's beam remain visible independently
             // of whether the body is hidden behind terrain.

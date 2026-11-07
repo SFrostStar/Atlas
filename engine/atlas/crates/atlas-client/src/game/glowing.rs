@@ -32,6 +32,7 @@ impl Game<'_> {
 
     /// The outline of a dropped item or projectile: its `Glowing` flag, in its team's colour.
     pub(super) fn thing_outline(&self, id: u32, kind: &str) -> Option<u32> {
+        if kind=="minecraft:item"&&let Some(color)=self.atlas_visual_loot_outline(id){return Some(color);}
         let vanilla = self
             .entity_glowing(id)
             .then(|| team_color(self.mob_team(id)));

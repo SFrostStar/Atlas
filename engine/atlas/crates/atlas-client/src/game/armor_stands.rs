@@ -316,6 +316,9 @@ impl Game<'_> {
                 };
                 let color = layer_color(*undyed, stack);
                 out.push((part, uv, color, if i == 0 { overlay } else { 0 }, false));
+                if let Some(tint)=self.atlas_armor_tint(stack) {
+                    out.push((part,uv,tint,0,false));
+                }
                 // The layer's OptiFine emissive overlay, full bright without the glint.
                 if let Some(g) = emissive
                     .overlay(texture)

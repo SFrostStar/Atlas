@@ -1,14 +1,13 @@
 //! Atlas feature ports, installed per instance through the launcher.
-//! These are original Rust implementations, not Java bytecode or third-party source.
+//! AppleSkin follows squeek502's Unlicense implementation; other ports are Atlas implementations.
+mod actions;
 mod armor;
 mod food;
 mod utility;
+mod visual;
 
 use super::{Game, native_hooks::NativeMod};
-use atlas_client::{
-    hud::{HudAtlas, HudBatch},
-    text::{Style, Text},
-};
+use atlas_client::hud::HudBatch;
 use std::{collections::BTreeSet, fs, path::Path};
 
 const IDS: [&str; 6] = [
@@ -24,6 +23,11 @@ const IDS: [&str; 6] = [
 pub(super) struct State {
     installed: BTreeSet<String>,
     utility: utility::UtilityState,
+    food: food::State,
+    armor: armor::State,
+    actions: actions::State,
+    visual: visual::State,
+    pub(in crate::game) return_screen: Option<super::Screen>,
 }
 
 impl State {
@@ -40,26 +44,45 @@ impl State {
                 installed
                     .iter()
                     .filter_map(|v| v.as_str())
-                    .filter(|id| IDS.contains(id))
+                    .filter(|id| {
+                        IDS.contains(id) || actions::IDS.contains(id) || visual::IDS.contains(id)
+                    })
                     .map(str::to_owned),
             );
         }
+        if state.installed.contains(IDS[0]) {
+            state.food = food::State::load(home);
+        }
+        state.utility = utility::UtilityState::load(home);
+        state.armor = armor::State::load(home);
+        state.actions = actions::State::load(home);
+        state.visual = visual::State::load(home);
         state
     }
 }
 
-fn compact(batch: &mut HudBatch, atlas: &HudAtlas, label: &str, x: f32, y: f32, color: u32) {
-    let text = Text::styled(
-        label,
-        Style {
-            font: Some(atlas_client::font::COMPACT.into()),
-            ..Default::default()
-        },
-    );
-    batch.text_styled(atlas, &text, x, y, color, true);
-}
-
 impl Game<'_> {
+    /// Port-owned configuration can open from the title's Options as well as from a world.
+    pub(in crate::game) fn atlas_open_port_screen(&mut self, id: &str) -> bool {
+        if !self.atlas_ports.installed.contains(id)
+            || self.renderer.is_none()
+            || self.remote_loading()
+        {
+            return false;
+        }
+        if self.screen == super::Screen::Mod {
+            return self.native_mod_screen() == Some(id);
+        }
+        self.atlas_ports.return_screen = Some(self.screen);
+        self.native_mod_screen = Some(id.to_owned());
+        self.screen = super::Screen::Mod;
+        self.keys.clear();
+        self.left = false;
+        self.right = false;
+        self.mining = None;
+        self.capture(false);
+        true
+    }
     pub(super) fn atlas_port_on(&self, id: &str) -> bool {
         self.atlas_ports.installed.contains(id) && self.native_on(id)
     }
@@ -69,12 +92,12 @@ impl Game<'_> {
             (
                 IDS[0],
                 "AppleSkin",
-                "Atlas food HUD: hunger, saturation and held-food preview.",
+                "AppleSkin 3.0.10: saturation, food/health previews and food tooltips.",
             ),
             (
                 IDS[1],
                 "ArmorIndicator",
-                "Atlas: your equipped armor and remaining durability.",
+                "ArmorIndicator 1.0.0: target armor, durability and damage tint.",
             ),
             (
                 IDS[2],
@@ -89,7 +112,7 @@ impl Game<'_> {
             (
                 IDS[4],
                 "Zoomify",
-                "Atlas: hold C to zoom; rebind the key on this page.",
+                "Zoomify: hold C and use the wheel for geometric zoom steps.",
             ),
             (
                 IDS[5],
@@ -97,7 +120,11 @@ impl Game<'_> {
                 "Atlas: a notification when incoming chat mentions your name.",
             ),
         ];
-        for (id, name, description) in definitions {
+        for (id, name, description) in definitions
+            .into_iter()
+            .chain(visual::DEFINITIONS)
+            .chain(actions::DEFINITIONS)
+        {
             if !self.atlas_ports.installed.contains(id) {
                 continue;
             }
@@ -106,13 +133,40 @@ impl Game<'_> {
                 title: name.into(),
                 description: description.into(),
                 keys: if id == IDS[4] {
+                    vec![
+                        [
+                            "zoom".into(),
+                            "Приближение / Zoom".into(),
+                            "key.keyboard.c".into(),
+                        ],
+                        [
+                            "secondary".into(),
+                            "Secondary zoom".into(),
+                            "key.keyboard.unknown".into(),
+                        ],
+                        [
+                            "zoom_in".into(),
+                            "Zoom in".into(),
+                            "key.keyboard.unknown".into(),
+                        ],
+                        [
+                            "zoom_out".into(),
+                            "Zoom out".into(),
+                            "key.keyboard.unknown".into(),
+                        ],
+                    ]
+                } else if id == IDS[3] {
                     vec![[
-                        "zoom".into(),
-                        "Приближение / Zoom".into(),
-                        "key.keyboard.c".into(),
+                        "toggle".into(),
+                        "Toggle camera sway".into(),
+                        "key.keyboard.unknown".into(),
                     ]]
                 } else {
-                    vec![]
+                    if visual::IDS.contains(&id) {
+                        visual::keys(id)
+                    } else {
+                        actions::keys(id)
+                    }
                 },
             });
         }
@@ -122,11 +176,10 @@ impl Game<'_> {
         if !self.native_window() {
             return;
         }
-        if self.atlas_port_on(IDS[0]) {
-            food::draw(self, batch);
-        }
         if self.atlas_port_on(IDS[1]) {
             armor::draw(self, batch);
         }
+        self.atlas_visual_hud(batch);
+        self.atlas_actions_viewmodel_hud(batch);
     }
 }

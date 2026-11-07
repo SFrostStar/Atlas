@@ -39,6 +39,11 @@ pub(super) struct ServerDebug {
 impl Game<'_> {
     /// Every enabled entry's lines, by identifier.
     pub(super) fn debug_entry_lines(&self, d: &mut Displayer, framebuffer: [i32; 2]) {
+        if self.debug && self.atlas_port_on("atlas-appleskin") && let Some(player)=&self.player {
+            let food=&player.health.food;
+            let sat=format!("{:.2}",food.saturation).trim_end_matches('0').trim_end_matches('.').to_owned();
+            d.line(format!("hunger: {}, sat: {}, exh: {:.2}/4",food.food,sat,food.exhaustion));
+        }
         let reduced = self.reduced_debug_info();
         let mut paths: Vec<&str> = ENTRIES
             .iter()
