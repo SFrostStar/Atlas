@@ -44,6 +44,14 @@ Exact reference versions, source hashes, authors and licenses are recorded in
 
 ## Configuration and validation
 
+The built-in Mod Menu 21.0.0 is available from the title and pause menus. Its
+original two-pane browser lists installed native/content mods, search, metadata,
+filters and available native configuration callbacks. Its 21 visible preferences
+and file-only options use per-instance `config/modmenu.json`. Launcher installation
+and enable controls remain separate from browsing. An unavailable Java configuration
+plugin does not acquire a fake settings button. See MOD-PORT-NOTICES.md for the
+reference and the native import/update boundaries.
+
 `atlas-ports.json` records installation separately in each instance;
 `atlas-mods.txt` records enable flags and key bindings. Installation/removal
 applies at the next game launch; in-game toggles apply immediately. Nothing is

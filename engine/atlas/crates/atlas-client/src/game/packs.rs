@@ -276,7 +276,7 @@ impl Game<'_> {
         let (selected, server, mods, dev_mods) = (
             self.settings.resource_packs.clone(),
             self.server_packs.active.clone(),
-            self.settings.mods.enabled.clone(),
+            self.applied_mods(),
             self.options.dev_mods.clone(),
         );
         let (assets, res, context) = (
@@ -294,7 +294,7 @@ impl Game<'_> {
             self.settings.atlas.api,
             self.settings.atlas.translucent_batching,
             self.settings.atlas.wide_frame(),
-            super::shader_packs::picked_pack_draws_flat(&self.settings),
+            super::shader_packs::picked_pack_shape(&self.settings),
             (
                 self.settings.file.int("textureFiltering"),
                 self.settings.file.int("maxAnisotropyBit"),
@@ -341,6 +341,7 @@ impl Game<'_> {
             staged.and_then(|staged| self.apply_staged_pack(staged).map_err(|e| e.to_string()));
         match kind {
             ReloadKind::Selection => {
+                self.mods_reloaded(result.is_ok());
                 if let Err(e) = result {
                     self.selection_reload_failed(&e);
                 }
@@ -395,7 +396,7 @@ impl Game<'_> {
                         self.settings.atlas.api,
                         self.settings.atlas.translucent_batching,
                         self.settings.atlas.wide_frame(),
-                        super::shader_packs::picked_pack_draws_flat(&self.settings),
+                        super::shader_packs::picked_pack_shape(&self.settings),
                         (
                             self.settings.file.int("textureFiltering"),
                             self.settings.file.int("maxAnisotropyBit"),

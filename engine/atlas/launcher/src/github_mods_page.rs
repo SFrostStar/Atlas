@@ -472,8 +472,16 @@ impl Launcher {
         right = right.child(
             switch(format!("native-switch-{id}"), on, &t).on_click(cx.listener(
                 move |this, _: &ClickEvent, _, cx| {
+                    let home = this.mods.home();
+                    // An update holds the folder: the window doesn't wait for it.
+                    let Some(_lock) = atlas_launcher::browser::try_lock_home(&home) else {
+                        this.mods.message =
+                            Some(Err(tr("Wait for the current operation to finish.").into()));
+                        cx.notify();
+                        return;
+                    };
                     this.mods.message =
-                        atlas_launcher::browser::java::set_enabled(&this.mods.home(), &id, !on)
+                        atlas_launcher::browser::java::set_enabled(&home, &id, !on)
                             .err()
                             .map(Err);
                     this.instance_mods_changed();

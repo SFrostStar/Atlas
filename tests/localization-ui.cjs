@@ -26,14 +26,15 @@ const root = path.resolve(__dirname, '..');
       assert.deepEqual(await untranslated(), [], `Untranslated labels on ${label}`);
     };
     for (const route of ['home', 'instances', 'workshop', 'settings', 'logs']) {
-      await page.locator(`[data-page="${route}"]`).click();
+      await page.locator(`.nav-item[data-page="${route}"]`).click();
       await checkLayout(route);
     }
-    await page.locator('[data-page="home"]').click();
-    await page.locator('[data-tab="files"]').click();
-    assert.equal(await page.locator('.file-row').count(), 4);
+    await page.locator('.nav-item[data-page="home"]').click();
+    await page.locator('.nav-item[data-page="instances"]').click();
+    await page.locator('[data-instance-tab="files"]').click();
+    assert.equal(await page.locator('.file-row').count(), 6);
     await checkLayout('files');
-    await page.locator('[data-tab="overview"]').click();
+    await page.locator('.nav-item[data-page="home"]').click();
     let snapshot = await page.evaluate(() => window.atlas.getState());
     let instance = snapshot.instances.find(item => item.name === 'Настройки');
     if (!instance) {

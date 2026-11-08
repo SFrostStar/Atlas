@@ -3,7 +3,7 @@ name = "atlas-mcp"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
-rust-version = "1.88"
+rust-version.workspace = true
 description = "The Model Context Protocol, one implementation for Atlas's three servers (atlas-ctl mcp, atlas-server mcp, atlas-launcher mcp)"
 
 [dependencies]

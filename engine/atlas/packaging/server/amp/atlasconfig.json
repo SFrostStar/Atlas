@@ -1,0 +1,107 @@
+[
+    {
+        "DisplayName": "Accept the Minecraft EULA",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "Ticked accepts the Minecraft EULA for this server. The first start fails until it is ticked.",
+        "Keywords": "atlas,eula",
+        "FieldName": "AtlasEula",
+        "InputType": "checkbox",
+        "ParamFieldName": "AtlasEula",
+        "DefaultValue": "false",
+        "EnumValues": {
+            "False": "false",
+            "True": "true"
+        }
+    },
+    {
+        "DisplayName": "Atlas release",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "The GitHub release tag to install: nightly (the current Nightly) or an exact tag. Read at install and reinstall only.",
+        "Keywords": "atlas,version",
+        "FieldName": "AtlasVersion",
+        "InputType": "text",
+        "ParamFieldName": "AtlasVersion",
+        "DefaultValue": "nightly",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "World name",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "The world's folder name. Read on the first start only.",
+        "Keywords": "atlas,world",
+        "FieldName": "AtlasWorld",
+        "InputType": "text",
+        "ParamFieldName": "AtlasWorld",
+        "DefaultValue": "world",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "World seed",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "The world's seed; empty picks a random one. Read on the first start only.",
+        "Keywords": "atlas,seed",
+        "FieldName": "AtlasSeed",
+        "InputType": "text",
+        "ParamFieldName": "AtlasSeed",
+        "DefaultValue": "",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Whitelist",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "Ticked turns the whitelist on, as in vanilla. Read on the first start only.",
+        "Keywords": "atlas,whitelist",
+        "FieldName": "AtlasWhitelist",
+        "InputType": "checkbox",
+        "ParamFieldName": "AtlasWhitelist",
+        "DefaultValue": "true",
+        "EnumValues": {
+            "False": "false",
+            "True": "true"
+        }
+    },
+    {
+        "DisplayName": "Whitelisted players",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "Names separated by commas, added to the whitelist. Read on the first start only.",
+        "Keywords": "atlas,players",
+        "FieldName": "AtlasPlayers",
+        "InputType": "text",
+        "ParamFieldName": "AtlasPlayers",
+        "DefaultValue": "",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Operator",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "A player to make an operator. Read on the first start only.",
+        "Keywords": "atlas,op",
+        "FieldName": "AtlasOp",
+        "InputType": "text",
+        "ParamFieldName": "AtlasOp",
+        "DefaultValue": "",
+        "EnumValues": {}
+    },
+    {
+        "DisplayName": "Online mode",
+        "Category": "Atlas:public",
+        "Subcategory": "Server:dns:1",
+        "Description": "Ticked checks players' Minecraft accounts, as vanilla's online mode does (docs/hosting.md). Read on the first start only.",
+        "Keywords": "atlas,online",
+        "FieldName": "AtlasOnline",
+        "InputType": "checkbox",
+        "ParamFieldName": "AtlasOnline",
+        "DefaultValue": "true",
+        "EnumValues": {
+            "False": "false",
+            "True": "true"
+        }
+    }
+]

@@ -23,17 +23,13 @@ pub fn rows(no_ai: bool) -> Vec<(Entry, Option<Entry>)> {
     use Entry::{Page as Open, Toggle as Switch};
     let mut rows = vec![
         (
-            Open("Graphics", Page::Graphics),
-            Some(Open("Advanced Graphics", Page::AdvancedGraphics)),
-        ),
-        (
-            Open("Shader Packs", Page::ShaderPacks),
-            Some(Open("Mods", Page::Mods)),
+            Open("options.video", Page::Graphics),
+            Some(Open("atlas.pages.shader_packs", Page::ShaderPacks)),
         ),
         (Switch(Toggle::DiscordPresence), Some(Switch(Toggle::NoAi))),
     ];
     if !no_ai {
-        rows.push((Open("AI Agent", Page::Agent), None));
+        rows.push((Open("atlas.pages.agent", Page::Agent), None));
     }
     rows
 }
@@ -47,12 +43,12 @@ mod tests {
     fn no_ai_keeps_its_position_and_hides_agent_navigation() {
         for disabled in [false, true] {
             let menu = rows(disabled);
-            assert!(matches!(menu[1].1, Some(Entry::Page(_, Page::Mods))));
-            assert!(matches!(menu[2].1, Some(Entry::Toggle(Toggle::NoAi))));
+            assert!(matches!(menu[0].1, Some(Entry::Page(_, Page::ShaderPacks))));
+            assert!(matches!(menu[1].1, Some(Entry::Toggle(Toggle::NoAi))));
             if disabled {
-                assert_eq!(menu.len(), 3);
+                assert_eq!(menu.len(), 2);
             } else {
-                assert!(matches!(menu[3], (Entry::Page(_, Page::Agent), None)));
+                assert!(matches!(menu[2], (Entry::Page(_, Page::Agent), None)));
             }
         }
     }

@@ -23,6 +23,8 @@ use std::{
 pub const DEFAULT: &str = "minecraft:default";
 /// Small, smooth digits for counts in 16px item slots.
 pub const COMPACT: &str = crate::atlas::fonts::COMPACT;
+/// The original resource-pack default, retained for faithful Java mod screens.
+pub const MOD_MENU: &str = "atlas:modmenu-vanilla";
 
 /// A glyph ready to draw: atlas UVs and its box relative to the pen
 /// position (GlyphBitmap left/top/right/bottom), in GUI pixels.
@@ -676,13 +678,18 @@ impl Font {
         // FontManager.prepare: every font definition of the resources.
         let mut ids = font_ids(root);
         ids.sort_by_key(|id| id != DEFAULT);
-        let sets = ids
+        let mut sets: Vec<_> = ids
             .into_iter()
             .map(|id| {
                 let set = font.load_set(&id, pixels);
                 (id, set)
             })
             .collect();
+        // Preserve the original providers before Atlas prepends its smooth face.
+        // Bitmap texture UVs still refer to this atlas; no Mojang files are bundled.
+        if sets.iter().any(|(id, _)| id == DEFAULT) {
+            sets.push((MOD_MENU.to_owned(), font.load_set(DEFAULT, pixels)));
+        }
         font.cache.borrow_mut().sets = sets;
         font
     }
@@ -771,6 +778,40 @@ impl Font {
                 ));
             }
         }
+    }
+
+    /// Measure and paint a complete screen with a named font as its default.
+    /// Restores the default even on unwind, and never holds the cache borrow
+    /// while drawing. Other Atlas screens and the world retain smooth text.
+    pub fn using_font<R>(&self, id: &str, draw: impl FnOnce() -> R) -> R {
+        struct Restore<'a>(&'a Font, usize, usize);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                let mut cache = self.0.cache.borrow_mut();
+                let name = cache.sets[self.1].0.clone();
+                cache.sets[self.1].0 = cache.sets[self.2].0.clone();
+                cache.sets[self.2].0 = name;
+            }
+        }
+        let indexes = {
+            let cache = self.cache.borrow();
+            cache
+                .sets
+                .iter()
+                .position(|(key, _)| key == DEFAULT)
+                .zip(cache.sets.iter().position(|(key, _)| key == id))
+                .filter(|(a, b)| a != b)
+        };
+        let restore = indexes.map(|(a, b)| {
+            let mut cache = self.cache.borrow_mut();
+            let name = cache.sets[a].0.clone();
+            cache.sets[a].0 = cache.sets[b].0.clone();
+            cache.sets[b].0 = name;
+            Restore(self, a, b)
+        });
+        let result = draw();
+        drop(restore);
+        result
     }
 
     /// Forget rasterized glyphs (after changing font options).
@@ -1523,6 +1564,30 @@ mod tests {
         ));
         assert!(small < regular * 0.85 && small > 6.0);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn mod_menu_pixel_font_scope_restores_smooth_text_even_after_unwind() {
+        let definition = br#"{"providers":[{"type":"space","advances":{"x":17}}]}"#;
+        let resources = root(
+            "modmenu-scope",
+            &[("assets/minecraft/font/default.json", definition)],
+        );
+        let font = load(&resources);
+        font.enable_smooth();
+        let smooth = font.width("xxx");
+        assert!(font.glyph('x').smooth);
+        assert_eq!(font.using_font(MOD_MENU, || font.width("xxx")), 51.0);
+        assert_eq!(font.width("xxx"), smooth);
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            font.using_font(MOD_MENU, || {
+                assert_eq!(font.width("xxx"), 51.0);
+                panic!("test font-scope unwind");
+            });
+        }));
+        assert!(panic.is_err());
+        assert_eq!(font.width("xxx"), smooth);
+        assert!(font.glyph('x').smooth);
     }
 
     #[test]

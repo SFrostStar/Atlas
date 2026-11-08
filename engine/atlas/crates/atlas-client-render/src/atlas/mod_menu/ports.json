@@ -1,0 +1,649 @@
+[
+  {
+    "id": "atlas-appleskin",
+    "name": "AppleSkin",
+    "version": "3.0.10+mc26.3",
+    "description": "Adds various food-related HUD improvements",
+    "authors": [
+      "squeek502"
+    ],
+    "licenses": [
+      "Unlicense"
+    ],
+    "homepage": "https://modrinth.com/mod/appleskin",
+    "issues": "https://github.com/squeek502/AppleSkin/issues",
+    "source": "https://github.com/squeek502/AppleSkin",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-appleskin"
+  },
+  {
+    "id": "atlas-armorindicator",
+    "name": "Armor Indicator",
+    "version": "1.0.0",
+    "description": "Shows remaining armor durability on players, armor stands, and mobs with dynamic visual red damage tint and target HUD.",
+    "authors": [
+      "ArmorIndicator Dev"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-armorindicator",
+    "client": true
+  },
+  {
+    "id": "atlas-autosprint",
+    "name": "Auto Sprint",
+    "version": "${version}",
+    "description": "Automatically sprints when holding W.",
+    "authors": [
+      "Manus"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-noshakehand",
+    "name": "NoShakeHand",
+    "version": "1.0.0",
+    "description": "Disables first-person hands and held items shaking/swaying when moving the camera.",
+    "authors": [
+      "slmnk"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-noshakehand",
+    "client": true
+  },
+  {
+    "id": "atlas-zoomify",
+    "name": "Zoomify",
+    "version": "2.15.2+1.21.5",
+    "description": "A zoom mod with infinite customizability.",
+    "authors": [
+      "isXander"
+    ],
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ],
+    "homepage": "https://isxander.dev",
+    "issues": "https://github.com/isXander/Zoomify/issues",
+    "source": "https://github.com/isXander/Zoomify",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-zoomify",
+    "client": true
+  },
+  {
+    "id": "atlas-mentionsound",
+    "name": "Mention Sound",
+    "version": "1.0.0",
+    "description": "Plays a custom sound when your nickname is mentioned in chat.",
+    "authors": [
+      "You"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-radarmod",
+    "name": "Radar",
+    "version": "1.0.0",
+    "description": "Nearby players radar HUD with customizable size, position and max players.",
+    "authors": [
+      "slmnk"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-radarmod",
+    "client": true
+  },
+  {
+    "id": "atlas-crystaloptimizer",
+    "name": "Crystal Optimizer",
+    "version": "1.0.0",
+    "description": "Zero delay crystal placing and breaking for Minecraft Fabric 1.21.4",
+    "authors": [
+      "Author"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-crystaloptimizer",
+    "client": true
+  },
+  {
+    "id": "atlas-friendlist",
+    "name": "FriendList",
+    "version": "1.0.0",
+    "description": "Добавляй друзей, они становятся полупрозрачными и их нельзя бить.",
+    "authors": [
+      "slmnk"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-killnotification",
+    "name": "KillNotification",
+    "version": "1.0.0",
+    "description": "Автоматически отправляет !-ник в чат при убийстве игрока.",
+    "authors": [
+      "Slmnk"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-lootbeams",
+    "name": "Lootbeams",
+    "version": "1.1.0",
+    "description": "Highlights items on the ground with a rarity-colored contour that follows the item's real shape (visible through walls) and an optional beam of light. Fully configurable.",
+    "authors": [
+      "you"
+    ],
+    "licenses": [
+      "CC0-1.0"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-nofluid",
+    "name": "No Fluid (Clear Water & Lava)",
+    "version": "1.0.0",
+    "description": "Removes underwater and underlava fog, screen overlays, and adds crystal-clear visibility for CPvP.",
+    "authors": [
+      "slmnk"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-nofluid",
+    "client": true
+  },
+  {
+    "id": "atlas-pvpsurvived",
+    "name": "PvP Survived",
+    "version": "1.0.0",
+    "description": "Показывает надпись 'ТЫ ВЫЖИЛ!' под прицелом на 2 секунды после выхода из PvP режима на серверах.",
+    "authors": [
+      "Slmnk"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-pvpsurvived",
+    "client": true
+  },
+  {
+    "id": "atlas-rwjoiner",
+    "name": "RwJoiner",
+    "version": "1.0.0",
+    "description": "Автоматический заход на грифы сервера ReallyWorld для Minecraft 1.21.4 Fabric",
+    "authors": [
+      "RwJoiner Team"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-rwjoiner",
+    "client": true
+  },
+  {
+    "id": "atlas-totempops",
+    "name": "Totem Pops",
+    "version": "1.0.0",
+    "description": "Показывает под ником игрока, сколько тотемов у него снесли. Настройка через config/totempops/config.yml",
+    "authors": [
+      "you"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-cullparticles",
+    "name": "CullParticles",
+    "version": "1.21.4_1.0",
+    "description": "A client-side mod that culls particles that are not visible to increase performance.",
+    "authors": [
+      "quikjay"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-cullparticles",
+    "client": true
+  },
+  {
+    "id": "atlas-autocraft",
+    "name": "AutoCraft",
+    "version": "1.0.0",
+    "description": "Автокрафт Кристалла Энда, Ока Эндера и Стрел моментального урона II в верстаке.",
+    "authors": [
+      "AutoCraft Developer"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "https://fabricmc.net/",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-autocraft"
+  },
+  {
+    "id": "atlas-dropall",
+    "name": "Drop All Mod",
+    "version": "1.0.0",
+    "description": "Adds a Drop All button to the player inventory",
+    "authors": [
+      "Author"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-hotcommands",
+    "name": "HotCommands",
+    "version": "1.0.0",
+    "description": "Customizable hot command menu with submenus, categories and in-game editor.",
+    "authors": [
+      "Slmnk"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-inventory-manager",
+    "name": "Раскладчик инвентаря",
+    "version": "1.01",
+    "description": "Save, rename and restore inventory layouts. Client-side Fabric mod for Minecraft 1.21.4.",
+    "authors": [
+      "Inventory Layouts"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-middleclickpearl",
+    "name": "Middle Click Pearl",
+    "version": "1.0.0",
+    "description": "Throw an ender pearl from your hotbar with the middle mouse button, without switching items manually.",
+    "authors": [
+      "you"
+    ],
+    "licenses": [
+      "CC0-1.0"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-sortmod",
+    "name": "Chest Sorter",
+    "version": "1.0.0",
+    "description": "Sorts chest inventories with a single click",
+    "authors": [
+      "Developer"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "https://fabricmc.net/",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    }
+  },
+  {
+    "id": "atlas-streamermode",
+    "name": "StreamerMode: Password Masker",
+    "version": "1.0.0",
+    "description": "Hides passwords when logging in or registering on Minecraft servers (/login, /reg, etc.).",
+    "authors": [
+      "StreamerMode"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-streamermode",
+    "client": true
+  },
+  {
+    "id": "atlas-viewmodel",
+    "name": "ViewModel",
+    "version": "1.0.0",
+    "description": "Interactive ViewModel drag & drop and 13 custom Swing Animations for Minecraft 1.21.4 Fabric",
+    "authors": [
+      "ViewModel"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-viewmodel",
+    "client": true
+  },
+  {
+    "id": "atlas-chunkanimator",
+    "name": "Chunk Animator",
+    "version": "1.0.0+1.21.4",
+    "description": "Animates chunks when they appear.",
+    "authors": [
+      "Donyka"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "homepage": "",
+    "issues": "",
+    "source": "https://github.com/sskyness/Chunk-Animator",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-chunkanimator",
+    "client": true
+  },
+  {
+    "id": "atlas-gammautils",
+    "name": "Gamma Utils",
+    "version": "2.2.6",
+    "description": "Gamma / Brightness / Night Vision mod, making it easy to see in the dark.",
+    "authors": [
+      "Sjouwer"
+    ],
+    "licenses": [
+      "GNU LGPLv3"
+    ],
+    "homepage": "https://modrinth.com/mod/gamma-utils",
+    "issues": "https://github.com/Sjouwer/gamma-utils/issues",
+    "source": "https://github.com/Sjouwer/gamma-utils",
+    "credits": {
+      "contributor": [
+        "pt-br: Percario",
+        "zh-cn: buiawpkgew1, GodGun968, YouQi-0v0, Q2297045667",
+        "ko-kr: gyular",
+        "es-es: Boxadactle",
+        "ja-jp: co-91",
+        "ru-ru: Fenixinc",
+        "vi-vn: ImVietnam",
+        "be-by: Gazmanovich",
+        "tr-tr: kryparnold",
+        "zh-tw: yichifauzi",
+        "de-de: Rafmon",
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-gammautils",
+    "client": true
+  }
+]

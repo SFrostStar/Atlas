@@ -16,6 +16,108 @@ let installActionPending = false;
 let modsSource = 'atlas';
 let modsSearch = '';
 let modsBusy = false;
+let settingsAnchor = 'appearance';
+let instancesTab = 'files';
+let renderedView = null;
+let viewAnimation;
+let accountPickerPage = "list";
+let accountPickerSignature = "";
+let accountContextId = null;
+
+function motionReduced() {
+  return state?.settings?.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function positionAccountPicker() {
+  const picker=document.getElementById('account-picker'),rect=document.getElementById('profile-button').getBoundingClientRect();
+  picker.style.top=`${rect.bottom+10}px`;
+  picker.style.right=`${Math.max(16,innerWidth-rect.right)}px`;
+  picker.style.maxHeight=`${Math.max(200,innerHeight-rect.bottom-30)}px`;
+}
+function renderAccountPicker() {
+  const picker=document.getElementById('account-picker'),account=state.accounts;
+  if(!account)return;
+  const signature=JSON.stringify([accountPickerPage,account,state.settings.language]);
+  if(signature===accountPickerSignature)return;
+  accountPickerSignature=signature;
+  const back=button('picker-back','Назад','arrow-left','quiet');
+  let content='';
+  if(accountPickerPage==='list') {
+    content=`<div class="picker-heading"><strong>Аккаунты</strong>${button('picker-add','Добавить','plus','quiet')}</div><div class="picker-list">${account.accounts.map(a=>`<button class="picker-account" data-action="picker-select" data-id="${escapeHtml(a.id)}" aria-pressed="${a.id===account.selectedId}"><span class="profile-avatar" data-user-text>${escapeHtml(a.name.slice(0,1).toUpperCase())}</span><span class="picker-account-copy"><strong data-user-text>${escapeHtml(a.name)}</strong><small>${a.type==='microsoft'?'Microsoft':'Локальный профиль'}</small></span>${a.id===account.selectedId?icon('check'):''}</button>`).join('')}</div>`;
+  } else if(accountPickerPage==='add') {
+    content=`<div class="picker-heading">${back}<strong>Добавить аккаунт</strong></div>${button('picker-local','Офлайн-профиль','user-round','secondary picker-choice')}${button('picker-microsoft','Microsoft','log-in','secondary picker-choice')}`;
+  } else if(accountPickerPage==='local') {
+    content=`<div class="picker-heading">${back}<strong>Офлайн-профиль</strong></div><form id="picker-local-form"><label class="field">Ник игрока<input name="name" pattern="[A-Za-z0-9_]{3,16}" minlength="3" maxlength="16" required autocomplete="off"></label><p id="picker-error" class="form-error" role="alert"></p><button class="button primary picker-choice" type="submit">${icon('plus')}Добавить</button></form>`;
+  } else {
+    const waiting=['starting','waiting','verifying'].includes(account.status);
+    content=`<div class="picker-heading">${back}<strong>Microsoft</strong></div>${!account.configured?'<p class="subtitle">Для Microsoft-входа нужен Client ID приложения Atlas.</p>':!account.storageAvailable?'<p class="subtitle">Защищённое хранилище Windows недоступно.</p>':''}${button('signin-microsoft',waiting?'Вход…':'Войти через Microsoft','log-in','primary picker-choice',!account.configured||!account.storageAvailable||waiting?'disabled':'')}${account.device?`<div class="signin-device"><span>Код входа</span><strong data-user-text>${escapeHtml(account.device.userCode)}</strong>${button('open-microsoft','Открыть Microsoft','external-link')}</div>`:''}${waiting?button('cancel-signin','Отменить вход','x','quiet'):''}${account.error?`<p class="form-error">${escapeHtml(AtlasI18n.accountError(account.error,state.settings.language))}</p>`:''}`;
+  }
+  closeAccountContext();
+  document.getElementById('account-picker-content').innerHTML=content;
+  hydrateIcons(); AtlasI18n.translateTree(picker,state.settings.language);
+  positionAccountPicker();
+}
+function closeAccountContext(restoreFocus=false) {
+  const id=accountContextId;
+  accountContextId=null;
+  const menu=document.getElementById('account-context-menu');
+  if(menu.matches(':popover-open'))menu.hidePopover();
+  if(restoreFocus&&id)document.querySelector(`.picker-account[data-id="${CSS.escape(id)}"]`)?.focus();
+}
+function openAccountContext(row,x,y) {
+  accountContextId=row.dataset.id;
+  const menu=document.getElementById('account-context-menu');
+  if(!menu.matches(':popover-open'))menu.showPopover();
+  const rect=menu.getBoundingClientRect();
+  menu.style.left=`${Math.max(8,Math.min(x,innerWidth-rect.width-8))}px`;
+  menu.style.top=`${Math.max(40,Math.min(y,innerHeight-rect.height-8))}px`;
+  menu.querySelector('button').focus();
+}
+document.getElementById('account-picker').addEventListener('contextmenu',event=>{
+  const row=event.target.closest('.picker-account');if(!row)return;
+  event.preventDefault();event.stopPropagation();
+  const rect=row.getBoundingClientRect();
+  openAccountContext(row,event.clientX||rect.left+20,event.clientY||rect.bottom);
+});
+document.getElementById('account-picker').addEventListener('keydown',event=>{
+  const row=event.target.closest('.picker-account');
+  if(row&&(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){
+    event.preventDefault();const rect=row.getBoundingClientRect();openAccountContext(row,rect.left+20,rect.bottom);
+  }
+});
+document.addEventListener('keydown',event=>{
+  if(!accountContextId)return;
+  if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();closeAccountContext(true);}
+  else if(event.key==='Tab')closeAccountContext();
+},true);
+document.addEventListener('pointerdown',event=>{if(accountContextId&&!event.target.closest('#account-context-menu'))closeAccountContext();},true);
+document.getElementById('account-picker').addEventListener('scroll',()=>closeAccountContext());
+window.addEventListener('resize',()=>closeAccountContext());
+document.getElementById('account-picker').addEventListener('toggle',event=>{
+  document.getElementById('profile-button').setAttribute('aria-expanded',String(event.newState==='open'));
+  if(event.newState!=='open')closeAccountContext();
+});
+window.addEventListener('resize',positionAccountPicker);
+document.addEventListener('click',async event=>{
+  const control=event.target.closest('[data-action]');if(!control)return;
+  const action=control.dataset.action;
+  if(action==='picker-remove-account'){
+    const id=accountContextId;closeAccountContext();
+    if(id){const result=await invoke(()=>window.atlas.removeAccount(id));if(result)(document.querySelector('.picker-account[aria-pressed="true"]')||document.querySelector('#account-picker button'))?.focus();}
+    return;
+  }
+  if(action==='picker-select'){const result=await invoke(()=>window.atlas.selectAccount(control.dataset.id));if(result)document.getElementById('account-picker').hidePopover();return;}
+  const next={'picker-add':'add','picker-local':'local','picker-microsoft':'microsoft','picker-back':accountPickerPage==='add'?'list':'add'}[action];
+  if(next){accountPickerPage=next;renderAccountPicker();document.querySelector('#account-picker input')?.focus();}
+});
+document.addEventListener('submit',async event=>{
+  if(event.target.id!=='picker-local-form')return;
+  event.preventDefault();const submit=event.target.querySelector('[type="submit"]');submit.disabled=true;
+  try{state=await window.atlas.addLocalAccount(new FormData(event.target).get('name'));accountPickerPage='list';render();}
+  catch(error){document.getElementById('picker-error').textContent=error.message;submit.disabled=false;}
+});
+function syncSceneFocus() {
+  document.body.dataset.focusSurface = String(currentPage !== 'home' || currentTab !== 'overview' || Boolean(contextMenuState));
+}
 const titles = { home: 'Главная', instances: 'Мои сборки', workshop: 'Мастерская', settings: 'Настройки', logs: 'Журнал запуска' };
 const accents = AtlasInstanceOptions.colors;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -127,19 +229,13 @@ async function cancelInstall() {
 function intro(title, subtitle, action = '') {
   return `<div class="page-intro"><h1>${title}</h1>${action}</div>`;
 }
-function tabNavigation() {
-  return `<div class="home-tabs" role="tablist" aria-label="Разделы сборки">${[['overview','Обзор'],['files','Файлы сборки'],['mods','Моды']].map(([id,name]) => `<button type="button" class="tab ${currentTab===id?'active':''}" role="tab" aria-selected="${currentTab===id}" data-tab="${id}">${name}</button>`).join('')}</div>`;
-}
 function homePage() {
   const instance = selected();
   const selectedRunning = selectedInstanceRunning();
-  const top = intro('Главная', '') + tabNavigation();
-  if (currentTab === 'files') return top + filePage();
-  if (currentTab === 'mods') return top + modsPage();
-  return top + `<section class="hero" aria-label="Пейзаж Atlas"><div class="hero-copy"><h2>Твой мир.<br>Твои правила.</h2></div></section>
-  <div class="launch-bar"><div class="launch-main">${cube(instance)}<div class="launch-info"><strong>${escapeHtml(instance.name)}</strong><span><span class="status-dot"></span>${selectedRunning ? 'Игра запущена' : installActive()?'Подготовка игры':state.install && !state.install.ready?'Нужна подготовка игры':state.runtimeAvailable ? 'Готово к запуску' : 'Выбери клиент в настройках'}${selectedRunning?` · <span class="playtime" data-session-id="${activeGameSession()?.id}"></span>`:''}</span></div>${selectedRunning ? button('game-menu','Игра запущена','chevron-down','running launch-button',`aria-haspopup="menu" aria-expanded="${contextMenuState?.type==='game'}" ${pendingGameAction?'disabled':''}`) : button('launch',busy?'Запускаем…':installActive()?'Подготовка игры':'Играть','play','primary launch-button',busy||pendingGameAction||installActive()?'disabled':'')}</div></div>
-  <div class="quick-grid"><button class="quick-card" data-open="project">${icon('folder-open')}<strong>Корневая папка</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button><button class="quick-card" data-page="workshop">${icon('code-2')}<strong>Исходники</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button><button class="quick-card" data-open="resourcepacks">${icon('package-open')}<strong>Ресурспаки</strong>${icon('arrow-up-right').replace('<i ','<i class="arrow" ')}</button></div>
-  `;
+  const top = intro('Главная', '');
+  const status=selectedRunning?'Игра запущена':installActive()?'Подготовка игры':state.install && !state.install.ready?'Нужна подготовка игры':state.runtimeAvailable?'Готово к запуску':'Выбери клиент в настройках';
+  return top + `<div class="home-overview"><section class="hero" aria-label="Пейзаж Atlas"><div class="hero-copy"><p class="hero-status"><span class="status-dot"></span><strong>${status}</strong><span data-user-text> · ${escapeHtml(instance.name)} · ${(instance.memoryMb||4096)/1024} ${tr('ГБ')}</span>${selectedRunning?` · <span class="playtime" data-session-id="${activeGameSession()?.id}"></span>`:''}</p><h2>Твой мир.<br>Твои правила.</h2></div></section>
+  <div class="home-launch-actions"><div class="launch-bar">${selectedRunning ? button('game-menu','Игра запущена','chevron-down','running launch-button',`aria-haspopup="menu" aria-expanded="${contextMenuState?.type==='game'}" ${pendingGameAction?'disabled':''}`) : button('launch',busy?'Запускаем…':installActive()?'Подготовка игры':'Играть','play','primary launch-button',busy||pendingGameAction||installActive()?'disabled':'')}</div><div id="home-dock-slot"></div></div></div>`;
 }
 function modsPage() {
   const data=state.mods||{ports:[],horizon:[]},en=state.settings.language==='en';
@@ -161,19 +257,27 @@ document.addEventListener('input',event=>{
   if(event.target.name==='mod-search'){modsSearch=event.target.value.slice(0,100);render();}
 });
 function instancesPage() {
-  return intro('Мои сборки', '', button('new-instance','Новая сборка','plus')) + `<div class="instance-grid">${state.instances.map(instance => `<article class="instance-card" data-instance="${instance.id}" style="--accent:${accent(instance)}"><div class="instance-cover">${icon(AtlasInstanceOptions.icons.includes(instance.icon)?instance.icon:'box')}${instance.id===state.selectedId?'<span class="tag">Выбрана</span>':''}</div><div class="instance-body"><h3>${escapeHtml(instance.name)}</h3>${instance.description?`<p>${escapeHtml(instance.description)}</p>`:''}<div class="instance-card-footer"><small>Atlas ${escapeHtml(state.version)}</small><div><button class="bare" data-open="instance" data-id="${instance.id}" aria-label="Открыть папку ${escapeHtml(instance.name)}">${icon('folder-open')}</button>${button('select-instance',instance.id===state.selectedId?'Открыть':'Выбрать','arrow-up-right','secondary',`data-id="${instance.id}"`)}<button class="bare" data-action="instance-menu" data-id="${instance.id}" aria-label="Действия со сборкой ${escapeHtml(instance.name)}" aria-haspopup="menu">${icon('ellipsis-vertical')}</button></div></div></div></article>`).join('')}<button class="instance-new" data-action="new-instance">${icon('plus')}<span>Новая сборка</span></button></div>`;
+  const instance=selected();
+  const tiles=state.instances.map(item=>`<button type="button" class="instance-tile ${item.id===state.selectedId?'selected':''}" data-instance="${item.id}" data-action="select-instance" data-id="${item.id}" aria-pressed="${item.id===state.selectedId}" style="--accent:${accent(item)}">${cube(item)}<strong data-user-text>${escapeHtml(item.name)}</strong><span>${item.id===state.selectedId?'Выбрана':`Atlas ${escapeHtml(state.version)}`}</span></button>`).join('');
+  const tabs=`<div class="instance-detail-tabs" role="tablist" aria-label="Разделы сборки">${[['files','Файлы сборки'],['mods','Моды']].map(([id,label])=>`<button type="button" class="tab ${instancesTab===id?'active':''}" role="tab" aria-selected="${instancesTab===id}" aria-controls="instance-detail-content" data-instance-tab="${id}">${label}</button>`).join('')}</div>`;
+  return `<div class="instances-workspace">${intro('Мои сборки','')}<div class="instance-tiles">${tiles}<button type="button" class="instance-tile instance-tile-new" data-action="new-instance">${icon('plus')}<span>Добавить сборку</span></button></div><section class="instance-details"><h2 data-user-text>${escapeHtml(instance.name)}</h2>${tabs}<div id="instance-detail-content" role="tabpanel" aria-label="${tr(instancesTab==='files'?'Файлы сборки':'Моды')}">${instancesTab==='files'?filePage():modsPage()}</div></section></div>`;
 }
 function filePage() {
-  const instance = selected();
-  const entries = [['instance','folder-open','Папка сборки',instance.path],['saves','mountain','Сохранённые миры','Отдельные сохранения этой сборки'],['resourcepacks','package-open','Ресурспаки','Добавляй пакеты ресурсов в формате .zip'],['logs','file-text','Логи игры','Журнал работы клиента и ошибки запуска']];
-  return `<div class="section-heading"><h3>${escapeHtml(instance.name)}</h3></div><div class="file-list">${entries.map(([kind,glyph,title,description])=>`<button class="file-row" data-open="${kind}">${icon(glyph)}<div><strong>${title}</strong>${kind==='instance'?`<p>${escapeHtml(description)}</p>`:''}</div>${icon('arrow-up-right')}</button>`).join('')}</div>`;
+  const entries=[['saves','mountain','Сохранённые миры','saves'],['mods','package','Моды','atlas-mods'],['resourcepacks','package-open','Ресурспаки','resourcepacks'],['shaderpacks','sparkles','Шейдерпаки','shaderpacks'],['config','settings-2','Настройки модов','config'],['logs','file-text','Логи игры','logs']];
+  return `<div class="instance-folder-list">${entries.map(([kind,glyph,label,folder])=>`<button type="button" class="file-row" data-open="${kind}" aria-label="${tr('Открыть')}: ${escapeHtml(folder)}">${icon(glyph)}<div><strong>${label}</strong><p data-user-text>${folder}</p></div><span class="file-open">Открыть</span></button>`).join('')}</div>`;
 }
 function workshopPage() {
   return intro('Мастерская', '', button('open-source','Открыть исходники','folder-code','primary')) + `<section class="panel"><div class="panel-heading">${icon('braces')}<h3>Atlas ${escapeHtml(state.version)}</h3></div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div><span class="tag">${state.sourceAvailable?'Готово':'Не найдены'}</span></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div></section><div class="workshop-actions">${button('open-guide','Инструкция по изменению игры','book-open','secondary')}</div>`;
 }
 function settingsPage() {
-  return intro('Настройки', '') + updateSettingsPanel() + appearanceSettingsPanel() + memorySettingsPanel() + accountSettingsPanel() + discordSettingsPanel() + `<section class="panel"><div class="panel-heading">${icon('box')}<h3>Клиент и исходники</h3></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div>${button('choose-source','Выбрать папку','folder-code')}</div><div class="settings-row"><div><strong>Скрывать лаунчер во время игры</strong></div><label class="switch"><input type="checkbox" id="close-on-launch" ${state.settings.closeOnLaunch?'checked':''} aria-label="Скрывать лаунчер во время игры"><span class="switch-track"></span></label></div></section><section class="panel"><div class="panel-heading">${icon('hard-drive')}<h3>Папки</h3></div><div class="settings-row"><div><strong>Корневая папка</strong><p class="path">${escapeHtml(state.projectRoot)}</p></div>${button('open-project','Открыть','arrow-up-right')}</div><div class="settings-row"><div><strong>Сборки и настройки</strong><p class="path">${escapeHtml(state.dataRoot)}</p></div><span class="tag">${state.instances.length}</span></div></section>`;
+  const categories = [['appearance','palette','Оформление'],['memory','memory-stick','Память сборки'],['accounts','circle-user-round','Аккаунты'],['discord','radio','Discord'],['updates','download','Обновления'],['files','folder-code','Клиент и исходники']];
+  const section = (id, content) => `<div class="settings-section" id="settings-${id}">${content}</div>`;
+  return intro('Настройки', '') + `<div class="settings-layout"><nav class="settings-navigation" aria-label="Настройки">${categories.map(([id,glyph,label])=>`<button type="button" class="settings-category ${id===settingsAnchor?'active':''}" data-settings-anchor="${id}">${icon(glyph)}<span>${label}</span></button>`).join('')}</nav><div class="settings-panels">`
+    + section('appearance', appearanceSettingsPanel()) + section('memory', memorySettingsPanel()) + section('accounts', accountSettingsPanel())
+    + section('discord', discordSettingsPanel()) + section('updates', updateSettingsPanel()) + section('files', `<section class="panel"><div class="panel-heading">${icon('box')}<h3>Клиент и исходники</h3></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div><div class="row-actions">${button('open-source','Открыть исходники','arrow-up-right')}${button('choose-source','Выбрать папку','folder-code')}</div></div><div class="settings-row"><div><strong>Скрывать лаунчер во время игры</strong></div><label class="switch"><input type="checkbox" id="close-on-launch" ${state.settings.closeOnLaunch?'checked':''} aria-label="Скрывать лаунчер во время игры"><span class="switch-track"></span></label></div></section><section class="panel"><div class="panel-heading">${icon('hard-drive')}<h3>Папки</h3></div><div class="settings-row"><div><strong>Корневая папка</strong><p class="path">${escapeHtml(state.projectRoot)}</p></div>${button('open-project','Открыть','arrow-up-right')}</div><div class="settings-row"><div><strong>Сборки и настройки</strong><p class="path">${escapeHtml(state.dataRoot)}</p></div><span class="tag">${state.instances.length}</span></div></section>`)
+    + '</div></div>';
 }
+
 function updateLabel() {
   const update=state.update;
   if(!update)return tr('Автообновление доступно в готовой сборке.');
@@ -201,13 +305,22 @@ function logsPage() {
 function render() {
   if (!state) return;
   const focused = document.activeElement;
-  const editable = focused?.matches('input:not([type="checkbox"]):not([type="radio"])') && document.getElementById('content').contains(focused)
+  const focusedRange = focused?.matches('input[type="range"]') ? focused.id : null;
+  const editable = focused?.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="range"])') && document.getElementById('content').contains(focused)
     ? { name: focused.name, value: focused.value, start: focused.selectionStart, end: focused.selectionEnd } : null;
   const contentScroll = document.getElementById('content').scrollTop;
   applyAppearance();
-  document.querySelectorAll('.nav-item[data-page]').forEach(element => element.classList.toggle('active', element.dataset.page===currentPage));
+  document.getElementById('content').dataset.page = currentPage;
+  document.body.dataset.page = currentPage;
+  document.querySelectorAll('.nav-item[data-page]').forEach(element => {
+    const active = element.dataset.page === currentPage;
+    element.classList.toggle('active', active);
+    if (active) element.setAttribute('aria-current', 'page'); else element.removeAttribute('aria-current');
+  });
   document.getElementById('support-notice').hidden = state.supportVisible===false;
-  document.getElementById('atlas-version').innerHTML = `<span class="status-dot"></span>Atlas ${escapeHtml(state.version)}`;
+  const account = state.accounts?.accounts?.find(item => item.id === state.accounts.selectedId);
+  document.getElementById('profile-button').innerHTML = `<span class="profile-avatar" data-user-text>${escapeHtml((account?.name || 'Atlas').slice(0,1).toUpperCase())}</span><span class="profile-copy"><strong data-user-text>${escapeHtml(account?.name || 'Atlas')}</strong><small>${account?.type === 'microsoft' ? 'Microsoft' : tr('Офлайн')}</small></span>`;
+  document.getElementById('atlas-version').textContent = state.version;
   const updateNotice=document.getElementById('update-notice');
   updateNotice.hidden=!['downloading','ready'].includes(state.update?.status);
   updateNotice.innerHTML=state.update?.status==='ready'
@@ -216,13 +329,27 @@ function render() {
   document.getElementById('instance-count').textContent = state.instances.length;
   document.getElementById('sidebar-instances').innerHTML = state.instances.map(instance=>`<button class="sidebar-instance ${instance.id===state.selectedId?'selected':''}" data-action="select-instance" data-id="${instance.id}">${cube(instance)}<span>${escapeHtml(instance.name)}</span></button>`).join('');
   const renderer = {home:homePage,instances:instancesPage,workshop:workshopPage,settings:settingsPage,logs:logsPage};
+  const dock=document.querySelector('.instance-dock');
+  document.querySelector('main').append(dock);
   document.getElementById('content').innerHTML = renderer[currentPage]();
+  document.getElementById('home-dock-slot')?.append(dock);
+  renderAccountPicker();
   hydrateIcons();
   if (contextMenuState) renderContextMenu();
   renderInstall();
   updatePlaytime();
   AtlasI18n.translateTree(document.body,state.settings.language);
+  syncSceneFocus();
+  const view = `${currentPage}:${currentPage==='instances'?instancesTab+':'+state.selectedId:''}`;
+  if(renderedView!==null && view!==renderedView) {
+    viewAnimation?.cancel();
+    if(!motionReduced())viewAnimation=document.getElementById('content').animate([
+      {opacity:.15,transform:'translateY(10px)'}, {opacity:1,transform:'translateY(0)'}
+    ],{duration:280,easing:'cubic-bezier(.2,.8,.2,1)'});
+  } else if(motionReduced())viewAnimation?.cancel();
+  renderedView=view;
   document.getElementById('content').scrollTop = contentScroll;
+  if(focusedRange)document.getElementById(focusedRange)?.focus({preventScroll:true});
   if (editable?.name) {
     const replacement = document.querySelector(`#content input[name="${CSS.escape(editable.name)}"]`);
     if (replacement) { replacement.value=editable.value; replacement.focus({preventScroll:true}); replacement.setSelectionRange(editable.start,editable.end); }
@@ -234,15 +361,17 @@ function closeContextMenu(restoreFocus = false) {
   contextMenuState = null;
   contextMenuSignature = '';
   document.getElementById('context-menu').hidden = true;
+  syncSceneFocus();
   document.querySelector('[data-action="game-menu"]')?.setAttribute('aria-expanded','false');
   if (restoreFocus && previous) {
-    const selector = previous.type==='game' ? '[data-action="game-menu"]' : `.sidebar-instance[data-id="${CSS.escape(previous.id)}"]`;
+    const selector = previous.type==='game' ? '[data-action="game-menu"]' : currentPage==='instances'?`.instance-tile[data-id="${CSS.escape(previous.id)}"]`:`.sidebar-instance[data-id="${CSS.escape(previous.id)}"]`;
     document.querySelector(selector)?.focus();
   }
 }
 function openContextMenu(type, id, x, y, focus = false) {
   const scrollOffsets=new Map([...document.querySelectorAll('.sidebar-instances, .content'),document].map(element=>[element,element===document?[scrollX,scrollY]:[element.scrollLeft,element.scrollTop]]));
   contextMenuState = {type,id,x,y,scrollOffsets};
+  syncSceneFocus();
   contextMenuSignature = '';
   if(type==='game')contextMenuState.sessionId=activeGameSession()?.id;
   renderContextMenu();
@@ -312,13 +441,28 @@ document.addEventListener('keydown',event=>{
 document.addEventListener('click', async event => {
   const control = event.target.closest('button,a');
   if (!control) return;
+  if (control.dataset.action === 'account-settings') {
+    const picker=document.getElementById('account-picker');
+    if(!picker.matches(':popover-open')){accountPickerPage='list';renderAccountPicker();}
+    picker.togglePopover(); positionAccountPicker(); if(picker.matches(':popover-open'))(picker.querySelector('.picker-account[aria-pressed="true"]')||picker.querySelector('button'))?.focus(); return;
+  }
+  if (control.dataset.settingsAnchor) {
+    const anchor = control.dataset.settingsAnchor;
+    settingsAnchor = anchor;
+    document.getElementById(`settings-${anchor}`)?.scrollIntoView({ behavior: state.settings.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    document.querySelectorAll('.settings-category').forEach(item => item.classList.toggle('active', item.dataset.settingsAnchor === anchor));
+    return;
+  }
   if (control.dataset.window) { await invoke(()=>window.atlas.windowControl(control.dataset.window)); return; }
   if (control.dataset.page || control.classList.contains('brand')) {
     currentPage = control.dataset.page || 'home';
+    if(currentPage==='home' && control.closest('.primary-navigation'))currentTab='overview';
+    if (currentPage === 'settings') settingsAnchor = 'appearance';
     document.getElementById('content').scrollTop = 0;
     render(); return;
   }
   if (control.dataset.tab) { currentTab = control.dataset.tab; render(); return; }
+  if (control.dataset.instanceTab) { instancesTab=control.dataset.instanceTab; render(); return; }
   if(control.dataset.modsSource){modsSource=control.dataset.modsSource;render();if(modsSource==='horizon'&&!state.mods?.horizon?.length&&!modsBusy){modsBusy=true;render();try{await invoke(()=>window.atlas.refreshMods());}finally{modsBusy=false;render();}}return;}
   if (control.dataset.open) { await invoke(()=>window.atlas.openFolder(control.dataset.open,control.dataset.id||state.selectedId)); return; }
   const action = control.dataset.action;
@@ -351,7 +495,7 @@ document.addEventListener('click', async event => {
     document.getElementById('delete-error').textContent='';
     document.getElementById('delete-dialog').showModal();
   }
-  else if (action === 'select-instance') { const next = await invoke(()=>window.atlas.selectInstance(control.dataset.id)); if(next){currentPage='home';currentTab='overview';render();} }
+  else if (action === 'select-instance') { const keepPage=currentPage==='instances'; const next = await invoke(()=>window.atlas.selectInstance(control.dataset.id)); if(next){if(!keepPage)currentPage='home';currentTab='overview';render();} }
   else if (action === 'launch' && !busy) {
     await launchWithSetup(state.selectedId);
   }

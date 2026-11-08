@@ -1,13 +1,13 @@
 {
   "repository": "https://github.com/horizon-rust/horizon",
-  "tag": "nightly-source/2026-11-05-66f3981",
-  "commit": "66f3981f522b24c250b21523a70080965b940424",
-  "previousCommit": "baa379d71777f06a95b4e7650b2209a3d4209033",
+  "tag": "nightly-source/2026-11-07-2ebf00a",
+  "commit": "2ebf00a0281c592f79191e76fce0e7d522c6f425",
+  "previousCommit": "66f3981f522b24c250b21523a70080965b940424",
   "atlasMaintainer": "SFrostStar",
   "module": "crates/atlas-client-render/src/atlas",
   "resourceSchema": 7,
   "resourceOutputVersion": 3,
   "overlayCacheVersion": 8,
   "note": "Source integration with Atlas presentation, resource acceleration and startup adapters. Original copyright and dependency licenses retained.",
-  "atlasVersion": "1.0.0"
+  "atlasVersion": "1.1.0"
 }

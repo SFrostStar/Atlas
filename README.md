@@ -9,7 +9,7 @@
 ![Rust](https://img.shields.io/badge/engine-Rust-f97316?logo=rust&logoColor=white)
 ![Maintained](https://img.shields.io/badge/статус-поддерживается-22c55e)
 ![Development](https://img.shields.io/badge/разработка-активная-f97316)
-![Version](https://img.shields.io/badge/версия-1.0.0-64748b)
+![Version](https://img.shields.io/badge/версия-1.1.0-64748b)
 ![Windows](https://img.shields.io/badge/Windows-x64-0078D4)
 
 Нативный клиент Minecraft: Java Edition 26.3 с собственным лаунчером.
@@ -34,13 +34,13 @@
 
 ## О проекте
 
-Atlas — независимая доработка Horizon: клиент Minecraft на Rust с собственным оформлением, новыми функциями и удобным управлением сборками. Проект поддерживается и развивается. Текущая версия — **1.0.0**.
+Atlas — независимая доработка Horizon: клиент Minecraft на Rust с собственным оформлением, новыми функциями и удобным управлением сборками. Проект поддерживается и развивается. Текущая версия — **1.1.0**.
 
 ## Скачать и играть
 
-[**Скачать Atlas 1.0.0 для Windows x64**](https://github.com/SFrostStar/Atlas/releases/tag/atlas-1.0.0)
+[**Скачать Atlas 1.1.0 для Windows x64**](https://github.com/SFrostStar/Atlas/releases/tag/atlas-1.1.0)
 
-1. В разделе Assets скачайте `Atlas-1.0.0-Windows-x64.zip` и полностью распакуйте архив.
+1. В разделе Assets скачайте `Atlas-1.1.0-Windows-x64.zip` и полностью распакуйте архив.
 2. Запустите `Atlas Launcher.exe`, создайте локальный профиль и нажмите «Играть».
 3. Подтвердите скачивание файлов игры. При первом запуске нужен интернет;
    Java и ресурсы установятся автоматически. Готовые файлы Minecraft в ZIP не включены.
@@ -122,7 +122,7 @@ python scripts/check_repository_privacy.py
 
 Версии называются `atlas-1.0.0`, `atlas-1.0.1` и далее. Для будущего обновления релиз должен содержать `atlas-update.json` и соответствующий Update ZIP, созданные `scripts/build-release.cjs` из готового portable-комплекта. Публикация одного исходного кода обновление не создаёт.
 
-Для перехода с прежней версии 0.1 один раз скачайте новый portable-комплект, закройте Atlas и замените файлы рядом с существующей папкой `data`. Начиная с 1.0.0 работает встроенное обновление.
+Для перехода с прежней версии 0.1 один раз скачайте новый portable-комплект, закройте Atlas и замените файлы рядом с существующей папкой `data`. В версии 1.0.0 обнаружена ошибка обновления файла лаунчера: для перехода на 1.1.0 один раз скачайте новый portable-комплект и замените файлы, сохранив папку `data`. Начиная с 1.1.0 эта ошибка исправлена.
 
 Коммиты, отправка изменений, теги и публикация релизов выполняются только по явной команде SFrostStar.
 
@@ -130,6 +130,6 @@ python scripts/check_repository_privacy.py
 
 Автор собственных частей и изменений Atlas — **SFrostStar**: [AUTHORS.md](AUTHORS.md).
 
-Основа движка — Horizon `nightly-source/2026-11-05-66f3981`, commit `66f3981f522b24c250b21523a70080965b940424`. Оформление и ускорение Atlas выделены в [собственный модуль](engine/atlas/crates/atlas-client-render/src/atlas). Первоначальное авторство и условия MIT сохранены: [лицензия движка](engine/atlas/LICENSE), [сторонние компоненты](engine/atlas/THIRD_PARTY_NOTICES.md).
+Основа движка — Horizon `nightly-source/2026-11-07-2ebf00a`, commit `2ebf00a0281c592f79191e76fce0e7d522c6f425`. Оформление и ускорение Atlas выделены в [собственный модуль](engine/atlas/crates/atlas-client-render/src/atlas). Первоначальное авторство и условия MIT сохранены: [лицензия движка](engine/atlas/LICENSE), [сторонние компоненты](engine/atlas/THIRD_PARTY_NOTICES.md).
 
 Atlas — неофициальный проект, не связанный с Mojang или Microsoft. Minecraft и его материалы принадлежат соответствующим правообладателям.

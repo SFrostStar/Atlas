@@ -63,6 +63,7 @@ try {
     Get-ChildItem -LiteralPath $RuntimeDirectory -Filter 'LICENSE*.txt' -File | Copy-Item -Destination $atlasBundle -Force
     $atlasNotices = @{
         'crates\atlas-client-render\src\atlas\assets\LICENSE-AppleSkin.txt' = 'LICENSE-AppleSkin.txt'
+        'crates\atlas-client-render\src\atlas\mod_menu\LICENSE-ModMenu.txt' = 'LICENSE-ModMenu.txt'
         'crates\atlas-theme\fonts\OFL-Geist.txt' = 'LICENSE-Geist.txt'
         'crates\atlas-theme\fonts\OFL-PixelifySans.txt' = 'LICENSE-PixelifySans.txt'
         'crates\atlas-theme\icons\pixel\LICENSE-pixelarticons.txt' = 'LICENSE-Pixelarticons.txt'
@@ -74,6 +75,12 @@ try {
     }
     Copy-Item -LiteralPath (Join-Path $atlasSource 'MOD-PORT-NOTICES.md') -Destination $atlasBundle -Force
     Copy-Item -LiteralPath (Join-Path $atlasSource 'mod-port-licenses') -Destination $atlasBundle -Recurse -Force
+    # Keep notices in the LICENSE*.txt paths accepted by the 1.0.0 updater too.
+    Copy-Item -LiteralPath (Join-Path $atlasSource 'MOD-PORT-NOTICES.md') -Destination (Join-Path $atlasBundle 'LICENSE-Mod-Ports.txt') -Force
+    Copy-Item -LiteralPath (Join-Path $atlasSource 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $atlasBundle 'LICENSE-ThirdParty.txt') -Force
+    Copy-Item -LiteralPath (Join-Path $atlasSource 'LICENSE') -Destination (Join-Path $atlasBundle 'LICENSE-Atlas-Engine.txt') -Force
+    Get-ChildItem -LiteralPath (Join-Path $atlasSource 'mod-port-licenses') -File -Filter '*.txt' |
+        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $atlasBundle ('LICENSE-ModPorts-' + $_.Name)) -Force }
     Write-Host 'Atlas first-run payload ready in bundle/game. No Minecraft jars or prepared resources are included.'
 } finally {
     $env:PATH = $atlasOldPath

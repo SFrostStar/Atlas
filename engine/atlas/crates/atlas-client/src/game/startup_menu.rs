@@ -45,8 +45,14 @@ pub(super) struct StartupMenu {
     key_synthetic: bool,
     /// The screen the keyboard's focus is on (`key_screen`).
     key_screen: u64,
+    /// The screen (`Self::key_screen`) the title's click focus belongs to:
+    /// another one in front drops it, as `Gui.setScreen` drops the focus of
+    /// the screen it leaves (`Screen.clearFocus`).
+    focus_screen: u64,
     pub pending: Option<PendingWorldEntry>,
     pub reload_packs: bool,
+    /// Browse mods' worker (`mod_browser`).
+    mod_jobs: super::mod_browser::Jobs,
     pub perf: atlas_client::telemetry::Session,
 }
 
@@ -417,7 +423,18 @@ impl Loading {
                 }
             }
         }
+        self.drive_menu_mod_browser();
         self.restart_menu_resources()
+    }
+    /// The startup menu's Browse mods, as `Game::drive_mod_browser`.
+    fn drive_menu_mod_browser(&mut self) {
+        let menu = &mut self.menu;
+        if menu
+            .mod_jobs
+            .poll(&mut menu.options.mod_browser, &mut self.settings.mods)
+        {
+            self.settings.save(&Game::options_path());
+        }
     }
     pub(super) fn apply_menu_settings(&mut self) {
         if let Some(renderer) = &mut self.renderer {
@@ -554,12 +571,36 @@ impl Loading {
                     let _ = std::fs::create_dir_all(&dir);
                     packs::open_folder(&dir);
                 }
+                Event::ConfigureMod(i) => {
+                    self.menu.options.show(Page::NativeMod(i));
+                }
+                Event::ImportModFiles(paths) => {
+                    let success = super::mods::import_files(&Game::game_dir(), &paths);
+                    self.menu.options.mod_menu.import_result(success);
+                }
                 Event::OpenModFolder => {
                     let dir = Game::game_dir().join(atlas_client::mod_list::DIR);
                     let _ = std::fs::create_dir_all(&dir);
                     packs::open_folder(&dir);
                 }
+                Event::BrowseMods => {
+                    let ui = &mut self.menu.options.mod_browser;
+                    self.menu.mod_jobs.browse(ui, Game::game_dir());
+                }
+                Event::InstallMod(id) => {
+                    let ui = &mut self.menu.options.mod_browser;
+                    self.menu.mod_jobs.install(ui, Game::game_dir(), id);
+                }
+                Event::OpenModPage(url) => packs::open_uri(&url),
                 Event::ListShaderPacks => {
+                    let (key, _) = atlas_client::shader_pack_list::resolve(
+                        &Game::shader_packs_dir(),
+                        &self.settings.atlas.shader_pack,
+                    );
+                    if key != self.settings.atlas.shader_pack {
+                        self.settings.atlas.shader_pack = key;
+                        self.save_menu_settings();
+                    }
                     self.settings.shader_packs =
                         atlas_client::shader_pack_list::scan(&Game::shader_packs_dir());
                 }
@@ -611,7 +652,8 @@ impl Loading {
                     super::packs::open_uri(super::options::ACCESSIBILITY_HELP_LINK)
                 }
                 // Mods' settings pages open only in a running game.
-                Event::NativeSettings(_) | Event::NativeButton(..) => {}
+                // The HUD editor needs a world: its button is inactive here.
+                Event::NativeSettings(_) | Event::NativeButton(..) | Event::HudEditor => {}
                 // The startup menu runs before the game opens a control socket,
                 // and before its sound engine (no clicks, no volume previews,
                 // and no music tracks to list or play).
@@ -626,6 +668,11 @@ impl Loading {
                     let dir = std::path::PathBuf::from("recordings");
                     let _ = std::fs::create_dir_all(&dir);
                     packs::open_folder(&dir);
+                }
+                Event::OpenStudioReplay(path) => {
+                    self.menu.options_open = false;
+                    self.menu.dragging = false;
+                    self.menu.pending = Some(PendingWorldEntry::StudioReplay(path));
                 }
             }
         }
@@ -705,6 +752,7 @@ impl Loading {
         match action {
             Action::Quit => event_loop.exit(),
             Action::Options => self.open_menu_options(Page::Main),
+            Action::Mods => self.open_menu_options(Page::Mods),
             Action::Accessibility => self.open_menu_options(Page::Accessibility),
             Action::Language => self.open_menu_options(Page::Language),
             Action::Sounds => self.open_menu_options(Page::Sound),
@@ -990,6 +1038,9 @@ impl Loading {
             // `PackSelectionScreen.onFilesDrop`: a pack dropped on the window
             // joins the Create New World screen's data packs.
             WindowEvent::DroppedFile(path) => {
+                if self.menu.options_open && self.menu.options.drop_mod_files(vec![path.clone()]) {
+                    return Ok(());
+                }
                 if let Some(title) = &mut self.menu.title {
                     title.drop_file(path);
                 }
@@ -1179,6 +1230,16 @@ impl Loading {
                 .map(|_| ("Preparing world", Some(self.progress.fraction()))),
             Instant::now(),
         );
+        // `Gui.setScreen` clears the focus of the screen it leaves
+        // (`Screen.clearFocus`): the title behind the options, and the one
+        // that comes back, start with no button highlighted.
+        let screen = self.menu.key_screen();
+        if super::pad_menu::another_screen_is_front(&mut self.menu.focus_screen, screen) {
+            self.menu.options.clear_click_focus();
+            if let Some(title) = self.menu.title.as_mut() {
+                title.focused_button = None;
+            }
+        }
         if self.menu.pending.is_some() {
             self.loading_overlay.draw(batch, &gui.atlas, Instant::now());
         } else if let Some((win, frame)) = &mut self.menu.win {

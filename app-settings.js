@@ -31,12 +31,19 @@ function appearanceToggle(key,label,checked,invert=false) {
 }
 function memorySettingsPanel() {
   const instance = selected();
-  const maximum = state.memory.maximumMb;
-  const current = instance.memoryMb || 0;
-  const steps = [...new Set([0,2048,4096,6144,8192,12288,16384,24576,32768,current].filter(n=>n===0||n<=maximum))].sort((a,b)=>a-b);
+  const current = Math.max(1, Math.min(32, Math.round((instance.memoryMb || 4096) / 1024)));
   return `<section class="panel"><div class="panel-heading">${icon('memory-stick')}<h3>Память сборки</h3><span class="tag" data-user-text>${escapeHtml(instance.name)}</span></div>
-  <div class="settings-row"><div><strong>Лимит RAM</strong><p>При следующем запуске. При достижении лимита игре может не хватить памяти.</p></div><select id="instance-memory" aria-label="Лимит RAM">${steps.map(n=>`<option value="${n}" ${current===n?'selected':''}>${n===0?'Без ограничения':`${n/1024} ${tr('ГБ')}`}</option>`).join('')}</select></div></section>`;
+  <div class="memory-control"><div class="memory-heading"><label for="instance-memory">Лимит RAM</label><output id="memory-value" for="instance-memory" data-user-text>${current} ${tr('ГБ')}</output></div>
+  <input type="range" id="instance-memory" name="instance-memory" min="1" max="32" step="1" value="${current}" style="--memory-fill:${(current-1)/31*100}%" aria-valuetext="${current} ${tr('ГБ')}" aria-describedby="memory-note">
+  <div class="memory-scale" aria-hidden="true"><span>1 ${tr('ГБ')}</span><span>32 ${tr('ГБ')}</span></div><p id="memory-note" class="subtitle">Применится при следующем запуске.</p></div></section>`;
 }
+document.addEventListener('input',event=>{
+  if(event.target.id!=='instance-memory')return;
+  const value=Number(event.target.value);
+  event.target.style.setProperty('--memory-fill',`${(value-1)/31*100}%`);
+  event.target.setAttribute('aria-valuetext',`${value} ${tr('ГБ')}`);
+  document.getElementById('memory-value').value=`${value} ${tr('ГБ')}`;
+});
 function accountSettingsPanel() {
   const account = state.accounts;
   if (!account) return '';
@@ -55,7 +62,7 @@ document.addEventListener('change',async event=>{
     const value=element.type==='checkbox'?(element.dataset.invert?!element.checked:element.checked):element.value;
     await invoke(()=>window.atlas.saveSettings({[element.dataset.setting]:value}));
   }
-  if (element.id==='instance-memory') await invoke(()=>window.atlas.setInstanceMemory(state.selectedId,Number(element.value)));
+  if (element.id==='instance-memory') await invoke(()=>window.atlas.setInstanceMemory(state.selectedId,Number(element.value)*1024));
 });
 document.addEventListener('click',async event=>{
   const target=event.target.closest('[data-action]'); if(!target)return;

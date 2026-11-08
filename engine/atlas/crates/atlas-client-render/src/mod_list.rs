@@ -20,6 +20,9 @@ pub const NOT_BUILT: &str = "Installed, not built into this game: build the game
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModList {
+    /// Native metadata and Mod Menu preferences. Neither changes mod enable flags.
+    pub details: BTreeMap<String, crate::atlas::mod_menu::Details>,
+    pub menu: crate::atlas::mod_menu::config::Config,
     /// Ids of the mods the player turned on.
     pub enabled: BTreeSet<String>,
     /// Ids of the native mods the player turned off: they rest
@@ -59,9 +62,11 @@ pub struct NativePage {
 
 impl ModList {
     pub fn load(dir: &Path) -> Self {
-        fs::read_to_string(dir.join(FILE))
+        let mut value = fs::read_to_string(dir.join(FILE))
             .map(|t| Self::parse(&t))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        value.menu = crate::atlas::mod_menu::config::Config::load(dir);
+        value
     }
     pub fn parse(text: &str) -> Self {
         let ids = |value: &str| -> BTreeSet<String> {
@@ -90,6 +95,8 @@ impl ModList {
             disabled,
             keys,
             installed: Vec::new(),
+            details: Default::default(),
+            menu: Default::default(),
         }
     }
     pub fn serialize(&self) -> String {
@@ -108,6 +115,7 @@ impl ModList {
         })
     }
     pub fn save(&self, dir: &Path) {
+        self.menu.save(dir);
         let path = dir.join(FILE);
         if self.enabled.is_empty()
             && self.disabled.is_empty()

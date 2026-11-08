@@ -30,13 +30,16 @@ impl Screen {
             | Self::DebugOptions => true,
             Self::Playing
             | Self::GameModeSwitcher
+            | Self::EmoteWheel
             | Self::Chat
             | Self::Creative
             | Self::Inventory
             | Self::Dead
             | Self::CommandBlock
             | Self::BlockEditor
-            | Self::Mod => false,
+            | Self::Mod
+            // The HUD editor shows the HUD it moves.
+            | Self::HudEditor => false,
             // WinScreen.extractBackground: the poem fills the screen with the End portal, the
             // credits alone blur. Game::menu_blur knows which one rolls.
             Self::Win => false,
@@ -70,8 +73,12 @@ fn pause_buttons(
     split: bool,
 ) -> Vec<(f32, f32, f32, &'static str, u8, bool)> {
     let row3 = links || additions;
-    let (x0, y0) = pause_grid(w, h, u8::from(row3) + u8::from(split));
-    let down = 24.0 * f32::from(u8::from(row3) + u8::from(split));
+    let config = atlas_client::atlas::mod_menu::config::current();
+    let mod_row = config.modify_game_menu
+        && config.game_menu_button_style
+            == atlas_client::atlas::mod_menu::config::GameStyle::Insert;
+    let (x0, y0) = pause_grid(w, h, u8::from(row3) + u8::from(split) + u8::from(mod_row));
+    let down = 24.0 * f32::from(u8::from(row3) + u8::from(split) + u8::from(mod_row));
     let mut v = vec![
         (x0 + 4.0, y0 + 50.0, 204.0, "menu.returnToGame", 0, true),
         (x0 + 4.0, y0 + 74.0, 98.0, "gui.advancements", 4, true),
@@ -88,6 +95,16 @@ fn pause_buttons(
     if split {
         let y = y0 + 122.0 + if row3 { 24.0 } else { 0.0 };
         v.push((x0 + 4.0, y, 204.0, SPLIT_SETTINGS, 30, true));
+    }
+    if mod_row {
+        v.push((
+            x0 + 4.0,
+            y0 + 122.0 + 24.0 * f32::from(u8::from(row3) + u8::from(split)),
+            204.0,
+            "modmenu.title",
+            19,
+            true,
+        ));
     }
     v.extend([
         (x0 + 4.0, y0 + 122.0 + down, 98.0, "menu.options", 1, true),
@@ -160,15 +177,22 @@ fn pause_icons(
     links: bool,
     additions: bool,
     split: bool,
-) -> [(f32, f32, &'static str); 4] {
+) -> Vec<(f32, f32, &'static str)> {
     let (x0, y0) = pause_grid(w, h, u8::from(links || additions) + u8::from(split));
-    let (x0, y) = (x0 + 60.0, y0 + 98.0);
-    [
+    let config = atlas_client::atlas::mod_menu::config::current();
+    let mods = config.modify_game_menu
+        && config.game_menu_button_style == atlas_client::atlas::mod_menu::config::GameStyle::Icon;
+    let (x0, y) = (x0 + if mods { 48.0 } else { 60.0 }, y0 + 98.0);
+    let mut icons = vec![
         (x0, y, "gui/sprites/pause_menu/bug"),
         (x0 + 24.0, y, "gui/sprites/pause_menu/social_interactions"),
         (x0 + 48.0, y, "gui/sprites/friends/friends"),
         (x0 + 72.0, y, "gui/sprites/pause_menu/player_reporting"),
-    ]
+    ];
+    if mods {
+        icons.push((x0 + 96.0, y, "gui/sprites/modmenu/mods/enabled"));
+    }
+    icons
 }
 /// DeathScreen.init: a hardcore player can only spectate.
 /// `DeathScreen.TitleConfirmScreen`: its title and the yes and no labels.
@@ -270,6 +294,7 @@ impl Game<'_> {
             };
             let action = match id {
                 0 => Some(atlas_client::widgets::Action::Back),
+                1 => Some(atlas_client::widgets::Action::Options),
                 2 => Some(atlas_client::widgets::Action::Exit),
                 _ => None,
             };
@@ -293,6 +318,30 @@ impl Game<'_> {
         .into_iter()
         .enumerate()
         {
+            if i == 4 {
+                let label = Text::literal(atlas_client::atlas::mod_menu::button_text());
+                let hover =
+                    ui::hovered(self.cursor, x, y, 20.0, 20.0) || self.pause_focus == Some(19);
+                ui::button(batch, atlas, x, y, 20.0, 20.0, &Text::empty(), true, hover);
+                widgets::record(&label.plain(), [x, y, 20.0, 20.0], true);
+                batch.sprite_scaled(
+                    atlas,
+                    if hover {
+                        "gui/sprites/modmenu/mods/focused"
+                    } else {
+                        sprite
+                    },
+                    x,
+                    y,
+                    20.0,
+                    20.0,
+                    u32::MAX,
+                );
+                if hover {
+                    tooltip = Some(label);
+                }
+                continue;
+            }
             let active = icon_active(i, friends);
             let is_focused = (self.pause_focus == Some(10) && i == FRIENDS_ICON)
                 || (self.pause_focus == Some(12 + i as u8));
@@ -366,6 +415,7 @@ impl Game<'_> {
                 self.capture(true);
             }
             1 => self.open_options(false),
+            19 => self.open_options_at(false, atlas_client::options_ui::Page::Mods),
             3 => self.open_stats(),
             4 => self.open_advancements(true),
             9 => self.open_world_options(),
@@ -438,6 +488,12 @@ impl Game<'_> {
                 && ui::hovered(self.cursor, friends.0, friends.1, 20.0, 20.0))
             .then_some(10)
         });
+        let hit = hit.or_else(|| {
+            icons
+                .get(4)
+                .filter(|(x, y, _)| ui::hovered(self.cursor, *x, *y, 20.0, 20.0))
+                .map(|_| 19)
+        });
         if let Some(id) = hit {
             self.pause_focus = Some(id);
             self.audio.play_button_click();
@@ -466,6 +522,13 @@ impl Game<'_> {
         let mut active_ids: Vec<u8> = buttons.into_iter().filter(|b| b.5).map(|b| b.4).collect();
         let friends = self.friends_view().shown;
         active_ids.extend(pause_icon_focus_ids(friends));
+        let config = atlas_client::atlas::mod_menu::config::current();
+        if config.modify_game_menu
+            && config.game_menu_button_style
+                == atlas_client::atlas::mod_menu::config::GameStyle::Icon
+        {
+            active_ids.push(19);
+        }
         if active_ids.is_empty() {
             return Ok(());
         }

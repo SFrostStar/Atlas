@@ -1,5 +1,12 @@
-param([Parameter(Mandatory=$true)][string]$PlanPath)
+param([Parameter(Mandatory=$true)][string]$PlanPath, [switch]$Bootstrap)
 $ErrorActionPreference = 'Stop'
+if ($Bootstrap) {
+    # ShellExecute starts a hidden, independent console host. A PowerShell host
+    # inherited directly from a closing launcher can lose its console and exit.
+    $atlasArguments = @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('"' + $PSCommandPath + '"'),'-PlanPath',('"' + [IO.Path]::GetFullPath($PlanPath) + '"'))
+    Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $atlasArguments -WorkingDirectory (Split-Path -Parent $PSCommandPath) -WindowStyle Hidden | Out-Null
+    exit 0
+}
 $atlasPlan = $null
 $atlasApplied = [Collections.Generic.List[object]]::new()
 
@@ -63,6 +70,10 @@ try {
     $atlasStage = Split-Path -Parent ([IO.Path]::GetFullPath($PlanPath))
     Atlas-Guard $atlasStage $atlasPlan.payload | Out-Null
     Atlas-Guard $atlasStage $atlasPlan.backup | Out-Null
+    if ($atlasPlan.started) {
+        $atlasStarted = Atlas-Guard $atlasStage $atlasPlan.started
+        [IO.File]::WriteAllText($atlasStarted, (@{ version=$atlasPlan.version; parentPid=$atlasPlan.parentPid } | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    }
     $atlasBlockedPaths = @($atlasPlan.executable, (Join-Path $atlasPlan.projectRoot 'runtime/atlas-client.exe'), (Join-Path $atlasPlan.projectRoot 'runtime/atlas-prepare.exe'), (Join-Path $atlasPlan.projectRoot 'bundle/game/atlas-client.exe'), (Join-Path $atlasPlan.projectRoot 'bundle/game/atlas-prepare.exe'))
     # A game open in another launcher window is protected too. Never force-close a game.
     $atlasDeadline = [DateTime]::UtcNow.AddMinutes(10)

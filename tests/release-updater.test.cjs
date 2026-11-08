@@ -133,14 +133,14 @@ test('linked staging or destination folders are refused', async t => {
 test('running game blocks install; dist checkout plans use separate app, runtime and bundle roots', async t => {
   const root = scratch(t), fixture = releaseFixture(), server = await fixtureServer(t, fixture);
   let running = true, invocation;
-  const fakeSpawn = (...args) => { invocation = args; const child = new EventEmitter(); child.unref = () => {}; queueMicrotask(() => child.emit('spawn')); return child; };
+  const fakeSpawn = (...args) => { invocation = args; const child = new EventEmitter(); child.unref = () => {}; const plan = JSON.parse(fs.readFileSync(args[1][args[1].indexOf('-PlanPath') + 1], 'utf8')); fs.writeFileSync(plan.started, JSON.stringify({ version: plan.version, parentPid: plan.parentPid })); queueMicrotask(() => child.emit('spawn')); return child; };
   const instance = updater(root, server.fetch, { executable: path.join(root, 'dist', 'Atlas Launcher-win32-x64', 'Atlas Launcher.exe'), isGameRunning: () => running, spawnProcess: fakeSpawn });
   await instance.check(); await instance.download();
   await assert.rejects(() => instance.install(), /Close Minecraft/);
   assert.equal(invocation, undefined); running = false;
   await instance.check();
   assert.equal((await instance.install({ restart: false })).status, 'installing');
-  assert.equal(invocation[2].windowsHide, true); assert.equal(invocation[2].detached, true);
+  assert.equal(invocation[2].windowsHide, true); assert.equal(invocation[2].detached, false);
   const plan = JSON.parse(fs.readFileSync(invocation[1][invocation[1].indexOf('-PlanPath') + 1], 'utf8'));
   assert.equal(plan.appRoot, path.join(root, 'dist', 'Atlas Launcher-win32-x64'));
   assert.equal(plan.projectRoot, root); assert.equal(plan.restart, false);
@@ -151,8 +151,9 @@ test('running game blocks install; dist checkout plans use separate app, runtime
 test('concurrent installs spawn once and a failed spawn can retry without stale plan collisions', async t => {
   const root = scratch(t), fixture = releaseFixture(), server = await fixtureServer(t, fixture);
   let calls = 0;
-  const spawnProcess = () => {
+  const spawnProcess = (...args) => {
     calls++; const child = new EventEmitter(); child.unref = () => {};
+    if (calls > 1) { const plan = JSON.parse(fs.readFileSync(args[1][args[1].indexOf('-PlanPath') + 1], 'utf8')); fs.writeFileSync(plan.started, JSON.stringify({ version: plan.version, parentPid: plan.parentPid })); }
     queueMicrotask(() => child.emit(calls === 1 ? 'error' : 'spawn', new Error('test CreateProcess failed')));
     return child;
   };
@@ -201,6 +202,34 @@ async function helperFixture(t, failAfterFirst) {
 }
 test('Windows helper updates actual app/game files and preserves worlds, credentials and prepared resources', { skip: process.platform !== 'win32' }, async t => helperFixture(t, false));
 test('Windows helper rolls back replaced app files when a later replacement fails', { skip: process.platform !== 'win32' }, async t => helperFixture(t, true));
+
+test('production Windows installer runs after its launcher process exits', { skip: process.platform !== 'win32' }, async t => {
+  const root = scratch(t), stage = path.join(root, 'data', 'updates', 'exit-test'), payload = path.join(stage, 'payload');
+  fs.mkdirSync(path.join(payload, 'resources'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'resources'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'resources/app.asar'), 'old launcher');
+  fs.writeFileSync(path.join(payload, 'resources/app.asar'), 'new launcher');
+  const file = { path: 'resources/app.asar', size: 12, sha256: await hashFile(path.join(payload, 'resources/app.asar')) };
+  const input = path.join(stage, 'fixture.json');
+  fs.writeFileSync(input, JSON.stringify({ root, stage, payload, file }));
+  const worker = `
+    const fs = require('node:fs'), path = require('node:path');
+    const { ReleaseUpdater } = require(process.argv[1]);
+    const fixture = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+    const updater = new ReleaseUpdater({ projectRoot: fixture.root, dataRoot: path.join(fixture.root, 'data'), executable: path.join(fixture.root, 'Atlas Launcher.exe'), currentVersion: '1.0.0', enabled: true });
+    updater.info = { version: '1.1.0', files: [fixture.file] };
+    updater.staged = fixture.payload; updater.stageDirectory = fixture.stage;
+    updater.update({ status: 'ready' });
+    updater.install({ restart: false }).catch(error => { console.error(error); process.exitCode = 1; });
+  `;
+  execFileSync(process.execPath, ['-e', worker, path.resolve(__dirname, '../lib/release-updater.cjs'), input], { windowsHide: true, timeout: 10000, stdio: 'pipe' });
+  const receipt = path.join(root, 'data/updates/last-result.json');
+  for (let i = 0; i < 200 && !fs.existsSync(receipt); i++) await new Promise(resolve => setTimeout(resolve, 100));
+  assert.ok(fs.existsSync(receipt), 'Installer must execute after the launcher exits, rather than silently exiting without running its script.');
+  const result = JSON.parse(fs.readFileSync(receipt, 'utf8').replace(/^\uFEFF/, ''));
+  assert.equal(result.status, 'installed', result.error);
+  assert.equal(fs.readFileSync(path.join(root, 'resources/app.asar'), 'utf8'), 'new launcher');
+});
 
 test('release builder creates an archive that the production updater can validate and extract', { skip: process.platform !== 'win32' }, async t => {
   const root = scratch(t), portable = path.join(root, 'portable'), output = path.join(root, 'release');

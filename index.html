@@ -9,35 +9,36 @@
 </head>
 <body>
   <div class="boot-splash" id="boot-splash" role="status" aria-label="Загрузка Atlas">
-    <div class="boot-brand" aria-hidden="true"><span class="brand-mark boot-mark"></span><span class="boot-name">Atlas</span></div>
+    <div class="boot-brand" aria-hidden="true"><img class="brand-mark boot-mark" src="assets/icon.png" alt=""><span class="boot-name">Atlas</span></div>
     <div class="boot-progress" aria-hidden="true"><span></span></div>
   </div>
   <div class="window-bar">
-    <div class="window-caption"><span class="mini-mark">A</span> Atlas Launcher</div>
+    <div class="window-caption"><img class="mini-mark" src="assets/icon.png" alt="" width="16" height="16"> Atlas Launcher</div>
     <div class="window-actions"><button data-window="minimize" aria-label="Свернуть"><i data-lucide="minus"></i></button><button data-window="maximize" aria-label="Развернуть"><i data-lucide="square"></i></button><button data-window="close" aria-label="Закрыть"><i data-lucide="x"></i></button></div>
   </div>
+  <div class="scene-scrim" aria-hidden="true"></div>
   <div class="app-shell" inert>
-    <aside class="sidebar">
-      <a class="brand" href="#home" aria-label="Atlas — главная"><span class="brand-mark"><span></span></span><div>Atlas</div></a>
-      <nav aria-label="Основная навигация">
+    <header class="launcher-toolbar">
+      <button class="toolbar-brand" data-page="home" aria-label="Atlas"><img src="assets/icon.png" alt=""><strong>Atlas</strong><span id="atlas-version" data-user-text>1.0.0</span></button>
+      <nav class="primary-navigation" aria-label="Основная навигация">
         <button class="nav-item active" data-page="home"><i data-lucide="house"></i>Главная</button>
         <button class="nav-item" data-page="instances"><i data-lucide="layers-2"></i>Мои сборки<span class="nav-count" id="instance-count">1</span></button>
         <button class="nav-item" data-page="workshop"><i data-lucide="braces"></i>Мастерская</button>
         <button class="nav-item" data-page="logs"><i data-lucide="terminal"></i>Журнал запуска</button>
-      </nav>
-      <div class="nav-caption instance-caption">СБОРКИ<button class="bare small" data-action="new-instance" aria-label="Добавить сборку"><i data-lucide="plus"></i></button></div>
-      <div id="sidebar-instances" class="sidebar-instances"></div>
-      <button class="add-sidebar" data-action="new-instance"><i data-lucide="plus"></i>Добавить сборку</button>
-      <div class="sidebar-bottom">
         <button class="nav-item" data-page="settings"><i data-lucide="settings-2"></i>Настройки</button>
-
+      </nav>
+      <div class="toolbar-utilities">
+        <button class="profile-button" id="profile-button" data-action="account-settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="account-picker" aria-label="Аккаунты" title="Аккаунты"></button>
       </div>
-    </aside>
+    </header>
     <main>
-      <header class="page-header"><div class="support-notice" id="support-notice"><button class="support-link" data-action="support-gift"><i data-lucide="gift"></i><span>Поддержать подарком</span></button><button class="bare" data-action="dismiss-support" aria-label="Скрыть предложение поддержки"><i data-lucide="x"></i></button></div><div class="header-status"><div id="update-notice" class="update-notice" role="status" aria-live="polite" hidden></div><span class="local-badge" id="atlas-version"><span class="status-dot"></span>Atlas 1.0.0</span></div></header>
+      <header class="page-header"><div class="header-status"><div id="update-notice" class="update-notice" role="status" aria-live="polite" hidden></div></div></header>
       <div class="content" id="content"></div>
+      <div class="instance-dock" role="group" aria-label="Мои сборки"><div id="sidebar-instances" class="sidebar-instances"></div><button class="add-sidebar" data-action="new-instance" aria-label="Добавить сборку"><i data-lucide="plus"></i><span>Добавить сборку</span></button></div>
     </main>
+<div class="support-notice" id="support-notice"><button class="support-link" data-action="support-gift" aria-label="Поддержать подарком" title="Поддержать подарком"><i data-lucide="gift"></i><span>Поддержать подарком</span></button><button class="bare" data-action="dismiss-support" aria-label="Скрыть предложение поддержки"><i data-lucide="x"></i></button></div>
   </div>
+  <div id="account-picker" popover="auto" role="dialog" aria-label="Аккаунты"><div id="account-picker-content"></div><div id="account-context-menu" class="context-menu" popover="manual" role="menu" aria-label="Действия с аккаунтом"><button type="button" class="context-item" role="menuitem" data-action="picker-remove-account"><i data-lucide="trash-2" aria-hidden="true"></i><span>Удалить аккаунт</span></button></div></div>
   <dialog id="instance-dialog">
     <form id="instance-form">
       <div class="dialog-top"><h2 id="instance-dialog-title">Новая сборка</h2><button class="bare" type="button" data-action="close-dialog" aria-label="Закрыть"><i data-lucide="x"></i></button></div>

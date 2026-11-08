@@ -31,6 +31,7 @@ def prohibited(name):
             or (path.name.startswith(".env") and path.name != ".env.example")
             or re.fullmatch(r"(?:atlas|horizon)-(?:extras|graphics|player|controller)\.txt", path.name)
             or path.name in {"atlas-shaders.toml", "horizon-shaders.toml"}
+            or (path.name == "modmenu.json" and path.parent.name == "config")
             or name in LOCAL_ICONS)
 
 

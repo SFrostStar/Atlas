@@ -23,6 +23,11 @@ test('instances persist and display names cannot redirect instance folders', (t)
   const folder = store.instancePath(instance.id);
   assert.equal(path.dirname(folder), path.join(store.dataRoot, 'instances'));
   assert.ok(fs.existsSync(path.join(folder, 'saves')));
+  for (const [kind, name] of [['saves','saves'],['mods','atlas-mods'],['resourcepacks','resourcepacks'],['shaderpacks','shaderpacks'],['config','config'],['logs','logs']]) {
+    assert.equal(store.folder(kind, instance.id), path.join(folder, name));
+    assert.ok(fs.statSync(store.folder(kind, instance.id)).isDirectory());
+    assert.notEqual(store.folder(kind, 'atlas'), store.folder(kind, instance.id));
+  }
   assert.throws(() => store.folder('instance', '../atlas'), /не найдена/);
   assert.throws(() => store.createInstance({ name: '../../мой мир' }), /уже есть/);
 });

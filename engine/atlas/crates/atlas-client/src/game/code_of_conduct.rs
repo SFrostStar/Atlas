@@ -169,6 +169,7 @@ impl Game<'_> {
         let Some(prompt) = &self.code_of_conduct else {
             return;
         };
+        atlas_client::widgets::cover_frame();
         // CodeOfConductScreen: WarningScreen's narration, the title and the
         // text on the next line.
         atlas_client::widgets::begin_screen(|| {
@@ -218,6 +219,7 @@ impl Game<'_> {
 
         let [x, y, cw, ch] = layout.check;
         let hover = ui::hovered(cursor, x, y, cw, ch);
+        atlas_client::widgets::record(&layout.label.plain(), layout.check, true);
         atlas_client::widgets::narratable(|| {
             atlas_client::widgets::Narratable::new(
                 atlas_client::widgets::What::Checkbox {

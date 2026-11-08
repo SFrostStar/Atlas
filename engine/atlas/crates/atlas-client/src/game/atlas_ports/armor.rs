@@ -126,8 +126,8 @@ pub(super) fn draw(g: &Game<'_>, batch: &mut HudBatch) {
     }
     let hit = g
         .mob_hit()
-        .filter(|(i, d)| g.mobs[*i].alive() && g.before_block(*d))
-        .map(|(i, _)| i)
+        .filter(|(i, d, _)| g.mobs[*i].alive() && g.before_block(*d))
+        .map(|(i, _, _)| i)
         .or_else(|| {
             let (eye, dir) = g.aim()?;
             g.mobs

@@ -19,7 +19,10 @@ const launch=()=>_electron.launch({executablePath:path.join(root,'node_modules/e
     await page.locator('[data-setting="heroStyle"]').selectOption('sunset');
     await page.locator('[data-setting="showHeroText"]').uncheck();
     await page.locator('[data-setting="reducedMotion"]').uncheck();
-    await page.locator('#instance-memory').selectOption('2048');
+    await page.locator('#instance-memory').focus();
+    await page.locator('#instance-memory').press('Home');
+    await page.locator('#instance-memory').press('ArrowRight');
+    await page.waitForFunction(async()=>{const state=await window.atlas.getState();return state.instances.find(i=>i.id===state.selectedId).memoryMb===2048;});
     const state=await page.evaluate(()=>window.atlas.getState());
     assert.equal(state.settings.theme,'light');assert.equal(state.settings.accentColor,'blue');
     assert.equal(state.settings.showHeroText,false);assert.equal(state.settings.reducedMotion,true);

@@ -41,9 +41,10 @@ const fs = require('node:fs');
       assert.equal(overflow, false, `Overflow on ${route}`);
     }
     await page.locator('.sidebar-instance[data-id="atlas"]').click();
-    await page.locator('[data-tab="files"]').click();
-    assert.equal(await page.locator('.file-row').count(), 4);
-    await page.locator('[data-tab="overview"]').click();
+    await page.locator('.nav-item[data-page="instances"]').click();
+    await page.locator('[data-instance-tab="files"]').click();
+    assert.equal(await page.locator('.file-row').count(), 6);
+    await page.locator('.nav-item[data-page="home"]').click();
     assert.deepEqual(errors, []);
     console.log('UI PASS: navigation, instance persistence, game settings kept inside the game, files, icons, layout, renderer isolation.');
   } finally { await browser.close(); }

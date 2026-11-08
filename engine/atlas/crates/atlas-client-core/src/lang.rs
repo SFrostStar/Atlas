@@ -64,6 +64,8 @@ struct Bundled;
 impl ResourceSource for Bundled {
     fn read(&self, path: &str) -> Option<Vec<u8>> {
         let body = match path {
+            "assets/modmenu/lang/en_us.json" => include_str!("../../atlas-client/assets/modmenu/lang/en_us.json"),
+            "assets/modmenu/lang/ru_ru.json" => include_str!("../../atlas-client/assets/modmenu/lang/ru_ru.json"),
             "assets/atlas/lang/en_us.json" => {
                 include_str!("../../atlas-client/assets/atlas/lang/en_us.json")
             }
@@ -343,7 +345,7 @@ impl ResourceSource for Bundled {
         Some(body.as_bytes().to_vec())
     }
     fn namespaces(&self) -> Vec<String> {
-        vec!["atlas".into()]
+        vec!["atlas".into(), "modmenu".into()]
     }
 }
 impl ResourceSource for std::path::PathBuf {
@@ -394,7 +396,7 @@ pub fn apply_deprecated(map: &mut HashMap<String, String>, json: &[u8]) {
 /// characters in strings, `=` or `=>` and `;`), which vanilla reads lang files with (expected
 /// from `Language.loadFromJson`, Gson). A file that is not JSON even so adds nothing; a value
 /// that is not a string, number or boolean (`GsonHelper.convertToString`) ends the file there.
-fn read_lang_file(bytes: &[u8], map: &mut HashMap<String, String>) {
+pub fn read_lang_file(bytes: &[u8], map: &mut HashMap<String, String>) {
     use atlas_world::datafix::json::{Json, parse_lenient};
     if let Ok(entries) = serde_json::from_slice::<HashMap<String, String>>(bytes) {
         map.extend(entries);

@@ -8,6 +8,7 @@ const path = require('node:path');
     dir: root, name: 'Atlas Launcher', platform: 'win32', arch: 'x64',
     icon: path.join(root, 'assets/atlas-launcher.ico'), out, overwrite: true,
     asar: true, prune: true,
+    electronZipDir: process.env.ATLAS_ELECTRON_ZIP_DIR || undefined,
     ignore: [
       /^\/(engine|data|dist|docs|scripts|tests|work|tools|runtime|bundle|website)(\/|$)/,
       /^\/\./,

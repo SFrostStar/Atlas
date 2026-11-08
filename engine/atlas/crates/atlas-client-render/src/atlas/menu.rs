@@ -105,6 +105,32 @@ pub fn buttons(w: f32, h: f32, microsoft_account: bool) -> Vec<Button> {
             }
         }
     }
+    let config = super::mod_menu::config::current();
+    if config.modify_title_screen {
+        use super::mod_menu::config::TitleStyle;
+        let label = super::mod_menu::button_text();
+        match config.mods_button_style {
+            TitleStyle::Icon => {
+                let row_y = buttons.iter().find(|b| b.id == 5).map_or(y + 72.0, |b| b.y);
+                for button in buttons.iter_mut().filter(|b| matches!(b.id, 5 | 6 | 7)) { button.x -= 12.0; }
+                let mut mods = b(cx + 26.0, row_y, 20.0, &label, true, 19);
+                mods.icon = Some(("modmenu/mods/enabled",20.0));
+                buttons.push(mods);
+            }
+            TitleStyle::ReplaceRealms if buttons.iter().any(|b| b.id == 0) => {
+                if let Some(button) = buttons.iter_mut().find(|b| b.id == 0) { button.label=label;button.id=19;button.enabled=true; }
+            }
+            TitleStyle::Shrink if buttons.iter().any(|b| b.id == 0) => {
+                let button = buttons.iter_mut().find(|b|b.id==0).unwrap();button.w=98.0;
+                let row_y=button.y;buttons.push(b(cx+2.0,row_y,98.0,&label,true,19));
+            }
+            _ => {
+                let row_y=buttons.iter().find(|b|b.id==5).map_or(y+72.0,|b|b.y);
+                for button in &mut buttons { if button.y>=row_y { button.y+=24.0; } }
+                buttons.push(b(cx-100.0,row_y,200.0,&label,true,19));
+            }
+        }
+    }
     buttons
 }
 pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons: &[Button]) {
@@ -159,7 +185,7 @@ pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons:
         if let Some((icon, size)) = b.icon {
             ui.batch.sprite_scaled(
                 atlas,
-                &format!("gui/sprites/{icon}"),
+                &format!("gui/sprites/{}", if icon == "modmenu/mods/enabled" && hover { "modmenu/mods/focused" } else { icon }),
                 b.x + (b.w - size) / 2.0,
                 b.y + (20.0 - size) / 2.0,
                 size,
@@ -191,7 +217,7 @@ pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons:
         4.0 * k,
         (h - 10.0) * k,
         rgba(133, 153, 165, 255),
-        &super::version_label(),
+        &format!("{}{}", super::version_label(), if super::mod_menu::config::current().mod_count_location.title() { super::mod_menu::count_text() } else { String::new() }),
     );
     let notice = super::NOTICE;
     let tw = ui.measure(Face::Regular, 4.7 * k, notice);

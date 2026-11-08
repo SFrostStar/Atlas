@@ -2,6 +2,7 @@
 name = "atlas-theme"
 version = "0.1.0"
 edition = "2021"
+rust-version.workspace = true
 license = "MIT"
 description = "Atlas's design tokens, fonts and icons, shared by the launcher, the website and the game's menus"
 

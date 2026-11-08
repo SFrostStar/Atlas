@@ -184,7 +184,7 @@ EOF
     local unit=atlas-runner-${name#atlas-}.service
     systemctl --user enable "$unit" > /dev/null 2>&1
     # The runner reads .env when it starts: restart only an idle one (a restart cancels its job).
-    if pgrep -f "$base/$name/bin/Runner.Worker" > /dev/null; then echo "$name in a job: restart $unit after it"
+    if pgrep -f "$base/$name/bin[^/]*/Runner.Worker" > /dev/null; then echo "$name in a job: restart $unit after it"
     else systemctl --user restart "$unit"; fi
   done < <(runners)
   status
@@ -196,7 +196,7 @@ status() {
   for dir in "$base"/atlas-ci-* "$base"/atlas-light-*; do
     [ -d "$dir" ] || continue
     printf '%-16s %s, target %s\n' "$(basename "$dir")" \
-      "$(pgrep -f "$dir/bin/Runner.Worker" > /dev/null && echo busy || echo idle)" \
+      "$(pgrep -f "$dir/bin[^/]*/Runner.Worker" > /dev/null && echo busy || echo idle)" \
       "$(du -sh "$dir/target" 2>/dev/null | cut -f1 || echo -)"
   done
 }

@@ -43,6 +43,7 @@ atlas-ports.json
 atlas-runtime.json
 atlas-mods.txt
 mod-catalog.json
+**/config/modmenu.json
 horizon-extras.txt
 horizon-graphics.txt
 horizon-player.txt

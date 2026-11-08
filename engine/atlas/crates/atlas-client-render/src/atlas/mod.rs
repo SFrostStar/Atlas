@@ -3,10 +3,12 @@
 pub mod background;
 pub mod chunk_animation;
 pub mod fonts;
+pub mod graphics_style;
 pub mod labels;
 pub mod loading;
 #[doc(hidden)]
 pub mod menu;
+pub mod mod_menu;
 pub mod settings;
 
 pub const NAME: &str = "Atlas";

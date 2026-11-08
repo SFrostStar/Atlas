@@ -91,6 +91,7 @@ Deprecations and breaking changes are in bold. The release notes of the game rel
 | Native mods (atlas-mixins bundles, [native-mods.md](../native-mods.md)) | experimental | the pinned revisions |
 | `cargo atlas-mod` (`new`, `build`, `run`, `check`) | preview | none yet (unversioned) |
 | Shader API | experimental | 0.1 |
+| Shader API 0.2 (linear light, [hdr-linear-light.md](../design/hdr-linear-light.md)) | experimental, behind a switch: `atlas-shader` checks it, the game draws it only with `ATLAS_HDR_FRAME=float` set, and the registry doesn't list it | 0.2 |
 | `atlas-ctl` commands and MCP tools | preview | none yet (unversioned) |
 | The game's own control-socket commands outside `atlas-ctl`'s table (test hooks) | experimental | |
 | `atlas-server` commands, `server.toml` | stable | `atlas-server --version` |

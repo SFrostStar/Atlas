@@ -76,12 +76,31 @@ the references must not be described as MIT-licensed upstream source. Their orig
 - RwJoiner retains its ReallyWorld-specific menu/scoreboard assumptions, including the original hardcoded `11` material exception.
 - Lootbeams uses vanilla item silhouettes. Its original `lineWidth`, `expand`, `visibleAlpha` and `xrayAlpha` settings were already unused by the supplied renderer and are retained without invented behavior.
 - The supplied CullParticles JAR contains only a mixin cancelling `ClientPlayerEntity.pushOutOfBlocks(DD)V`; it does not cull particles. Atlas gates the corresponding `closest_space_nudge` push-out step. This entry must not be advertised as particle optimization.
-- No original mod artwork is introduced by the twenty new entries. Original MIT English/Russian localization entries from HotCommands (Slmnk) and Inventory Layouts are adapted into Atlas's native language bundle. AppleSkin icons have their separate retained notice.
+- The native Mod Menu displays the original supplied icons for AppleSkin, ArmorIndicator, AutoCraft, Chunk Animator, Crystal Optimizer, CullParticles, Gamma Utils, NoFluid, NoShakeHand, PvPSurvived, Radar/BetterNear, RwJoiner, StreamerMode, ViewModel and Zoomify. They retain the corresponding reference authorship and licenses listed above; AppleSkin has its separate retained notice. Mods without an original icon use the menu's fallback image. Original MIT English/Russian localization entries from HotCommands (Slmnk) and Inventory Layouts are adapted into Atlas's native language bundle.
 - Gamma Utils' optional custom status-effect icon is not reproduced in the current independent native adapter; brightness control must not be presented as complete parity with that additional display feature.
 
 No blanket claim of visual or behavior equivalence is made without in-game comparison.
 The chosen configuration-screen layout is recorded separately from gameplay and HUD equivalence.
 Automated tests cover numerical/state boundaries; renderer and multiplayer behavior still require the checks recorded in ATLAS-PORTS.md.
+
+## Mod Menu 21.0.0
+
+The supplied `modmenu-21.0.0-26.3-fabric.jar` is the reference for the built-in native menu.
+SHA-256: `837812c6c98d66141db7b5dcae668f27fb78d557e8f4c0c89912985fc26a5e6f`.
+Original project: [TerraformersMC/ModMenu](https://github.com/TerraformersMC/ModMenu).
+Copyright (c) 2018–2020 Prospector, MIT. The original complete notice is retained in
+`crates/atlas-client-render/src/atlas/mod_menu/LICENSE-ModMenu.txt` and accompanies the runtime.
+
+Atlas adapts the original configuration defaults, search weighting, stable sorting,
+two-pane layout, navigation, filter/configuration controls, localization and bundled
+Mod Menu sprites to Rust. Native registry metadata and configuration callbacks replace
+Fabric APIs. Mod Menu is built in; neither the reference JAR nor Fabric is distributed.
+The menu's configuration is saved per instance in `config/modmenu.json`.
+
+Java-only config plugins and arbitrary Java mod update/install APIs are not executable
+in Atlas. Configuration buttons are shown only for available native configuration
+callbacks. Compatible `.hmod`/`.hnmod` imports are validated; `.hnmod` still needs a native
+build adapter. No Fabric dependencies or Java update availability are fabricated.
 
 ## Source archive fingerprints
 

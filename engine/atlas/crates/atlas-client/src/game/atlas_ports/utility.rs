@@ -157,8 +157,8 @@ impl Game<'_> {
             && self.player.as_ref().is_some_and(|p| {
                 logic::auto_sprint(
                     self.focused && self.native_playing(),
-                    self.keys.contains(&KeyCode::KeyW),
-                    p.shift_key_down || self.keys.contains(&KeyCode::ShiftLeft),
+                    self.keys.held(atlas_client::actions::Action::Forward),
+                    p.shift_key_down || self.keys.held(atlas_client::actions::Action::Sneak),
                     p.swimming,
                     p.health.food.food,
                 )
