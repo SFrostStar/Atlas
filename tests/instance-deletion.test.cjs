@@ -113,7 +113,7 @@ test('deletion rejects junctions and inconsistent session metadata instead of fo
 test('Discord settings validate public IDs and keep missing opt-in unspecified; launcher version is independent', t => {
   const { store } = fixture(t);
   const initial = store.getState();
-  assert.equal(initial.version, '0.1');
+  assert.equal(initial.version, require('../package.json').version);
   assert.equal(initial.engineVersion, 'v0.2.93');
   assert.equal(Object.hasOwn(initial.settings, 'discordRichPresence'), false);
   assert.equal(initial.settings.discordApplicationId, '');

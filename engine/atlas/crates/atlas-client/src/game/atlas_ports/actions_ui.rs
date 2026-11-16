@@ -116,6 +116,20 @@ fn center(batch: &mut HudBatch, atlas: &HudAtlas, text: &str, cx: f32, y: f32, c
         true,
     );
 }
+fn trim_legacy(atlas: &HudAtlas, text: &str, width: f32) -> String {
+    let mut result = String::new();
+    let mut formatting = false;
+    for ch in text.chars() {
+        let mut next = result.clone();
+        next.push(ch);
+        if !formatting && ch != '§' && HudBatch::text_width(atlas, &next) > width {
+            break;
+        }
+        result = next;
+        formatting = ch == '§' && !formatting;
+    }
+    result
+}
 impl super::State {
     fn current_commands(&self) -> &[HotCommand] {
         let mut items = self.commands.as_slice();
@@ -206,6 +220,12 @@ impl Game<'_> {
                     batch.height - 30.0,
                 )
             };
+            // Hand Y points up; keep the frame between the header and chat input.
+            let pixels_per_unit = batch.height * 0.6;
+            let dx = (hand.position[0] * pixels_per_unit).clamp(-x1, batch.width - x2);
+            let dy = (-hand.position[1] * pixels_per_unit)
+                .clamp((28.0 - y1).min(0.0), batch.height - 14.0 - y2);
+            let (x1, y1, x2, y2) = (x1 + dx, y1 + dy, x2 + dx, y2 + dy);
             let c = packed(-4160260);
             batch.fill(atlas, x1, y1, x2 - x1, y2 - y1, packed(410794733));
             for (x, y, w, h) in [
@@ -418,10 +438,8 @@ impl Game<'_> {
         );
         for (r, _, key, value, min, max) in self.actions_view_sliders(batch) {
             let [sx, sy, w, h] = r;
-            if sy < y + 54.0 || sy + h > y + 264.0 {
-                continue;
-            }
-            let width = ((value - min) / (max - min)).clamp(0.0, 1.0) * (w - 2.0);
+            let clip_start = batch.vertices.len();
+            let width = (((value - min) / (max - min)).clamp(0.0, 1.0) * (w - 2.0)).floor();
             batch.fill(atlas, sx, sy, w, h, packed(1428034616));
             batch.fill(
                 atlas,
@@ -431,6 +449,8 @@ impl Game<'_> {
                 h - 2.0,
                 packed(-2005124371),
             );
+            batch.fill(atlas, sx, sy, w, 1.0, packed(1148992237));
+            batch.fill(atlas, sx, sy + h - 1.0, w, 1.0, packed(1148992237));
             batch.fill(atlas, sx + width - 1.0, sy, 4.0, h, packed(-4160260));
             batch.text(
                 atlas,
@@ -443,11 +463,44 @@ impl Game<'_> {
             let text = format!("{value:.2}");
             batch.text(
                 atlas,
-                &text,
+                &format!("§f§l{text}"),
                 sx + w - HudBatch::text_width(atlas, &text) - 6.0,
                 sy + 5.0,
                 u32::MAX,
                 false,
+            );
+            batch.clip_since(clip_start, x + 4.0, y + 54.0, x + 376.0, y + 264.0);
+        }
+        let max_scroll = if self.atlas_ports.actions.ui.view_tab == 0 {
+            85.0
+        } else {
+            0.0
+        };
+        if max_scroll > 0.0 {
+            let content_height = 210.0_f32;
+            let thumb_height = (content_height * content_height / (content_height + max_scroll))
+                .floor()
+                .max(20.0);
+            let thumb_y = y
+                + 54.0
+                + (self.atlas_ports.actions.ui.view_scroll / max_scroll
+                    * (content_height - thumb_height))
+                    .floor();
+            batch.fill(
+                atlas,
+                x + 372.0,
+                y + 54.0,
+                4.0,
+                content_height,
+                packed(855638016),
+            );
+            batch.fill(
+                atlas,
+                x + 372.0,
+                thumb_y,
+                4.0,
+                thumb_height,
+                packed(-2004132618),
             );
         }
     }
@@ -674,7 +727,7 @@ impl Game<'_> {
                         (1, 222.0, "atlas.viewmodel.outline"),
                     ] {
                         out.push(button(
-                            [x + 18.0, y + dy, 344.0, 14.0],
+                            [x + 18.0, y + dy, 344.0, 16.0],
                             tr(key),
                             Action::ViewToggle(i),
                         ));
@@ -696,12 +749,12 @@ impl Game<'_> {
                         Action::ViewSwing,
                     ));
                     out.push(button(
-                        [x + 18.0, y + 84.0, 344.0, 14.0],
+                        [x + 18.0, y + 84.0, 344.0, 16.0],
                         tr("atlas.viewmodel.onlytarget"),
                         Action::ViewToggle(2),
                     ));
                     out.push(button(
-                        [x + 18.0, y + 106.0, 344.0, 14.0],
+                        [x + 18.0, y + 106.0, 344.0, 16.0],
                         tr("atlas.viewmodel.autoswing"),
                         Action::ViewToggle(3),
                     ));
@@ -717,18 +770,24 @@ impl Game<'_> {
         out
     }
     fn actions_icon(&self, batch: &mut HudBatch, item: &HotCommand, x: f32, y: f32) {
-        let icon = item.icon.trim().to_lowercase();
+        let raw = item.icon.trim().to_lowercase();
+        let empty = raw.is_empty();
+        let icon = raw;
         let icon = if icon.contains(':') {
             icon
         } else {
             format!("minecraft:{icon}")
         };
         let fallback = if item.children.is_empty() {
-            "minecraft:paper"
+            if empty {
+                "minecraft:command_block"
+            } else {
+                "minecraft:paper"
+            }
         } else {
             "minecraft:chest"
         };
-        let icon = if self.items().get(&icon).is_some() {
+        let icon = if icon != "minecraft:air" && self.items().get(&icon).is_some() {
             icon.as_str()
         } else {
             fallback
@@ -746,24 +805,46 @@ impl Game<'_> {
         );
     }
     pub(in crate::game) fn atlas_actions_draw(&mut self, batch: &mut HudBatch) {
+        let _font = atlas_client::font::java_mod_font_scope();
         self.atlas_inventory_draw(batch);
         self.actions_draw_viewmodel_chat(batch);
         let screen = self.native_mod_screen().map(str::to_owned);
         let atlas = &self.gui.atlas;
         if screen.as_deref() == Some(IDS[2]) {
             let s = &self.atlas_ports.actions;
-            let title = lang::get(if s.ui.hot_edit {
+            let title = lang::get(if let Some(dialog) = &s.ui.hot_dialog {
+                if dialog.index.is_none() {
+                    "gui.hotcommands.editor.dialog_title_add"
+                } else {
+                    "gui.hotcommands.editor.dialog_title_edit"
+                }
+            } else if s.ui.hot_edit {
                 "gui.hotcommands.editor.title"
             } else {
                 "gui.hotcommands.title"
             });
             let category = s.hot_title();
-            let title = if category.is_empty() {
-                format!("§6§l{title}")
+            let title = if s.ui.hot_dialog.is_some() {
+                title
+            } else if category.is_empty() {
+                format!("§{}§l{title}", if s.ui.hot_edit { 'e' } else { '6' })
             } else {
                 format!("§7{title} §8▶ §f§l{category}")
             };
-            center(batch, atlas, &title, batch.width / 2.0, 14.0, u32::MAX);
+            center(
+                batch,
+                atlas,
+                &title,
+                batch.width / 2.0,
+                if s.ui.hot_dialog.is_some() {
+                    20.0
+                } else if s.ui.hot_edit {
+                    16.0
+                } else {
+                    14.0
+                },
+                u32::MAX,
+            );
             if s.ui.hot_dialog.is_none() && s.ui.hot_edit {
                 let lw = 380.0_f32.min(batch.width - 24.0);
                 let x = (batch.width - lw) / 2.0;
@@ -778,18 +859,51 @@ impl Game<'_> {
                     batch.fill(atlas, x, y, lw, 26.0, packed(-2011684824));
                     border(batch, atlas, [x, y, lw, 26.0], packed(1430541670));
                     self.actions_icon(batch, item, x + 4.0, y + 5.0);
-                    let n = atlas.font.fit(&item.name, lw - 160.0);
-                    let name: String = item.name.chars().take(n).collect();
+                    let name = if item.name.is_empty() {
+                        lang::get("atlas.hotcommands.editor.unnamed")
+                    } else {
+                        item.name.clone()
+                    };
+                    let name = trim_legacy(atlas, &format!("§f{name}"), lw - 160.0);
                     batch.text(atlas, &name, x + 26.0, y + 3.0, u32::MAX, true);
                     let sub = if item.children.is_empty() {
-                        item.command.clone()
+                        if item.command.is_empty() {
+                            lang::get("atlas.hotcommands.editor.empty")
+                        } else {
+                            format!("§b{}", item.command)
+                        }
                     } else {
-                        format!("📂 {}", item.children.len())
+                        lang::get("atlas.hotcommands.editor.submenu")
+                            .replace("%s", &item.children.len().to_string())
                     };
-                    let n = atlas.font.fit(&sub, lw - 160.0);
-                    let sub: String = sub.chars().take(n).collect();
+                    let sub = trim_legacy(atlas, &sub, lw - 160.0);
                     batch.text(atlas, &sub, x + 26.0, y + 14.0, 0xffaaaaaa, true);
                 }
+                let pages = s.current_commands().len().div_ceil(6).max(1);
+                if pages > 1 {
+                    center(
+                        batch,
+                        atlas,
+                        &format!("{} / {pages}", s.ui.hot_page + 1),
+                        batch.width / 2.0,
+                        batch.height - 22.0,
+                        0xffdddddd,
+                    );
+                }
+            }
+            if s.ui.hot_dialog.is_none() && s.current_commands().is_empty() {
+                center(
+                    batch,
+                    atlas,
+                    &lang::get("gui.hotcommands.empty"),
+                    batch.width / 2.0,
+                    batch.height / 2.0 - if s.ui.hot_edit { 0.0 } else { 10.0 },
+                    if s.ui.hot_edit {
+                        0xff888888
+                    } else {
+                        0xffaaaaaa
+                    },
+                );
             }
             if !s.ui.hot_edit && s.ui.hot_dialog.is_none() {
                 batch.text(
@@ -807,14 +921,8 @@ impl Game<'_> {
         }
         let mut tooltip: Option<Vec<Text>> = None;
         for b in self.actions_buttons(batch) {
-            // Original ViewModel scrolling clips the content below the tabs.
-            if screen.as_deref() == Some(IDS[7])
-                && view_content(&b.action)
-                && (b.rect[1] < (batch.height - 270.0) / 2.0 + 54.0
-                    || b.rect[1] + b.rect[3] > (batch.height + 270.0) / 2.0 - 6.0)
-            {
-                continue;
-            }
+            let clip_content = screen.as_deref() == Some(IDS[7]) && view_content(&b.action);
+            let clip_start = batch.vertices.len();
             let hover = hit(b.rect, self.cursor.0, self.cursor.1);
             if hover {
                 match b.action {
@@ -843,6 +951,18 @@ impl Game<'_> {
                             }
                         }
                     }
+                    Action::HotDelete(_) => {
+                        tooltip = Some(vec![tr("gui.hotcommands.editor.delete")])
+                    }
+                    Action::HotEdit(_) => tooltip = Some(vec![tr("gui.hotcommands.editor.edit")]),
+                    Action::HotChildren(i) => {
+                        tooltip = Some(vec![Text::tr(
+                            "gui.hotcommands.editor.subcommands",
+                            &[&self.atlas_ports.actions.current_commands()[i]
+                                .children
+                                .len()],
+                        )])
+                    }
                     _ => {}
                 }
             }
@@ -866,9 +986,8 @@ impl Game<'_> {
                 self.actions_icon(batch, &item, x + 4.0, y + (h - 16.0) / 2.0);
                 let atlas = &self.gui.atlas;
                 let max = w - 36.0 - if item.children.is_empty() { 0.0 } else { 12.0 };
-                let n = atlas.font.fit(&item.name, max);
-                let trimmed: String = item.name.chars().take(n).collect();
-                let text = if n < item.name.chars().count() {
+                let trimmed = trim_legacy(atlas, &item.name, max);
+                let text = if trimmed != item.name {
                     format!("{trimmed}...")
                 } else {
                     trimmed
@@ -958,7 +1077,11 @@ impl Game<'_> {
                             packed(-3355444),
                             false,
                         );
-                        let name = format!("§d§l{} §7⟳", s.viewmodel.swing.display_name());
+                        let name = format!(
+                            "§d§l{} {}",
+                            s.viewmodel.swing.display_name(),
+                            lang::get("atlas.viewmodel.swing_cycle_hint")
+                        );
                         batch.text(
                             atlas,
                             &name,
@@ -978,7 +1101,11 @@ impl Game<'_> {
                         let color = if reset {
                             if hover { -1713625562 } else { 1436097307 }
                         } else if selected {
-                            -8635667
+                            if matches!(b.action, Action::ViewTab(_)) {
+                                -9623335
+                            } else {
+                                -8635667
+                            }
                         } else if hover {
                             1716264341
                         } else {
@@ -988,10 +1115,24 @@ impl Game<'_> {
                         center(
                             batch,
                             atlas,
-                            &b.label.plain(),
+                            &format!(
+                                "{}{}",
+                                if reset {
+                                    ""
+                                } else if selected {
+                                    "§f§l"
+                                } else {
+                                    "§7"
+                                },
+                                b.label.plain()
+                            ),
                             x + w / 2.0,
                             y + 6.0,
-                            if selected { u32::MAX } else { packed(-7829368) },
+                            if selected || reset {
+                                u32::MAX
+                            } else {
+                                packed(-7829368)
+                            },
                         );
                     }
                 }
@@ -1007,6 +1148,11 @@ impl Game<'_> {
                     b.active,
                     hover,
                 );
+            }
+            if clip_content {
+                let x = (batch.width - 380.0) / 2.0;
+                let y = (batch.height - 270.0) / 2.0;
+                batch.clip_since(clip_start, x + 4.0, y + 54.0, x + 376.0, y + 264.0);
             }
         }
         if screen.as_deref() == Some(IDS[2])
@@ -1028,12 +1174,72 @@ impl Game<'_> {
                     x,
                     y - 12.0,
                     0xffdddddd,
-                    false,
+                    true,
                 );
                 dialog.fields[i].x = x;
                 dialog.fields[i].y = y;
                 dialog.fields[i].draw(batch, &self.gui.atlas, None);
             }
+        }
+        if screen.as_deref() == Some(IDS[2])
+            && let Some(dialog) = self.atlas_ports.actions.ui.hot_dialog.as_ref()
+        {
+            let x = (batch.width - 260.0) / 2.0;
+            let raw = dialog.fields[2].value.trim().to_lowercase();
+            let has_children = dialog
+                .index
+                .and_then(|i| self.atlas_ports.actions.current_commands().get(i))
+                .is_some_and(|item| !item.children.is_empty());
+            let icon = if raw.is_empty() {
+                if has_children {
+                    "minecraft:chest".into()
+                } else {
+                    "minecraft:command_block".into()
+                }
+            } else {
+                let qualified = if raw.contains(':') {
+                    raw
+                } else {
+                    format!("minecraft:{raw}")
+                };
+                if qualified != "minecraft:air" && self.items().get(&qualified).is_some() {
+                    qualified
+                } else {
+                    "minecraft:barrier".into()
+                }
+            };
+            let item = HotCommand::new("", "", &icon);
+            batch.fill(
+                &self.gui.atlas,
+                x + 236.0,
+                136.0,
+                20.0,
+                20.0,
+                packed(-2011028958),
+            );
+            border(
+                batch,
+                &self.gui.atlas,
+                [x + 236.0, 136.0, 20.0, 20.0],
+                packed(-5592406),
+            );
+            self.actions_icon(batch, &item, x + 238.0, 138.0);
+            batch.text(
+                &self.gui.atlas,
+                &lang::get("atlas.hotcommands.dialog.colors"),
+                x,
+                160.0,
+                packed(-7829368),
+                true,
+            );
+            batch.text(
+                &self.gui.atlas,
+                &lang::get("atlas.hotcommands.dialog.icons"),
+                x,
+                170.0,
+                packed(-10066330),
+                true,
+            );
         }
         if let Some(lines) = tooltip {
             ui::tooltip(batch, &self.gui.atlas, &lines, self.cursor);
@@ -1204,7 +1410,7 @@ impl Game<'_> {
                 let s = &mut self.atlas_ports.actions;
                 match i {
                     0 => *s.viewmodel.hand_mut(s.ui.view_main) = viewmodel::HandSettings::default(),
-                    1 => s.viewmodel = viewmodel::Config::default(),
+                    1 => s.viewmodel.reset_hands(),
                     _ => s.viewmodel.reset_swing(),
                 }
                 s.save_viewmodel();
@@ -1221,6 +1427,7 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_actions_mouse(&mut self, button: i32, pressed: bool) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if !pressed {
             self.atlas_ports.actions.ui.view_slider = None;
             return false;
@@ -1256,8 +1463,8 @@ impl Game<'_> {
         for b in self.actions_buttons(&batch) {
             if self.native_mod_screen() == Some(IDS[7])
                 && view_content(&b.action)
-                && (b.rect[1] < (batch.height - 270.0) / 2.0 + 54.0
-                    || b.rect[1] + b.rect[3] > (batch.height + 270.0) / 2.0 - 6.0)
+                && (y < (batch.height - 270.0) / 2.0 + 54.0
+                    || y > (batch.height + 270.0) / 2.0 - 6.0)
             {
                 continue;
             }
@@ -1300,6 +1507,7 @@ impl Game<'_> {
         ctrl: bool,
         shift: bool,
     ) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_key(key, ctrl, shift) {
             return true;
         }
@@ -1332,7 +1540,13 @@ impl Game<'_> {
                 }
                 return true;
             }
-            if key == KeyCode::KeyH {
+            if !self.atlas_ports.actions.ui.hot_edit
+                && atlas_client::keybinds::key_code(&self.native_mod_key(
+                    IDS[2],
+                    "open",
+                    "key.keyboard.h",
+                )) == Some(key)
+            {
                 self.actions_press(Action::Close);
             }
             return true;
@@ -1340,6 +1554,7 @@ impl Game<'_> {
         self.native_mod_screen() == Some(IDS[7]) && key != KeyCode::Escape
     }
     pub(in crate::game) fn atlas_actions_screen_char(&mut self, text: &str) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_char(text) {
             return true;
         }
@@ -1356,6 +1571,7 @@ impl Game<'_> {
         false
     }
     pub(in crate::game) fn atlas_actions_scroll(&mut self, delta: f32) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_scroll(delta) {
             return true;
         }
@@ -1383,7 +1599,7 @@ impl Game<'_> {
         if self.native_mod_screen() == Some(IDS[7]) {
             let s = &mut self.atlas_ports.actions;
             let max = if s.ui.view_tab == 0 { 85.0 } else { 0.0 };
-            s.ui.view_scroll = (s.ui.view_scroll - delta * 20.0).clamp(0.0, max);
+            s.ui.view_scroll = (s.ui.view_scroll - (delta * 16.0).trunc()).clamp(0.0, max);
             return true;
         }
         if self.screen == Screen::Chat && self.atlas_port_on(IDS[7]) {
@@ -1400,6 +1616,7 @@ impl Game<'_> {
         false
     }
     pub(in crate::game) fn atlas_actions_drag(&mut self, button: i32, dx: f32, dy: f32) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if self.screen == Screen::Chat && self.atlas_port_on(IDS[7]) {
             let shift = self.has_shift_down();
             let s = &mut self.atlas_ports.actions;

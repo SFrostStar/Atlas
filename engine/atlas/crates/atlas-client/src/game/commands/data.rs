@@ -1580,9 +1580,11 @@ mod loot_table_tests {
 }
 
 #[cfg(test)]
+#[path = "data_saved_tag_tests.rs"]
 mod saved_tag_tests;
 
 #[cfg(test)]
+#[path = "data_mod_block_entity_tests.rs"]
 mod mod_block_entity_tests;
 
 #[cfg(test)]

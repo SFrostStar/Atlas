@@ -53,7 +53,7 @@ atlas-server checks the section before every start, and the game reads it from t
 
 ## The list
 
-The built-in list is `crates/atlas-chat-filter/data/slurs.txt`; a `words_file` replaces it and uses the
+The built-in list is `crates/atlas-chat-filter/assets/slurs.txt`; a `words_file` replaces it and uses the
 same format, explained at its top: `word` matches inside longer words, `=word` only whole words, `~word`
 also spread over several words, `!word` never matches (`!word*`: any word starting so).
 

@@ -2,6 +2,12 @@
 //! AppleSkin follows squeek502's Unlicense implementation; other ports are Atlas implementations.
 mod actions;
 mod armor;
+mod aspect_ratio;
+mod config_actions;
+mod config_model;
+mod config_ui;
+mod esc_music;
+mod esc_music_ui;
 mod food;
 mod utility;
 mod visual;
@@ -25,8 +31,12 @@ pub(super) struct State {
     utility: utility::UtilityState,
     food: food::State,
     armor: armor::State,
+    aspect_ratio: aspect_ratio::State,
+    esc_music: esc_music::State,
+    esc_music_ui: esc_music_ui::State,
     actions: actions::State,
     visual: visual::State,
+    config_ui: config_ui::State,
     pub(in crate::game) return_screen: Option<super::Screen>,
 }
 
@@ -45,7 +55,11 @@ impl State {
                     .iter()
                     .filter_map(|v| v.as_str())
                     .filter(|id| {
-                        IDS.contains(id) || actions::IDS.contains(id) || visual::IDS.contains(id)
+                        IDS.contains(id)
+                            || actions::IDS.contains(id)
+                            || visual::IDS.contains(id)
+                            || *id == aspect_ratio::ID
+                            || *id == esc_music::ID
                     })
                     .map(str::to_owned),
             );
@@ -62,6 +76,45 @@ impl State {
 }
 
 impl Game<'_> {
+    pub(in crate::game) fn atlas_config_value(&self, id: &str) -> Option<serde_json::Value> {
+        match id {
+            "atlas-appleskin" => Some(self.atlas_ports.food.config_value()),
+            "atlas-zoomify" => self.atlas_utility_config(id),
+            "atlas-chunkanimator" | "atlas-gammautils" => self.atlas_actions_config(id),
+            _ => None,
+        }
+    }
+    pub(in crate::game) fn atlas_config_default(&self, id: &str) -> Option<serde_json::Value> {
+        match id {
+            "atlas-appleskin" => Some(food::State::default_config()),
+            "atlas-zoomify" => serde_json::to_value(utility::config::Zoom::default()).ok(),
+            _ => self.atlas_actions_default_config(id),
+        }
+    }
+    pub(in crate::game) fn atlas_config_apply(
+        &mut self,
+        id: &str,
+        value: serde_json::Value,
+    ) -> Result<(), String> {
+        match id {
+            "atlas-appleskin" => self.atlas_ports.food.set_config(&Self::game_dir(), value),
+            "atlas-zoomify" => self.atlas_utility_set_config(id, value),
+            _ => self.atlas_actions_set_config(id, value),
+        }
+    }
+    pub(in crate::game) fn atlas_open_original_mod_config(&mut self, id: &str) -> bool {
+        match id {
+            "atlas-appleskin" | "atlas-chunkanimator" | "atlas-zoomify" | "atlas-gammautils" => {
+                self.atlas_config_open(id)
+            }
+            "atlas-armorindicator" | "atlas-radarmod" => self.atlas_original_open_screen(id),
+            "atlas-hotcommands" | "atlas-viewmodel" => {
+                self.atlas_ports.actions.active_screen = Some(id.to_owned());
+                self.atlas_open_port_screen(id)
+            }
+            _ => false,
+        }
+    }
     /// Port-owned configuration can open from the title's Options as well as from a world.
     pub(in crate::game) fn atlas_open_port_screen(&mut self, id: &str) -> bool {
         if !self.atlas_ports.installed.contains(id)
@@ -119,6 +172,16 @@ impl Game<'_> {
                 "MentionSound",
                 "Atlas: a notification when incoming chat mentions your name.",
             ),
+            (
+                aspect_ratio::ID,
+                "Aspect Ratio",
+                "Adjust the game's aspect ratio in real time with a slider and presets.",
+            ),
+            (
+                esc_music::ID,
+                "ESC Music Controller",
+                "Control the current Windows media session from the pause menu.",
+            ),
         ];
         for (id, name, description) in definitions
             .into_iter()
@@ -132,7 +195,32 @@ impl Game<'_> {
                 id: id.into(),
                 title: name.into(),
                 description: description.into(),
-                keys: if id == IDS[4] {
+                keys: if id == esc_music::ID {
+                    Vec::new()
+                } else if id == IDS[1] {
+                    [
+                        (
+                            "toggle_hud",
+                            "key.armorindicator.toggle_hud",
+                            "key.keyboard.h",
+                        ),
+                        (
+                            "toggle_tint",
+                            "key.armorindicator.toggle_tint",
+                            "key.keyboard.j",
+                        ),
+                        (
+                            "open_config",
+                            "key.armorindicator.open_config",
+                            "key.keyboard.k",
+                        ),
+                    ]
+                    .into_iter()
+                    .map(|(name, label, key)| {
+                        [name.into(), atlas_client::lang::get(label), key.into()]
+                    })
+                    .collect()
+                } else if id == IDS[4] {
                     vec![
                         [
                             "zoom".into(),
@@ -161,6 +249,8 @@ impl Game<'_> {
                         "Toggle camera sway".into(),
                         "key.keyboard.unknown".into(),
                     ]]
+                } else if id == aspect_ratio::ID {
+                    aspect_ratio::keys()
                 } else {
                     if visual::IDS.contains(&id) {
                         visual::keys(id)

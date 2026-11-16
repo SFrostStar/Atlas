@@ -9,7 +9,7 @@
 ![Rust](https://img.shields.io/badge/engine-Rust-f97316?logo=rust&logoColor=white)
 ![Maintained](https://img.shields.io/badge/статус-поддерживается-22c55e)
 ![Development](https://img.shields.io/badge/разработка-активная-f97316)
-![Version](https://img.shields.io/badge/версия-1.1.0-64748b)
+![Version](https://img.shields.io/github/v/release/SFrostStar/Atlas?label=версия&color=64748b)
 ![Windows](https://img.shields.io/badge/Windows-x64-0078D4)
 
 Нативный клиент Minecraft: Java Edition 26.3 с собственным лаунчером.
@@ -34,13 +34,13 @@
 
 ## О проекте
 
-Atlas — независимая доработка Horizon: клиент Minecraft на Rust с собственным оформлением, новыми функциями и удобным управлением сборками. Проект поддерживается и развивается. Текущая версия — **1.1.0**.
+Atlas — независимая доработка Horizon: клиент Minecraft на Rust с собственным оформлением, новыми функциями и удобным управлением сборками. Проект поддерживается и развивается.
 
 ## Скачать и играть
 
-[**Скачать Atlas 1.1.0 для Windows x64**](https://github.com/SFrostStar/Atlas/releases/tag/atlas-1.1.0)
+[**Скачать Atlas для Windows x64**](https://github.com/SFrostStar/Atlas/releases/latest)
 
-1. В разделе Assets скачайте `Atlas-1.1.0-Windows-x64.zip` и полностью распакуйте архив.
+1. В разделе Assets скачайте архив `Atlas-<версия>-Windows-x64.zip` и полностью его распакуйте.
 2. Запустите `Atlas Launcher.exe`, создайте локальный профиль и нажмите «Играть».
 3. Подтвердите скачивание файлов игры. При первом запуске нужен интернет;
    Java и ресурсы установятся автоматически. Готовые файлы Minecraft в ZIP не включены.
@@ -88,6 +88,8 @@ npm test
 Подготовка игровых ресурсов и сборка Rust описаны в [руководстве движка](engine/atlas/README.md). Ресурсы Minecraft берутся из собственной законно полученной копии игры и в репозиторий не входят. Клонирование исходников само по себе не устанавливает готовую игру, локальные инструменты или подготовленные ресурсы.
 
 Для сборки игры под Windows: `powershell -ExecutionPolicy Bypass -File scripts/Build-Atlas.ps1`.
+
+Версия Atlas задаётся в `package.json`. Команда `npm version <версия> --no-git-tag-version` обновляет и поле версии, и сгенерированный `package-lock.json`. Затем пересоберите клиент и лаунчер для этой версии. Сайт и ссылка на скачивание берут последний опубликованный релиз с GitHub.
 Потребуются Rust, C++ toolchain и подготовленные ресурсы; готовую игру устанавливайте из Releases.
 Локальная рабочая документация в `docs/` не публикуется.
 

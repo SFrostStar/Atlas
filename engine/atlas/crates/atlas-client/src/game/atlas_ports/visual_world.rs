@@ -66,7 +66,7 @@ impl Game<'_> {
         if !self.native_window() || self.player.is_none() {
             return;
         }
-        if self.atlas_port_on(IDS[8]) && self.atlas_ports.visual.totem.enabled {
+        if self.atlas_port_on(IDS[7]) && self.atlas_ports.visual.totem.enabled {
             self.atlas_visual_pop_geometry(camera, partial, out, through)
         }
         if self.atlas_port_on(IDS[4]) {

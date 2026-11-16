@@ -43,7 +43,19 @@ fn main() {
         let mut resource = winresource::WindowsResource::new();
         resource.set_icon(&resource_icon);
         resource.set("ProductName", "Atlas");
-        resource.set("FileDescription", "Atlas 1.0.0");
+        resource.set("FileDescription", "Atlas");
+        let version = atlas_core::release::VERSION;
+        resource.set("FileVersion", version);
+        resource.set("ProductVersion", version);
+        if let Ok(parts) = version.split('.').map(str::parse::<u16>).collect::<Result<Vec<_>, _>>()
+            && let [major, minor, patch] = parts.as_slice()
+        {
+            let packed = (u64::from(*major) << 48)
+                | (u64::from(*minor) << 32)
+                | (u64::from(*patch) << 16);
+            resource.set_version_info(winresource::VersionInfo::FILEVERSION, packed);
+            resource.set_version_info(winresource::VersionInfo::PRODUCTVERSION, packed);
+        }
         resource.set("OriginalFilename", "atlas-client.exe");
         if std::env::var_os("CARGO_FEATURE_WINDOWS_SEGMENT_HEAP").is_some() {
             let manifest = manifest_dir.join("windows-segment-heap.manifest");

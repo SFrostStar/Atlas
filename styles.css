@@ -275,16 +275,13 @@ html[data-theme="light"] .running { background:#d7eddf; color:#22583a; border-co
 
 /* Launcher preferences */
 
-.settings-row select, .account-add input { color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:7px; min-height:40px; padding:8px 12px; }
+.settings-row select { color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:7px; min-height:40px; padding:8px 12px; }
 .settings-row select { min-width:170px; max-width:240px; flex-shrink:0; }
 .accent-options, .row-actions { display:flex; gap:10px; align-items:center; }
 .accent-choice { width:32px; height:32px; padding:5px; display:grid; place-items:center; border-radius:50%; background:var(--swatch); color:#171717; border:2px solid transparent; }
 .accent-choice[aria-pressed="true"] { outline:2px solid var(--text); outline-offset:3px; }
 .accent-choice svg { width:17px; height:17px; }
 .panel-heading .tag { margin-left:auto; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
-.account-add { display:flex; gap:10px; padding-top:18px; border-top:1px solid var(--border); }
-.account-add input { flex:1; min-width:0; }
-.account-signin { margin-top:16px; }
 .signin-device { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:16px; background:var(--bg); border:1px solid var(--border); border-radius:8px; margin-top:16px; }
 .signin-device strong { font-family:Consolas,monospace; letter-spacing:3px; font-size:24px; }
 html[data-hero="minimal"] .hero::before { background:none; }
@@ -435,7 +432,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
 .settings-row strong { font-size:14px; font-weight:400; line-height:1.5; }
 .settings-row p,.panel-heading p,.discord-preview span,.discord-preview small { color:var(--muted); font-size:12px; line-height:1.7; }
 .settings-row p { max-width:55ch; margin-top:5px; }
-.settings-row select,.account-add input { min-height:42px; border-radius:var(--control-radius); background:var(--input); border:1px solid var(--border); padding:9px 12px; color:var(--text); font-size:13px; }
+.settings-row select { min-height:42px; border-radius:var(--control-radius); background:var(--input); border:1px solid var(--border); padding:9px 12px; color:var(--text); font-size:13px; }
 .settings-row select { min-width:156px; max-width:220px; }
 .switch { min-height:36px; align-items:center; }
 .switch-track { width:40px; height:24px; background:var(--border); border-radius:14px; }
@@ -448,8 +445,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
 .tag { border-radius:6px; padding:4px 7px; font-size:11px; line-height:1.5; }
 .subtitle,.muted { color:var(--muted); font-size:13px; line-height:1.7; }
 .path,html[data-theme="light"] .path { color:var(--muted)!important; font-size:12px!important; }
-.account-add { padding-top:16px; border-color:var(--border); }
-.account-signin { margin-top:16px; }
 .signin-device { background:var(--input); border:0; border-radius:var(--control-radius); }
 .instance-grid { gap:18px; }
 .instance-card { border-radius:var(--panel-radius); }
@@ -467,7 +462,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible { 
 .mods-sources { border:0; gap:4px; }
 .mods-sources .tab { padding-inline:12px; }
 .mods-toolbar input { min-height:42px; border-color:var(--border); border-radius:var(--control-radius); background:var(--input); font-size:13px; }
-.mods-toolbar input::placeholder,.field input::placeholder,.account-add input::placeholder { color:var(--muted); }
+.mods-toolbar input::placeholder,.field input::placeholder { color:var(--muted); }
 .mods-caption { margin-bottom:18px; }
 .mods-caption strong { font-size:14px; font-weight:500; }
 .mods-caption span { font-size:12px; }
@@ -610,8 +605,8 @@ main { flex:1; min-height:0; position:relative; background:transparent; }
 .settings-category { min-height:42px; border-radius:9px; padding:10px; font-size:12px; }
 .panel,.instance-card,.file-row,html[data-theme="light"] .panel,html[data-theme="light"] .instance-card,html[data-theme="light"] .file-row { background:var(--surface); border:1px solid var(--glass-edge); backdrop-filter:blur(24px) saturate(1.2); border-radius:15px; }
 .panel-heading>svg { color:var(--muted); }
-.settings-row,.account-add,.home-tabs,.dialog-footer { border-color:var(--border); }
-.settings-row select,.account-add input,.field input,html[data-theme="light"] .field input { background:var(--input); border-color:var(--border); }
+.settings-row,.home-tabs,.dialog-footer { border-color:var(--border); }
+.settings-row select,.field input,html[data-theme="light"] .field input { background:var(--input); border-color:var(--border); }
 .settings-row p,.panel-heading p,.subtitle,.path,.optional { color:var(--muted); }
 .mods-section { margin-top:20px; padding:22px; border-radius:16px; background:var(--glass); backdrop-filter:blur(24px) saturate(1.2); }
 .mods-toolbar { margin-bottom:18px; }

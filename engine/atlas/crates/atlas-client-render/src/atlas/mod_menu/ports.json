@@ -319,31 +319,6 @@
     "client": true
   },
   {
-    "id": "atlas-rwjoiner",
-    "name": "RwJoiner",
-    "version": "1.0.0",
-    "description": "Автоматический заход на грифы сервера ReallyWorld для Minecraft 1.21.4 Fabric",
-    "authors": [
-      "RwJoiner Team"
-    ],
-    "licenses": [
-      "MIT"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "icon": "atlas/modmenu/icons/atlas-rwjoiner",
-    "client": true
-  },
-  {
     "id": "atlas-totempops",
     "name": "Totem Pops",
     "version": "1.0.0",
@@ -644,6 +619,46 @@
       "atlas": ">=1.0.0"
     },
     "icon": "atlas/modmenu/icons/atlas-gammautils",
+    "client": true
+  },
+  {
+    "id": "atlas-aspectratio",
+    "name": "Aspect Ratio",
+    "version": "1.0.0",
+    "description": "Adjust the game's aspect ratio in real time with a slider and presets. Press H to open the menu.",
+    "authors": [
+      "usaryy"
+    ],
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "client": true
+  },
+  {
+    "id": "atlas-esc-music",
+    "name": "ESC Music Controller",
+    "version": "1.0.0",
+    "description": "Control the current Windows media session from the pause menu.",
+    "authors": [
+      "AntiJOPA"
+    ],
+    "licenses": [
+      "MIT"
+    ],
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas Rust port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.0.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-esc-music",
     "client": true
   }
 ]

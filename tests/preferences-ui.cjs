@@ -1,11 +1,9 @@
-const { _electron }=require('playwright-core');
+const launchGuiTest=require('./launch-gui-test.cjs');
 const assert=require('node:assert/strict');
 const path=require('node:path');
 const fs=require('node:fs');
-const root=path.resolve(__dirname,'..');
-const launch=()=>_electron.launch({executablePath:path.join(root,'node_modules/electron/dist/electron.exe'),args:[root],env:{...process.env,ATLAS_GUI_TEST:'1'},cwd:root});
 (async()=>{
-  let app=await launch();
+  const { app, close } = await launchGuiTest();
   try {
     let page=await app.firstWindow();const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.waitForSelector('#boot-splash',{state:'detached'});
@@ -29,10 +27,32 @@ const launch=()=>_electron.launch({executablePath:path.join(root,'node_modules/e
     assert.equal(state.instances.find(i=>i.id===state.selectedId).memoryMb,2048);
     const leftovers=await page.evaluate(()=>[...document.querySelectorAll('#content strong,#content h3,#content p,#content button,#content option,.nav-item')].filter(e=>!e.closest('[data-user-text],.path')&&e.textContent.trim()!=='Русский'&&/[А-Яа-яЁё]/.test(e.textContent)).map(e=>e.textContent));
     assert.deepEqual(leftovers,[],'Untranslated UI');
-    await page.locator('#local-account-form input').fill('AtlasUITest');
-    await page.locator('#local-account-form button').click();
-    await page.waitForFunction(()=>document.querySelector('.account-row [data-user-text]')?.textContent==='AtlasUITest'||[...document.querySelectorAll('.account-row [data-user-text]')].some(e=>e.textContent==='AtlasUITest'));
-    await page.screenshot({path:path.join(root,'work','settings-light-en.png'),fullPage:false});
+    assert.equal(await page.locator('#settings-accounts,[data-settings-anchor="accounts"]').count(),0);
+    const port = state.mods.ports[0];
+    const modFile = path.join(state.instances[0].path, 'atlas-mods', port.id + '.atlas-port.json');
+    await page.evaluate(({ id, port }) => window.atlas.changeMod(id, 'atlas', port, 'install'), { id: state.selectedId, port: port.id });
+    assert.equal(JSON.parse(fs.readFileSync(modFile, 'utf8')).name, port.name);
+    await page.evaluate(({ id, port }) => window.atlas.changeMod(id, 'atlas', port, 'remove'), { id: state.selectedId, port: port.id });
+    assert.equal(fs.existsSync(modFile), false);
+    const accountName=`UITest${Date.now().toString(36)}`;
+    await page.locator('#profile-button').click();
+    await page.locator('[data-action="picker-add"]').click();
+    await page.locator('[data-action="picker-local"]').click();
+    await page.locator('#picker-local-form input').fill(accountName);
+    await page.locator('#picker-local-form button').click();
+    const addedAccount=page.locator('.picker-account').filter({hasText:accountName});
+    await addedAccount.waitFor();
+    assert.equal(await addedAccount.getAttribute('aria-pressed'),'true');
+    await addedAccount.click();
+    await page.locator('#account-picker').waitFor({state:'hidden'});
+    await page.locator('#profile-button').click();
+    await addedAccount.click({button:'right'});
+    await page.locator('[data-action="picker-remove-account"]').click();
+    await addedAccount.waitFor({state:'detached'});
+    await page.locator('[data-action="picker-add"]').click();
+    await page.locator('[data-action="picker-microsoft"]').click();
+    await page.locator('[data-action="signin-microsoft"]').waitFor();
+    await page.keyboard.press('Escape');
     await page.reload();await page.waitForSelector('#boot-splash',{state:'detached'});
     assert.equal(await page.getAttribute('html','data-theme'),'light');
     await page.locator('[data-page="settings"]').click();
@@ -41,8 +61,7 @@ const launch=()=>_electron.launch({executablePath:path.join(root,'node_modules/e
     await page.locator('[data-setting="theme"]').selectOption('dark');
     await page.locator('[data-accent="orange"]').click();
     assert.equal(await page.locator('h1').textContent(),'Настройки');
-    await page.screenshot({path:path.join(root,'work','settings-dark-ru.png')});
     assert.deepEqual(errors,[]);
     console.log('PASS: English/Russian, light/dark, accents, personalization, per-instance RAM, local accounts, persistence, no renderer errors.');
-  } finally {await app.close();}
+  } finally {await close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

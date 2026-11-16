@@ -719,12 +719,15 @@ mod tests {
         })
         .unwrap();
         assert!(reload.finished().is_none(), "still staging");
-        assert_eq!(reload.progress.line(), "Preparing resources");
+        assert_eq!(reload.progress.fraction(), 0.0);
         release.send(()).unwrap();
         let (kind, staged) = wait(&mut reload);
         assert_eq!(kind, ReloadKind::Selection);
         assert_eq!(staged.err().as_deref(), Some("staged"));
-        assert_eq!(reload.progress.line(), "Loading pack tables");
+        assert_eq!(
+            reload.progress.fraction(),
+            2.0 / (reload.progress.lines.len() - 1) as f32
+        );
         assert_eq!(ran_on.recv().unwrap().as_deref(), Some("pack-reload"));
         assert!(reload.finished().is_none(), "the outcome is taken once");
     }

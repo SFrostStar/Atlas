@@ -9,7 +9,7 @@ if (-not $LauncherDirectory) {
     $LauncherDirectory = Join-Path $atlasRoot 'work\package-fixture\dist\Atlas Launcher-win32-x64'
 }
 $atlasVersion = (Get-Content -LiteralPath (Join-Path $atlasRoot 'package.json') -Raw | ConvertFrom-Json).version
-if (-not $OutputDirectory) { $OutputDirectory = Join-Path $atlasRoot "dist\Atlas-$atlasVersion-Portable" }
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $atlasRoot "dist\Atlas-$atlasVersion-Windows-x64" }
 $atlasDestination = [IO.Path]::GetFullPath($OutputDirectory)
 $atlasLauncher = [IO.Path]::GetFullPath($LauncherDirectory)
 $atlasPayload = Join-Path $atlasRoot 'bundle\game'
@@ -17,8 +17,16 @@ if (Test-Path -LiteralPath $atlasDestination) { throw 'Output already exists; ch
 foreach ($atlasFile in @('Atlas Launcher.exe','resources\app.asar')) {
     if (-not (Test-Path -LiteralPath (Join-Path $atlasLauncher $atlasFile) -PathType Leaf)) { throw "Missing launcher file: $atlasFile" }
 }
+$atlasLauncherVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $atlasLauncher 'Atlas Launcher.exe')).ProductVersion
+if ($atlasLauncherVersion -ne $atlasVersion) {
+    throw "Run the launcher packager before packaging Atlas $atlasVersion (launcher is $atlasLauncherVersion)."
+}
 foreach ($atlasFile in @('atlas-client.exe','atlas-ctl.exe','atlas-prepare.exe','libc++.dll','libunwind.dll','libwinpthread-1.dll','atlas-runtime.json','game-root\research-lock.json','game-root\exporters\manifest.json')) {
     if (-not (Test-Path -LiteralPath (Join-Path $atlasPayload $atlasFile) -PathType Leaf)) { throw "Missing setup payload: $atlasFile" }
+}
+$atlasPayloadVersion = (Get-Content -LiteralPath (Join-Path $atlasPayload 'atlas-runtime.json') -Raw | ConvertFrom-Json).version
+if ($atlasPayloadVersion -ne $atlasVersion) {
+    throw "Run Build-SetupPayload.ps1 before packaging Atlas $atlasVersion (payload is $atlasPayloadVersion)."
 }
 if (Get-ChildItem -LiteralPath (Join-Path $atlasPayload 'game-root') -Recurse -File -Filter '*.jar') { throw 'Minecraft jars must not be included in the portable payload.' }
 foreach ($atlasForbidden in @('data','runtime','engine','tools','bundle')) {

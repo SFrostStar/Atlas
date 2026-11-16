@@ -12,6 +12,7 @@ use winit::{event::KeyEvent, keyboard::ModifiersState};
 
 #[derive(Default)]
 pub(super) struct StartupMenu {
+    pending_mod_config: Option<String>,
     title: Option<Title>,
     options: OptionsUi,
     options_open: bool,
@@ -141,6 +142,9 @@ impl StartupMenu {
         }
         if let Some(focus) = self.key_focus.take() {
             game.key_focus_adopt(focus, self.key_slider_edit);
+        }
+        if let Some(id) = self.pending_mod_config.take() {
+            game.atlas_open_original_mod_config(&id);
         }
     }
 
@@ -572,7 +576,13 @@ impl Loading {
                     packs::open_folder(&dir);
                 }
                 Event::ConfigureMod(i) => {
-                    self.menu.options.show(Page::NativeMod(i));
+                    if let Some(id) = self.settings.mods.installed.get(i).map(|m| m.id.clone()) {
+                        if atlas_client::atlas::mod_menu::model::original_config(&id) {
+                            self.menu.pending_mod_config = Some(id);
+                        } else {
+                            self.menu.options.show(Page::NativeMod(i));
+                        }
+                    }
                 }
                 Event::ImportModFiles(paths) => {
                     let success = super::mods::import_files(&Game::game_dir(), &paths);

@@ -14,7 +14,7 @@ use crate::{
 use atlas_core::geometry::{Aabb, Direction, ShapeOp, Vec3, VoxelShape};
 use serde_json::Value;
 use std::{collections::HashMap, fs, io, path::Path, sync::Arc};
-#[path = "data/cache.rs"]
+#[path = "data_cache.rs"]
 mod cache;
 pub(super) use cache::set_dir as set_cache_dir;
 

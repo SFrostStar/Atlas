@@ -9207,6 +9207,12 @@ impl Game<'_> {
             self.draw_split_hud(&mut batch, true);
             return batch;
         }
+        if self.screen == Screen::Mod && self.title.is_some() {
+            atlas_client::atlas_menu::background(&mut batch, &self.gui.atlas);
+            self.fire_screen_render_post(&mut batch);
+            self.draw_toasts(&mut batch, false);
+            return batch;
+        }
         if let Some(title) = &mut self.title {
             title.poll_backup();
             if std::mem::take(&mut title.onboarding_finished) {
@@ -9611,8 +9617,12 @@ impl Game<'_> {
         debug_assert_eq!(self.slot_count(), self.slots().len());
         let view = self.screen_view(batch, screen);
         self.native_screen_render_post(batch, &view);
+        let _font = atlas_client::font::java_mod_font_scope();
         self.atlas_actions_draw(batch);
         self.atlas_visual_screen_render(batch);
+        self.atlas_config_render(batch);
+        self.atlas_aspect_render(batch);
+        self.atlas_esc_music_render(batch);
     }
     /// `native_screen_render_post` (`ScreenEvent.Render.Post`) for the title's
     /// own screen (`title`, `world_select`, `world_create`, `multiplayer`…),
@@ -9628,8 +9638,10 @@ impl Game<'_> {
             return;
         };
         self.native_screen_render_post(batch, &view);
+        let _font = atlas_client::font::java_mod_font_scope();
         self.atlas_actions_draw(batch);
         self.atlas_visual_screen_render(batch);
+        self.atlas_config_render(batch);
     }
     /// `CreativeModeInventoryScreen.hasPermissions` (`canUseGameMasterBlocks`
     /// and the Operator Items Tab option) given to `tryRefreshInvalidatedTabs`,
@@ -17088,6 +17100,10 @@ impl Game<'_> {
         let distance = (terrain_distance * 16) as f32;
         let depth_far =
             atlas_client::camera::depth_far(terrain_distance, self.settings.cloud_range);
+        let projection_aspect = (!title).then(|| self.atlas_aspect_ratio()).flatten();
+        if let Some(renderer) = &mut self.renderer {
+            renderer.set_projection_aspect(projection_aspect);
+        }
         // Only native mods read it: no matrices or allocation per frame without one.
         let mods_read_camera = !atlas_client::mod_api::mods().is_empty();
         self.screen_blur_requested.set(false);
@@ -17106,7 +17122,7 @@ impl Game<'_> {
                 view: (bob * spin * atlas_client::camera::view_matrix(yaw, pitch)).to_cols_array(),
                 projection: glam::Mat4::perspective_rh(
                     fov_degrees.to_radians(),
-                    size[0] as f32 / size[1].max(1) as f32,
+                    projection_aspect.unwrap_or_else(|| size[0] as f32 / size[1].max(1) as f32),
                     depth_far,
                     0.05,
                 )
@@ -19031,7 +19047,16 @@ impl Game<'_> {
                 return Ok(());
             }
             if let WindowEvent::MouseInput {state,button,..}=&event {
-                if self.atlas_visual_screen_mouse(glfw_button(*button),*state==ElementState::Pressed)||self.atlas_actions_mouse(glfw_button(*button),*state==ElementState::Pressed){return Ok(());}
+                let button = glfw_button(*button);
+                let pressed = *state == ElementState::Pressed;
+                if self.atlas_esc_music_mouse(button, pressed)
+                    || self.atlas_aspect_mouse(button, pressed)
+                    || self.atlas_config_mouse(button, pressed)
+                    || self.atlas_visual_screen_mouse(button, pressed)
+                    || self.atlas_actions_mouse(button, pressed)
+                {
+                    return Ok(());
+                }
             }
             // ScreenEvent.MouseButtonPressed.Pre / MouseButtonReleased.Pre:
             // the open screen hears of the press before anything reads it, and
@@ -19197,7 +19222,7 @@ impl Game<'_> {
                         }) * wheel_sensitivity
                     };
                     let d = scaled(raw_y) as f32;
-                    if self.atlas_visual_screen_scroll(d)||self.atlas_actions_scroll(d){return Ok(());}
+                    if self.atlas_config_scroll(d)||self.atlas_visual_screen_scroll(d)||self.atlas_actions_scroll(d){return Ok(());}
                     // ScreenEvent.MouseScrolled.Pre: the open screen hears of
                     // the wheel before anything scrolls, and a cancelled turn
                     // scrolls nothing — no bundle, no list, slider or
@@ -23386,20 +23411,10 @@ pub fn run_with() -> Result<()> {
         }
         return Err(error.into());
     }
-    // Someone is playing: the anonymous ping behind the launcher's "N playing now", and the
-    // official server in their list (servers.dat in the game folder, the working directory). Not
-    // for a server, a benchmark, a run that quits by itself, a harness's fixture or a run that
-    // atlas-ctl drives: those start in a source checkout and wrote the list there.
+    // Only ordinary player launches send the anonymous heartbeat.
     if !options.offscreen && !synchronous_startup(&options) {
         #[cfg(feature = "heartbeat")]
         atlas_client::heartbeat::start();
-        let player_dir = atlas_client::logging::player_dir();
-        if let Err(e) = atlas_client::multiplayer::add_official_server(&player_dir) {
-            log::warn!("could not add the official server to servers.dat: {e}");
-        }
-        if let Err(e) = atlas_client::multiplayer::add_partner_servers(&player_dir) {
-            log::warn!("could not add the partner servers to servers.dat: {e}");
-        }
     }
     mods::register_components(&vanilla_root)?;
     mods::register_standalone_models();

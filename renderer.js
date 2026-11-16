@@ -106,6 +106,9 @@ document.addEventListener('click',async event=>{
     return;
   }
   if(action==='picker-select'){const result=await invoke(()=>window.atlas.selectAccount(control.dataset.id));if(result)document.getElementById('account-picker').hidePopover();return;}
+  if(action==='signin-microsoft')return invoke(()=>window.atlas.startSignIn());
+  if(action==='cancel-signin')return invoke(()=>window.atlas.cancelSignIn());
+  if(action==='open-microsoft')return invoke(()=>window.atlas.openMicrosoft());
   const next={'picker-add':'add','picker-local':'local','picker-microsoft':'microsoft','picker-back':accountPickerPage==='add'?'list':'add'}[action];
   if(next){accountPickerPage=next;renderAccountPicker();document.querySelector('#account-picker input')?.focus();}
 });
@@ -270,10 +273,10 @@ function workshopPage() {
   return intro('Мастерская', '', button('open-source','Открыть исходники','folder-code','primary')) + `<section class="panel"><div class="panel-heading">${icon('braces')}<h3>Atlas ${escapeHtml(state.version)}</h3></div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div><span class="tag">${state.sourceAvailable?'Готово':'Не найдены'}</span></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div></section><div class="workshop-actions">${button('open-guide','Инструкция по изменению игры','book-open','secondary')}</div>`;
 }
 function settingsPage() {
-  const categories = [['appearance','palette','Оформление'],['memory','memory-stick','Память сборки'],['accounts','circle-user-round','Аккаунты'],['discord','radio','Discord'],['updates','download','Обновления'],['files','folder-code','Клиент и исходники']];
+  const categories = [['appearance','palette','Оформление'],['memory','memory-stick','Память сборки'],['discord','radio','Discord'],['updates','download','Обновления'],['files','folder-code','Клиент и исходники']];
   const section = (id, content) => `<div class="settings-section" id="settings-${id}">${content}</div>`;
   return intro('Настройки', '') + `<div class="settings-layout"><nav class="settings-navigation" aria-label="Настройки">${categories.map(([id,glyph,label])=>`<button type="button" class="settings-category ${id===settingsAnchor?'active':''}" data-settings-anchor="${id}">${icon(glyph)}<span>${label}</span></button>`).join('')}</nav><div class="settings-panels">`
-    + section('appearance', appearanceSettingsPanel()) + section('memory', memorySettingsPanel()) + section('accounts', accountSettingsPanel())
+    + section('appearance', appearanceSettingsPanel()) + section('memory', memorySettingsPanel())
     + section('discord', discordSettingsPanel()) + section('updates', updateSettingsPanel()) + section('files', `<section class="panel"><div class="panel-heading">${icon('box')}<h3>Клиент и исходники</h3></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div><div class="row-actions">${button('open-source','Открыть исходники','arrow-up-right')}${button('choose-source','Выбрать папку','folder-code')}</div></div><div class="settings-row"><div><strong>Скрывать лаунчер во время игры</strong></div><label class="switch"><input type="checkbox" id="close-on-launch" ${state.settings.closeOnLaunch?'checked':''} aria-label="Скрывать лаунчер во время игры"><span class="switch-track"></span></label></div></section><section class="panel"><div class="panel-heading">${icon('hard-drive')}<h3>Папки</h3></div><div class="settings-row"><div><strong>Корневая папка</strong><p class="path">${escapeHtml(state.projectRoot)}</p></div>${button('open-project','Открыть','arrow-up-right')}</div><div class="settings-row"><div><strong>Сборки и настройки</strong><p class="path">${escapeHtml(state.dataRoot)}</p></div><span class="tag">${state.instances.length}</span></div></section>`)
     + '</div></div>';
 }

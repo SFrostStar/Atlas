@@ -1,6 +1,5 @@
-const {_electron}=require('playwright-core');const assert=require('node:assert/strict');const path=require('node:path');
-const root=path.resolve(__dirname,'..');
-(async()=>{const app=await _electron.launch({executablePath:path.join(root,'node_modules/electron/dist/electron.exe'),args:[root],cwd:root,env:{...process.env,ATLAS_GUI_TEST:'1'}});try{
+const launchGuiTest=require('./launch-gui-test.cjs');const assert=require('node:assert/strict');
+(async()=>{const {app,close}=await launchGuiTest();try{
  const page=await app.firstWindow();await page.waitForSelector('#boot-splash',{state:'detached'});
  const initial=await page.evaluate(()=>window.atlas.getState());
  await app.evaluate(({ipcMain,BrowserWindow},initial)=>{
@@ -33,4 +32,4 @@ const root=path.resolve(__dirname,'..');
  assert.equal(await page.locator('#install-dialog').evaluate(e=>e.open),false);
  assert.equal(await app.evaluate(()=>globalThis.__atlasSetupTest.launches),1);
  console.log('PASS first-run UI: explicit download offer, real progress state, launch once after ready, error/retry/cancel with no actual downloads or game launch.');
- }finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1});
+ }finally{await close();}})().catch(e=>{console.error(e);process.exitCode=1});

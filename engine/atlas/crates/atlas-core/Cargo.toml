@@ -13,6 +13,9 @@ rng-trace = []
 [dependencies]
 libm = "=0.2.16"
 
+[build-dependencies]
+serde_json = "1"
+
 [[bin]]
 name = "atlas-parity"
 path = "src/bin/parity.rs"

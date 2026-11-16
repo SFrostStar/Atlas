@@ -338,6 +338,7 @@ dependencies = [
  "unicode-bidi",
  "ureq",
  "wgpu",
+ "windows 0.62.2",
  "winit",
  "winresource",
  "zip",
@@ -494,6 +495,7 @@ name = "atlas-core"
 version = "0.1.0"
 dependencies = [
  "libm",
+ "serde_json",
 ]
 
 [[package]]
@@ -662,6 +664,7 @@ dependencies = [
 name = "atlas-prepare"
 version = "0.1.0"
 dependencies = [
+ "atlas-core",
  "crc32fast",
  "libc",
  "regex",

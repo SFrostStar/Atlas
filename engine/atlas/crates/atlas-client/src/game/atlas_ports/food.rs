@@ -52,6 +52,29 @@ pub(super) struct State {
     synced: RefCell<HashMap<u32, (f32, f32, bool)>>,
 }
 impl State {
+    pub(super) fn config_value(&self) -> serde_json::Value {
+        // Preserve Java's short float spelling instead of widening f32 into a long f64.
+        serde_json::from_str(&serde_json::to_string(&self.config).unwrap()).unwrap()
+    }
+    pub(super) fn default_config() -> serde_json::Value {
+        serde_json::from_str(&serde_json::to_string(&Config::default()).unwrap()).unwrap()
+    }
+    pub(super) fn set_config(
+        &mut self,
+        home: &Path,
+        value: serde_json::Value,
+    ) -> Result<(), String> {
+        let config: Config = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        if !config.max_hud_overlay_flash_alpha.is_finite() {
+            return Err(atlas_client::lang::get("atlas.ports.invalid_config"));
+        }
+        let path = home.join("config/appleskin.json5");
+        let bytes = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+        std::fs::write(path, bytes).map_err(|e| e.to_string())?;
+        self.config = config;
+        Ok(())
+    }
     pub(super) fn load(home: &Path) -> Self {
         let path = home.join("config/appleskin.json5");
         let mut state = Self::default();
@@ -633,5 +656,18 @@ fn tooltip_multiple(
     for vertex in &mut batch.vertices[start..] {
         vertex.pos[0] = x + (vertex.pos[0] - x) * 0.75;
         vertex.pos[1] = y + (vertex.pos[1] - y) * 0.75;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configuration_keeps_original_short_float_values() {
+        assert_eq!(State::default_config()["maxHudOverlayFlashAlpha"], 0.65);
+        let mut state = State::default();
+        state.config.max_hud_overlay_flash_alpha = 0.7;
+        assert_eq!(state.config_value()["maxHudOverlayFlashAlpha"], 0.7);
     }
 }

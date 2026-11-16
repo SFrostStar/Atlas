@@ -42,7 +42,10 @@ function transformText(text, filename, localPackages) {
     // and their checksums/source URLs remain exactly as Cargo recorded them.
     source = source.replace(/"([a-zA-Z0-9_-]+)([^"\r\n]*)"/g, (full, name, rest) => localPackages.has(name) ? `"${renameBrand(name)}${rest}"` : full);
   } else source = renameBrand(source);
-  return restore(source);
+  const branded = restore(source);
+  return path.basename(filename) === 'game.rs'
+    ? require('./atlas-server-policy.cjs').stripBundledServerOffers(branded)
+    : branded;
 }
 
 function inventory(sourceRoot, workspaceRoot) {

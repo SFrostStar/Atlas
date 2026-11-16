@@ -3,12 +3,15 @@ use super::super::{Game, ray_box};
 use atlas_client::{
     hud::{HudBatch, rgba},
     items::ItemStack,
+    keybinds,
+    text::Text,
 };
 use std::{
     cell::Cell,
     path::{Path, PathBuf},
     time::Instant,
 };
+use winit::keyboard::KeyCode;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub(super) struct Config {
@@ -259,6 +262,69 @@ pub(super) fn draw(g: &Game<'_>, batch: &mut HudBatch) {
     }
 }
 impl Game<'_> {
+    pub(in crate::game) fn atlas_armor_key(
+        &mut self,
+        key: KeyCode,
+        pressed: bool,
+        repeat: bool,
+    ) -> bool {
+        if !pressed
+            || repeat
+            || !self.atlas_port_on("atlas-armorindicator")
+            || !self.native_playing()
+            || self.player.is_none()
+        {
+            return false;
+        }
+        let mut handled = false;
+        for (binding, default) in [
+            ("toggle_hud", "key.keyboard.h"),
+            ("toggle_tint", "key.keyboard.j"),
+            ("open_config", "key.keyboard.k"),
+        ] {
+            if keybinds::key_code(&self.native_mod_key("atlas-armorindicator", binding, default))
+                != Some(key)
+            {
+                continue;
+            }
+            handled = true;
+            if binding == "open_config" {
+                self.atlas_original_open_screen("atlas-armorindicator");
+                continue;
+            }
+            let armor = &mut self.atlas_ports.armor;
+            let enabled = if binding == "toggle_hud" {
+                armor.config.target_hud_enabled = !armor.config.target_hud_enabled;
+                armor.config.target_hud_enabled
+            } else {
+                armor.config.visual_damage_tint = !armor.config.visual_damage_tint;
+                armor.config.visual_damage_tint
+            };
+            super::utility::config::save(&armor.path, &armor.config);
+            let text = if binding == "toggle_hud" {
+                atlas_client::lang::get_or(
+                    "atlas.original.armor.message.hud",
+                    "§6[ArmorIndicator] §fTarget HUD: {state}",
+                )
+            } else {
+                atlas_client::lang::get_or(
+                    "atlas.original.armor.message.tint",
+                    "§6[ArmorIndicator] §fArmor Red Damage Tint: {state}",
+                )
+            };
+            let state = atlas_client::lang::get_or(
+                if enabled {
+                    "atlas.original.armor.enabled"
+                } else {
+                    "atlas.original.armor.disabled"
+                },
+                if enabled { "§aEnabled" } else { "§cDisabled" },
+            );
+            self.titles
+                .set_overlay(Text::legacy(&text.replace("{state}", &state)), false);
+        }
+        handled
+    }
     pub(in crate::game) fn atlas_armor_config(&self, id: &str) -> Option<serde_json::Value> {
         (id == "atlas-armorindicator")
             .then(|| serde_json::to_value(&self.atlas_ports.armor.config).ok())

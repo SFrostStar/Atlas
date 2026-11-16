@@ -26,6 +26,41 @@ pub const COMPACT: &str = crate::atlas::fonts::COMPACT;
 /// The original resource-pack default, retained for faithful Java mod screens.
 pub const MOD_MENU: &str = "atlas:modmenu-vanilla";
 
+thread_local! {
+    static JAVA_MOD_FONT_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// A thread-bound font selection for original Java mod widgets. It deliberately
+/// does not borrow the GUI, so an interactive screen can also mutate its state.
+#[must_use]
+pub struct JavaModFontScope {
+    previous: u32,
+    thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+impl Drop for JavaModFontScope {
+    fn drop(&mut self) {
+        JAVA_MOD_FONT_DEPTH.with(|depth| depth.set(self.previous));
+    }
+}
+pub fn java_mod_font_scope() -> JavaModFontScope {
+    let previous = JAVA_MOD_FONT_DEPTH.with(|depth| {
+        let previous = depth.get();
+        depth.set(previous.saturating_add(1));
+        previous
+    });
+    JavaModFontScope {
+        previous,
+        thread: std::marker::PhantomData,
+    }
+}
+fn active_font_id(id: &str) -> &str {
+    if matches!(id, DEFAULT | COMPACT) && JAVA_MOD_FONT_DEPTH.with(|depth| depth.get() != 0) {
+        MOD_MENU
+    } else {
+        id
+    }
+}
+
 /// A glyph ready to draw: atlas UVs and its box relative to the pen
 /// position (GlyphBitmap left/top/right/bottom), in GUI pixels.
 #[derive(Clone, Copy, Debug, Default)]
@@ -784,6 +819,17 @@ impl Font {
     /// Restores the default even on unwind, and never holds the cache borrow
     /// while drawing. Other Atlas screens and the world retain smooth text.
     pub fn using_font<R>(&self, id: &str, draw: impl FnOnce() -> R) -> R {
+        if id == MOD_MENU
+            && self
+                .cache
+                .borrow()
+                .sets
+                .iter()
+                .any(|(key, _)| key == MOD_MENU)
+        {
+            let _scope = java_mod_font_scope();
+            return draw();
+        }
         struct Restore<'a>(&'a Font, usize, usize);
         impl Drop for Restore<'_> {
             fn drop(&mut self) {
@@ -841,7 +887,10 @@ impl Font {
     /// cache reset (glyphs move in the atlas) or other font options. Text laid
     /// out under one epoch can be kept until it changes.
     pub fn epoch(&self) -> u64 {
-        self.generation.get() << 2 | u64::from(self.uniform) << 1 | u64::from(self.japanese)
+        self.generation.get() << 3
+            | u64::from(JAVA_MOD_FONT_DEPTH.with(|depth| depth.get() != 0)) << 2
+            | u64::from(self.uniform) << 1
+            | u64::from(self.japanese)
     }
     /// The glyph for a character in the default font (FontSet.getGlyph).
     pub fn glyph(&self, c: char) -> Glyph {
@@ -862,6 +911,7 @@ impl Font {
     }
     /// The first active provider's glyph, else the missing glyph.
     fn glyph_of(&self, id: &str, c: char) -> Glyph {
+        let id = active_font_id(id);
         let mut cache = self.cache.borrow_mut();
         let Cache { sets, region, .. } = &mut *cache;
         // FontManager.getFontSetRaw: a font that doesn't exist draws every
@@ -889,6 +939,7 @@ impl Font {
     /// advance is not fishy, else the missing glyph. A character whose first glyph is fine has
     /// the same one for both.
     fn glyph_non_fishy(&self, id: &str, c: char) -> Glyph {
+        let id = active_font_id(id);
         let any = self.glyph_of(id, c);
         if !fishy_advance(any.advance) {
             return any;
@@ -1049,7 +1100,7 @@ impl Font {
     /// glyphs below U+0250.
     pub fn random_glyph(&self, style: &Style, advance: f32) -> Glyph {
         use atlas_core::random::RandomSource;
-        let id = style.font.as_deref().unwrap_or(DEFAULT);
+        let id = active_font_id(style.font.as_deref().unwrap_or(DEFAULT));
         let width = advance.ceil() as i32;
         let pick = {
             let mut cache = self.cache.borrow_mut();
@@ -1578,6 +1629,16 @@ mod tests {
         let smooth = font.width("xxx");
         assert!(font.glyph('x').smooth);
         assert_eq!(font.using_font(MOD_MENU, || font.width("xxx")), 51.0);
+        assert_eq!(font.width("xxx"), smooth);
+        let smooth_epoch = font.epoch();
+        {
+            let _scope = java_mod_font_scope();
+            assert_eq!(font.width("xxx"), 51.0);
+            assert_ne!(font.epoch(), smooth_epoch);
+            assert_eq!(font.using_font(MOD_MENU, || font.width("xxx")), 51.0);
+            assert_eq!(font.width("xxx"), 51.0);
+        }
+        assert_eq!(font.epoch(), smooth_epoch);
         assert_eq!(font.width("xxx"), smooth);
         let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             font.using_font(MOD_MENU, || {

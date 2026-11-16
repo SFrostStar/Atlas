@@ -52,10 +52,6 @@ pub fn images() -> Vec<(&'static str, &'static [u8])> {
             include_bytes!("assets/atlas-radarmod.png"),
         ),
         (
-            "atlas/modmenu/icons/atlas-rwjoiner",
-            include_bytes!("assets/atlas-rwjoiner.png"),
-        ),
-        (
             "atlas/modmenu/icons/atlas-streamermode",
             include_bytes!("assets/atlas-streamermode.png"),
         ),
@@ -66,6 +62,10 @@ pub fn images() -> Vec<(&'static str, &'static [u8])> {
         (
             "atlas/modmenu/icons/atlas-zoomify",
             include_bytes!("assets/atlas-zoomify.png"),
+        ),
+        (
+            "atlas/modmenu/icons/atlas-esc-music",
+            include_bytes!("assets/atlas-esc-music.png"),
         ),
         (
             "atlas/modmenu/mod_configuration",

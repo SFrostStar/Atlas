@@ -5,12 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-/// This release's version: release.yml builds it with `ATLAS_VERSION` from the tag
-/// (docs/versioning.md); a build from source says Cargo.toml's.
-const VERSION: &str = match option_env!("ATLAS_VERSION") {
-    Some(version) if !version.is_empty() => version,
-    _ => env!("CARGO_PKG_VERSION"),
-};
+const VERSION: &str = atlas_core::release::VERSION;
 
 const HELP: &str = "\
 atlas-prepare: prepare Atlas's resources from your own Minecraft Java Edition

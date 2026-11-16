@@ -36,6 +36,20 @@ pub struct Entry {
     pub configurable: bool,
     pub problem: Option<String>,
 }
+
+pub fn original_config(id: &str) -> bool {
+    matches!(
+        id,
+        "atlas-appleskin"
+            | "atlas-armorindicator"
+            | "atlas-radarmod"
+            | "atlas-chunkanimator"
+            | "atlas-zoomify"
+            | "atlas-gammautils"
+            | "atlas-hotcommands"
+            | "atlas-viewmodel"
+    )
+}
 impl Entry {
     pub fn name(&self, c: &Config) -> String {
         if c.translate_names {
@@ -92,7 +106,7 @@ pub fn entries(list: &ModList) -> Vec<Entry> {
         details: Details {
             id: "atlas".into(),
             name: "Atlas".into(),
-            version: option_env!("ATLAS_VERSION").unwrap_or("1.1.0").into(),
+            version: atlas_core::release::VERSION.into(),
             description: "Minecraft on Rust, based on Horizon.".into(),
             authors: vec!["SFrostStar".into()],
             licenses: vec!["MIT".into()],
@@ -128,10 +142,14 @@ pub fn entries(list: &ModList) -> Vec<Entry> {
                     ..Default::default()
                 }
             });
-        let configurable = installed
-            .native
-            .as_ref()
-            .is_some_and(|p| !p.keys.is_empty() || !p.buttons.is_empty());
+        let configurable = if ports.iter().any(|p| p.id == installed.id) {
+            original_config(&installed.id)
+        } else {
+            installed
+                .native
+                .as_ref()
+                .is_some_and(|p| !p.keys.is_empty() || !p.buttons.is_empty())
+        };
         out.push(Entry {
             details,
             installed_index: Some(index),

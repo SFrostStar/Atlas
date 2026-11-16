@@ -403,6 +403,9 @@ impl Game<'_> {
         if self.dialog_open() {
             return "dialog";
         }
+        if self.screen == Screen::Mod {
+            return "mod";
+        }
         if self.title.is_some() {
             return "title";
         }

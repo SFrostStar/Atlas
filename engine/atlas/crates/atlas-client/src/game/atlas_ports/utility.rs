@@ -149,7 +149,12 @@ impl Game<'_> {
             }
             _ => return Err("Unknown mod".into()),
         }
-        u.save();
+        match id {
+            NO_SHAKE_HAND => config::save(&u.home.join("config/noshakehand.json"), &u.shake),
+            MENTION_SOUND => config::save(&u.home.join("config/mentionsound/config.json"), &u.mention),
+            ZOOMIFY => config::save(&u.home.join("config/zoomify.json"), &u.zoom),
+            _ => unreachable!(),
+        }
         Ok(())
     }
     pub(in crate::game) fn atlas_port_auto_sprint(&self) -> bool {

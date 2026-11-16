@@ -126,6 +126,9 @@ pub fn map_slot_sprite(slot: usize) -> Option<&'static str> {
 }
 /// The atlas slot the minimap extra draws into.
 pub const MINIMAP_SPRITE: &str = "atlas/minimap";
+/// Album art uploaded by the pause menu's external media controls.
+pub const MEDIA_COVER_SPRITE: &str = "atlas/media-cover";
+pub const MEDIA_COVER_SIZE: u32 = 64;
 /// A mod's own image (`native_mod_image`), drawn with `native_sprite`; big
 /// enough for a world map's 1024 blocks at a block a pixel.
 pub const MOD_IMAGE_SPRITE: &str = "atlas/modimage";
@@ -862,6 +865,12 @@ impl HudAtlas {
             crate::minimap::SIZE as u32,
             vec![0; crate::minimap::SIZE * crate::minimap::SIZE * 4],
         ));
+        images.push((
+            MEDIA_COVER_SPRITE.into(),
+            MEDIA_COVER_SIZE,
+            MEDIA_COVER_SIZE,
+            vec![0; (MEDIA_COVER_SIZE * MEDIA_COVER_SIZE * 4) as usize],
+        ));
         // A mod's own image (native `mod_image`), only when a mod is loaded.
         if mod_image {
             images.push((
@@ -957,7 +966,10 @@ impl HudAtlas {
             h,
         };
         let mut sprites = HashMap::new();
-        sprites.insert("atlas/white".into(), rect(0, text_rows, 4, text_rows + 4, 4, 4));
+        sprites.insert(
+            "atlas/white".into(),
+            rect(0, text_rows, 4, text_rows + 4, 4, 4),
+        );
         sprites.insert(
             "atlas/ui-text".into(),
             rect(0, 0, width, text_rows, width, text_rows),
@@ -1325,7 +1337,10 @@ impl HudAtlas {
         {
             edition.3 = pixels;
         }
-        for (name, png) in crate::atlas::images().into_iter().chain(crate::atlas::mod_menu::images()) {
+        for (name, png) in crate::atlas::images()
+            .into_iter()
+            .chain(crate::atlas::mod_menu::images())
+        {
             let (w, h, pixels) = decode_bytes(png)?;
             images.push((name.into(), w, h, pixels));
         }

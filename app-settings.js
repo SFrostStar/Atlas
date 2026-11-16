@@ -44,18 +44,6 @@ document.addEventListener('input',event=>{
   event.target.setAttribute('aria-valuetext',`${value} ${tr('ГБ')}`);
   document.getElementById('memory-value').value=`${value} ${tr('ГБ')}`;
 });
-function accountSettingsPanel() {
-  const account = state.accounts;
-  if (!account) return '';
-  const signingIn = ['starting','waiting','verifying'].includes(account.status);
-  const signinLabel = account.status==='verifying'?'Проверяем аккаунт…':signingIn?'Вход…':'Войти через Microsoft';
-  return `<section class="panel"><div class="panel-heading">${icon('circle-user-round')}<h3>Аккаунты</h3></div>
-  ${account.accounts.map(item=>`<div class="settings-row account-row"><div><strong data-user-text>${escapeHtml(item.name)}</strong><p>${item.type==='local'?'Локальный профиль':'Microsoft'}</p></div><div class="row-actions">${button('select-account',account.selectedId===item.id?'Выбран':'Выбрать',account.selectedId===item.id?'check':'user-round','secondary',`data-id="${escapeHtml(item.id)}" ${account.selectedId===item.id?'disabled':''}`)}${button('remove-account','Удалить','x','quiet',`data-id="${escapeHtml(item.id)}"`)}</div></div>`).join('')}
-  <form id="local-account-form" class="account-add"><input name="name" aria-label="Ник игрока" placeholder="Ник игрока" pattern="[A-Za-z0-9_]{3,16}" minlength="3" maxlength="16" required autocomplete="off"><button type="submit" class="button secondary">${icon('plus')}Добавить</button></form>
-  <div class="account-signin">${button('signin-microsoft',signinLabel,'log-in','secondary',!account.configured||!account.storageAvailable||signingIn?'disabled':'')}${!account.configured?'<p class="subtitle">Для Microsoft-входа нужен Client ID приложения Atlas.</p>':!account.storageAvailable?'<p class="subtitle">Защищённое хранилище Windows недоступно.</p>':''}${signingIn&&!account.device?button('cancel-signin','Отменить вход','x','quiet'):''}</div>
-  ${account.device?`<div class="signin-device"><span>Код входа</span><strong data-user-text>${escapeHtml(account.device.userCode)}</strong>${button('open-microsoft','Открыть Microsoft','external-link')}${button('cancel-signin','Отменить вход','x','quiet')}</div>`:''}
-  ${account.error?`<p class="form-error">${escapeHtml(AtlasI18n.accountError(account.error,state.settings.language))}</p>`:''}<p class="subtitle">Игра использует выбранный профиль при следующем запуске.</p></section>`;
-}
 document.addEventListener('change',async event=>{
   const element=event.target;
   if (element.dataset.setting) {
@@ -66,17 +54,5 @@ document.addEventListener('change',async event=>{
 });
 document.addEventListener('click',async event=>{
   const target=event.target.closest('[data-action]'); if(!target)return;
-  const action=target.dataset.action;
-  if(action==='set-accent')await invoke(()=>window.atlas.saveSettings({accentColor:target.dataset.accent}));
-  if(action==='select-account')await invoke(()=>window.atlas.selectAccount(target.dataset.id));
-  if(action==='remove-account')await invoke(()=>window.atlas.removeAccount(target.dataset.id));
-  if(action==='signin-microsoft')await invoke(()=>window.atlas.startSignIn());
-  if(action==='cancel-signin')await invoke(()=>window.atlas.cancelSignIn());
-  if(action==='open-microsoft')await invoke(()=>window.atlas.openMicrosoft());
-});
-document.addEventListener('submit',async event=>{
-  if(event.target.id!=='local-account-form')return;
-  event.preventDefault();
-  const name=new FormData(event.target).get('name');
-  await invoke(()=>window.atlas.addLocalAccount(name));
+  if(target.dataset.action==='set-accent')await invoke(()=>window.atlas.saveSettings({accentColor:target.dataset.accent}));
 });

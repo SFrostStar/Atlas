@@ -1,5 +1,5 @@
 //! The dedicated server's chat filter (docs/chat-filter.md), without the game: `server.toml`'s
-//! `[chat_filter]`, the matcher for the slur list (`data/slurs.txt`, or the owner's `words_file`), and
+//! `[chat_filter]`, the matcher for the slur list (`assets/slurs.txt`, or the owner's `words_file`), and
 //! the escalation (a refused message, then a mute, then a temporary ban), with the mutes kept in a file
 //! so that they outlive a restart. The server's hub (`atlas_client::lan`) asks it before it relays a
 //! player's text and carries out what it decides.
@@ -13,7 +13,7 @@ mod normalise;
 pub use normalise::{Run, Text};
 
 /// The list built into the game, used when `words_file` is empty.
-pub const DEFAULT_WORDS: &str = include_str!("../data/slurs.txt");
+pub const DEFAULT_WORDS: &str = include_str!("../assets/slurs.txt");
 
 /// The mutes, beside server.properties.
 pub const MUTES_FILE: &str = "chat-filter-mutes.json";
@@ -108,7 +108,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    /// Compiles a list in `data/slurs.txt`'s format.
+    /// Compiles a list in `assets/slurs.txt`'s format.
     pub fn new(list: &str) -> Self {
         let mut f = Filter {
             entries: Vec::new(),

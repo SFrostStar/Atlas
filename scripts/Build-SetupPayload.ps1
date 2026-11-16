@@ -10,7 +10,7 @@ if (-not $RuntimeDirectory) { $RuntimeDirectory = Join-Path $atlasProject 'runti
 $atlasSource = Join-Path $atlasProject 'engine\atlas'
 $atlasBundle = Join-Path $atlasProject 'bundle\game'
 $atlasGameRoot = Join-Path $atlasBundle 'game-root'
-$atlasScratch = Join-Path $atlasProject ('work\setup-build-' + [guid]::NewGuid())
+$atlasScratch = Join-Path ([IO.Path]::GetTempPath()) ('atlas-setup-build-' + [guid]::NewGuid())
 $atlasOldPath = $env:PATH
 $atlasOldCargo = $env:CARGO_HOME
 $atlasOldRustup = $env:RUSTUP_HOME
@@ -18,6 +18,10 @@ $atlasOldVersion = $env:ATLAS_VERSION
 $atlasOldNightly = $env:ATLAS_NIGHTLY
 try {
     $env:ATLAS_VERSION = (Get-Content -LiteralPath (Join-Path $atlasProject 'package.json') -Raw | ConvertFrom-Json).version
+    $atlasBuiltVersion = (Get-Content -LiteralPath (Join-Path $RuntimeDirectory 'atlas-runtime.json') -Raw | ConvertFrom-Json).version
+    if ($atlasBuiltVersion -ne $env:ATLAS_VERSION) {
+        throw "Run Build-Atlas.ps1 before packaging Atlas $env:ATLAS_VERSION (client is $atlasBuiltVersion)."
+    }
     $env:ATLAS_NIGHTLY = ''
     $env:CARGO_HOME = Join-Path $atlasProject 'tools\cargo'
     $env:RUSTUP_HOME = Join-Path $atlasProject 'tools\rustup'
@@ -88,4 +92,5 @@ try {
     $env:RUSTUP_HOME = $atlasOldRustup
     $env:ATLAS_VERSION = $atlasOldVersion
     $env:ATLAS_NIGHTLY = $atlasOldNightly
+    & (Join-Path $PSScriptRoot 'Remove-AtlasScratch.ps1') -Directory $atlasScratch
 }

@@ -8,6 +8,5 @@
   "resourceSchema": 7,
   "resourceOutputVersion": 3,
   "overlayCacheVersion": 8,
-  "note": "Source integration with Atlas presentation, resource acceleration and startup adapters. Original copyright and dependency licenses retained.",
-  "atlasVersion": "1.1.0"
+  "note": "Source integration with Atlas presentation, resource acceleration and startup adapters. Original copyright and dependency licenses retained."
 }

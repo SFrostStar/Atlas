@@ -16,6 +16,7 @@ const adapters = [
   ...['game/agent.rs','game/fov.rs','game/hand.rs','game/maps.rs','game/creatures.rs','game/armor_stands.rs','game/glowing.rs','game/render_tick.rs','menu.rs'].map(name=>'crates/atlas-client/src/'+name),
   'crates/atlas-client-render/src/audio.rs', 'crates/atlas-client-render/src/chat.rs','crates/atlas-client-render/src/entity.wgsl',
   'crates/atlas-client-input/src/mouse.rs','crates/atlas-client/src/game/potions.rs',
+  'crates/atlas-threads/src/lib.rs','crates/atlas-threads/src/locale.rs',
   'crates/atlas-client/assets/atlas/lang/en_us.json','crates/atlas-client/assets/atlas/lang/ru_ru.json',
   'crates/atlas-client-render/Cargo.toml', 'crates/atlas-client/Cargo.toml', 'crates/atlas-client-lib/Cargo.toml', 'ATLAS-UPSTREAM.json', 'ATLAS-PORTS.md', 'MOD-PORT-NOTICES.md', 'THIRD_PARTY_NOTICES.md',
 ];

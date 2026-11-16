@@ -110,35 +110,6 @@ impl Default for Pvp {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
-pub(super) struct RwJoiner {
-    pub enabled: bool,
-    pub target_grief: i32,
-    pub target_mode: String,
-    pub click_delay_ms: u64,
-    pub auto_restart_rejoin: bool,
-    pub sound_alert: bool,
-    pub show_hud: bool,
-    pub hud_x: i32,
-    pub hud_y: i32,
-}
-impl Default for RwJoiner {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            target_grief: 11,
-            target_mode: "1.21".into(),
-            click_delay_ms: 900,
-            auto_restart_rejoin: true,
-            sound_alert: true,
-            show_hud: true,
-            hud_x: 10,
-            hud_y: 10,
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
 pub(super) struct Outline {
     pub enabled: bool,
     pub through_walls: bool,

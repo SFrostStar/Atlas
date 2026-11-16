@@ -21,9 +21,14 @@ if (process.versions.electron) {
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
   const { hashFile } = require('../lib/release-updater.cjs');
-  test('Electron extracts and hashes app.asar as a real update file, outside its virtual archive filesystem', { skip: process.platform !== 'win32' }, async () => {
+  test('Electron extracts and hashes app.asar as a real update file, outside its virtual archive filesystem', { skip: process.platform !== 'win32' }, async t => {
     const root = path.resolve(__dirname, '..');
-    const fixtureRoot = fs.mkdtempSync(path.join(root, 'work', 'update-asar-test-'));
+    const temp = fs.realpathSync(require('node:os').tmpdir());
+    const fixtureRoot = fs.mkdtempSync(path.join(temp, 'atlas-update-asar-test-'));
+    t.after(() => {
+      assert.equal(fs.realpathSync(fixtureRoot), fixtureRoot);
+      fs.rmSync(fixtureRoot, { recursive: true, maxRetries: 3, retryDelay: 250 });
+    });
     const source = path.join(fixtureRoot, 'app-source');
     const portable = path.join(fixtureRoot, 'portable');
     fs.mkdirSync(source, { recursive: true });

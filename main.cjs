@@ -35,11 +35,14 @@ const logs = [];
 let publishTimer;
 const projectRoot = app.isPackaged ? resolvePortableRoot(process.execPath) : __dirname;
 const startupDeadline = performance.timeOrigin + 1000;
-const guiTest = !app.isPackaged && process.env.ATLAS_GUI_TEST === '1';
-if (guiTest) {
-  const profile = path.join(projectRoot, 'work', 'gui-test-profile');
+const guiTestRoot = !app.isPackaged && process.env.ATLAS_GUI_TEST;
+const guiTest = Boolean(guiTestRoot);
+if (guiTestRoot) {
+  if (!path.isAbsolute(guiTestRoot)) throw new Error('ATLAS_GUI_TEST requires an absolute test directory.');
+  const profile = path.join(guiTestRoot, 'profile');
   fs.mkdirSync(profile, { recursive: true });
   app.setPath('userData', profile);
+  app.setPath('sessionData', profile);
 }
 
 function appendLog(message, level = 'info') {
@@ -84,6 +87,7 @@ async function applyUpdate(restart) {
 }
 
 function discordEnabled() {
+  if (guiTest) return false;
   return typeof store.config.settings.discordRichPresence === 'boolean'
     ? store.config.settings.discordRichPresence
     : readPreference(store.instancePath(store.config.selectedId));
@@ -201,7 +205,10 @@ function registerHandlers() {
   handle('refresh-mods', async () => { await mods.refresh(); return state(); });
   handle('change-mod', (id, source, project, action) => {
     if (games.isInstanceRunning(id)) throw new Error('Закрой окна этой сборки перед изменением её модов.');
-    mods.change(id, source, project, action); return state();
+    mods.change(id, source, project, action);
+    try { mods.syncPortFiles(id); }
+    catch (error) { appendLog(`Не удалось обновить список файлов модов: ${error.message}`, 'error'); }
+    return state();
   });
   handle('mod-page', (id) => {
     const project=mods.projects.find(p=>p.id===id);
@@ -218,7 +225,7 @@ function registerHandlers() {
   handle('stop-game', async (sessionId) => { await games.stop(sessionId); return state(); });
   handle('restart-game', async (sessionId) => { assertUpdateIdle(); await games.restart(sessionId); return state(); });
   handle('open-folder', async (kind, id) => {
-    const directory = store.folder(kind, id);
+    const directory = kind === 'mods' ? mods.syncPortFiles(id ?? store.config.selectedId) : store.folder(kind, id);
     if (!fs.existsSync(directory)) throw new Error('Эта папка ещё не создана.');
     const error = await shell.openPath(directory);
     if (error) throw new Error(`Не удалось открыть папку: ${error}`);
@@ -251,7 +258,7 @@ else {
     if (window) { window.show(); if (window.isMinimized()) window.restore(); window.focus(); }
   });
   app.whenReady().then(() => {
-    try { store = new LauncherStore(projectRoot, guiTest ? { dataRoot: path.join(projectRoot, 'work', 'gui-test-data') } : undefined); }
+    try { store = new LauncherStore(projectRoot, guiTest ? { dataRoot: path.join(guiTestRoot, 'data') } : undefined); }
     catch (error) { dialog.showErrorBox('Atlas Launcher', error.message); app.quit(); return; }
     try {
       const existingAccounts = fs.existsSync(path.join(store.dataRoot, 'accounts.json'));
@@ -281,6 +288,10 @@ else {
     } });
     installer = new GameInstallManager({projectRoot,dataRoot:store.dataRoot,onChange:()=>{if(installer?.snapshot().status==='ready')needsSetup=false;publishSoon();}});
     mods = new ModManager(store);
+    for (const {id} of store.config.instances) {
+      try { mods.syncPortFiles(id); }
+      catch (error) { appendLog(error.message, 'error'); }
+    }
     if (app.isPackaged && process.env.ATLAS_LAUNCHER_NO_SELF_UPDATE !== '1') {
       updater = new ReleaseUpdater({ projectRoot, dataRoot: store.dataRoot, executable: process.execPath,
         currentVersion: launcherVersion, onChange: publishSoon,

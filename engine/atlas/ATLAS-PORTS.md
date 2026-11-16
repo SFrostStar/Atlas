@@ -1,8 +1,8 @@
 # Atlas native mod ports
 
-The launcher offers 26 optional native implementations: the existing six ports
-and twenty additional mods inspected from SFrostStar's supplied JARs.
-Java JARs are reference material and are never executed or included in builds.
+The launcher offers 27 optional native implementations: the existing six ports
+and twenty-one additional mods inspected from SFrostStar's supplied JARs.
+Java JARs are reference material; Atlas never executes them or includes them in builds.
 Exact reference versions, source hashes, authors and licenses are recorded in
 [MOD-PORT-NOTICES.md](MOD-PORT-NOTICES.md).
 
@@ -17,7 +17,7 @@ Exact reference versions, source hashes, authors and licenses are recorded in
 | Zoomify 2.15.2 | Geometric wheel tiers, smooth entry/exit, hold/toggle and secondary zoom, retained tiers, sensitivity, hand FOV and spyglass behavior |
 | MentionSound 1.0.0 | Case-insensitive substring mentions, extra names, configurable 500-ms default cooldown, own-message exclusion and WAV/AIFF notification files |
 
-## Twenty additional implementations
+## Twenty-one additional implementations
 
 | Mod | Native behavior |
 | --- | --- |
@@ -28,7 +28,6 @@ Exact reference versions, source hashes, authors and licenses are recorded in
 | Lootbeams | Item filters, rarity outlines and rotating world-space beams |
 | NoFluid | Independent fluid-fog, water/fire-overlay and water-vision switches |
 | PvPSurvived | Original combat-end messages, boss-bar tracking, cooldown and sound |
-| RwJoiner | ReallyWorld menu/scoreboard state machine and client commands |
 | TotemPops | Player pop counters, reset rules, chat notices and world-space labels |
 | CullParticles | The supplied JAR disables push-out-of-blocks; its name does not describe particle culling |
 | AutoCraft | Original crystal/eye/arrow crafting click sequence and feedback |
@@ -41,6 +40,8 @@ Exact reference versions, source hashes, authors and licenses are recorded in
 | ViewModel | Separate hand transforms, thirteen swing styles, duration and interactive chat controls |
 | Chunk Animator | Five section-entry modes, eleven easings and first-visible-draw timing |
 | Gamma Utils | Gamma/night-vision controls, transitions, dynamic light, dimensions and optional client-only status indicators |
+| Aspect Ratio | H opens the original live slider and five presets; Reset restores the window ratio. The world and hand stretch while the HUD stays at the window size. |
+| ESC Music Controller | Pause menu playback controls, title, artist, cover and timeline from the current Windows media session. |
 
 ## Configuration and validation
 
@@ -58,11 +59,26 @@ applies at the next game launch; in-game toggles apply immediately. Nothing is
 installed by default. Additional windows copy the listed mod configuration,
 never saved worlds or account credentials.
 
-Radar and Gamma Utils deliberately use Atlas configuration screens, as approved
-by SFrostStar. Further work on complex mod interfaces is deferred at the user's
-request. Existing interface code is preserved; it is not a claim of complete
-pixel-for-pixel visual parity. Remaining interface comparisons include all GUI
-scales, HotCommands editor details and Inventory Layouts wrapped status text.
+The port-owned screens follow the supplied Java versions: AppleSkin and Chunk
+Animator use Cloth-style configuration; Gamma Utils keeps its three Cloth
+categories; Zoomify keeps its four YACL categories. ArmorIndicator, Radar,
+HotCommands and ViewModel retain their original custom screens. Inventory Layouts
+retains its inventory-side panel rather than acquiring a standalone settings page.
+Ports with no original configuration GUI do not expose the generic Atlas JSON
+editor through Mod Menu. Original mod screens use their original bitmap font;
+ordinary Atlas game screens retain the smooth font.
+Native mod key bindings remain available in the vanilla Controls / Key Binds list,
+including ports that have no configuration screen.
+
+Two differences were explicitly approved by SFrostStar: Zoomify Check Migrations
+is visible but disabled with an explanation until its Java source mods are ported;
+Unbind Conflicting removes other bindings matching the primary zoom key, even
+though the supplied reference JAR produced no change in the controlled Java run.
+Native UI validation passed 31 scenarios at 1280x720: English at GUI scale 2 and
+Russian at GUI scale 3, including opening configuration before entering a world,
+save/cancel/reset, RGB editing, all Zoomify presets and native key rebinding.
+Further GUI scales and uncommon interaction combinations still require validation;
+this is not a blanket claim of pixel-for-pixel equivalence.
 
 Checks available in this repository:
 

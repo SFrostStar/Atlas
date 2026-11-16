@@ -429,7 +429,7 @@ impl Game<'_> {
                 }
                 Event::ConfigureMod(i) => {
                     if let Some(id) = self.settings.mods.installed.get(i).map(|m| m.id.clone()) {
-                        if !self.atlas_open_port_screen(&id) {
+                        if !self.atlas_open_original_mod_config(&id) {
                             self.ui
                                 .options
                                 .show(atlas_client::options_ui::Page::NativeMod(i));

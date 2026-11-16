@@ -1,7 +1,7 @@
-const {_electron}=require('playwright-core');const assert=require('node:assert/strict');const path=require('node:path');
-const root=path.resolve(__dirname,'..');
-(async()=>{const app=await _electron.launch({executablePath:path.join(root,'node_modules/electron/dist/electron.exe'),args:[root],cwd:root,env:{...process.env,ATLAS_GUI_TEST:'1'}});try{
+const launchGuiTest=require('./launch-gui-test.cjs');const assert=require('node:assert/strict');
+(async()=>{const {app,close}=await launchGuiTest();try{
  const page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ page.setDefaultTimeout(5000);
  await page.waitForSelector('#boot-splash',{state:'detached'});
  assert.equal(await page.locator('.statusbar').count(),0);assert.equal(await page.locator('.sidebar-footer').count(),0);
  assert.equal(await page.locator('.launch-meta').count(),0);assert.equal(await page.locator('#support-notice').isVisible(),true);
@@ -23,6 +23,6 @@ const root=path.resolve(__dirname,'..');
  await page.reload();await page.waitForSelector('#boot-splash',{state:'detached'});assert.equal(await page.locator('#support-notice').isVisible(),false);
  await page.locator('[data-page="settings"]').click();await page.locator('[data-setting="language"]').selectOption('en');
  assert.equal(await page.locator('h1').textContent(),'Settings');
- await page.screenshot({path:path.join(root,'work','launcher-new-settings.png')});assert.deepEqual(errors,[]);
+ assert.deepEqual(errors,[]);
  console.log('PASS launcher customization: exact instance colors,20icons,edit/rename,timer,runningbutton,minimalism,supportdismiss,translations.');
- }finally{await app.close();}})().catch(e=>{console.error(e);process.exitCode=1});
+ }finally{await close();}})().catch(e=>{console.error(e);process.exitCode=1});

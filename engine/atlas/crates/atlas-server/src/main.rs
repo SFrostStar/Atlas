@@ -35,12 +35,7 @@ mod websocket;
 
 use std::{path::PathBuf, process::ExitCode};
 
-/// This release's version: release.yml builds it with `ATLAS_VERSION` from the tag
-/// (docs/versioning.md); a build from source says Cargo.toml's.
-const VERSION: &str = match option_env!("ATLAS_VERSION") {
-    Some(version) if !version.is_empty() => version,
-    _ => env!("CARGO_PKG_VERSION"),
-};
+const VERSION: &str = atlas_core::release::VERSION;
 
 const HELP: &str = "\
 atlas-server: host a Atlas (Minecraft Java Edition 26.3) server

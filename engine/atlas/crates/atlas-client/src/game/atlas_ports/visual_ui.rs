@@ -1,5 +1,7 @@
-//! A complete configuration editor for ports whose Java mod uses JSON/YAML configuration.
-//! This Atlas editor intentionally does not claim to reproduce RadarConfigScreen's layout.
+//! Original ArmorIndicator/Radar dispatch and the legacy developer JSON editor.
+//! The generic fallback is separate from the faithful Java configuration screens.
+#[path = "visual_original.rs"]
+mod original;
 use super::Game;
 use atlas_client::{
     clipboard::EditShortcut,
@@ -12,6 +14,7 @@ use winit::keyboard::KeyCode;
 
 #[derive(Default)]
 pub(super) struct State {
+    original: original::State,
     id: String,
     value: Value,
     scroll: usize,
@@ -112,6 +115,9 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_visual_open_editor(&mut self, id: &str) -> bool {
+        if original::supports(id) {
+            return self.atlas_original_open_screen(id);
+        }
         let Some(value) = self.atlas_editor_config(id) else {
             return false;
         };
@@ -130,6 +136,9 @@ impl Game<'_> {
         !ui.id.is_empty() && self.native_mod_screen() == Some(ui.id.as_str())
     }
     pub(in crate::game) fn atlas_visual_screen_render(&mut self, batch: &mut HudBatch) -> bool {
+        if self.atlas_original_screen_active() {
+            return self.atlas_original_screen_render(batch);
+        }
         if !self.atlas_visual_editor_active() {
             return false;
         }
@@ -312,6 +321,9 @@ impl Game<'_> {
         button: i32,
         pressed: bool,
     ) -> bool {
+        if self.atlas_original_screen_active() {
+            return self.atlas_original_screen_mouse(button, pressed);
+        }
         if !self.atlas_visual_editor_active() {
             return false;
         }
@@ -398,6 +410,9 @@ impl Game<'_> {
         ctrl: bool,
         shift: bool,
     ) -> bool {
+        if self.atlas_original_screen_active() {
+            return self.atlas_original_screen_key(key, pressed, shift);
+        }
         if !self.atlas_visual_editor_active() {
             return false;
         }
@@ -427,6 +442,9 @@ impl Game<'_> {
         true
     }
     pub(in crate::game) fn atlas_visual_screen_shortcut(&mut self, shortcut: EditShortcut) -> bool {
+        if self.atlas_original_screen_active() {
+            return true;
+        }
         if !self.atlas_visual_editor_active() {
             return false;
         }
@@ -436,6 +454,9 @@ impl Game<'_> {
         true
     }
     pub(in crate::game) fn atlas_visual_screen_char(&mut self, text: &str) -> bool {
+        if self.atlas_original_screen_active() {
+            return true;
+        }
         if !self.atlas_visual_editor_active() {
             return false;
         }
@@ -445,6 +466,9 @@ impl Game<'_> {
         true
     }
     pub(in crate::game) fn atlas_visual_screen_scroll(&mut self, delta: f32) -> bool {
+        if self.atlas_original_screen_active() {
+            return true;
+        }
         if !self.atlas_visual_editor_active() {
             return false;
         }

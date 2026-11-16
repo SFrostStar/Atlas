@@ -1,13 +1,12 @@
 // Run separately from other ATLAS_GUI_TEST windows (Electron's instance lock).
-const { _electron } = require('playwright-core');
+const launchGuiTest = require('./launch-gui-test.cjs');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const root = path.resolve(__dirname, '..');
 
 (async () => {
-  const app = await _electron.launch({ executablePath: path.join(root, 'node_modules/electron/dist/electron.exe'), args: [root], cwd: root, env: { ...process.env, ATLAS_GUI_TEST: '1' } });
+  const { app, close } = await launchGuiTest();
   try {
     const page = await app.firstWindow();
+    page.setDefaultTimeout(5000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.waitForSelector('#boot-splash', { state: 'detached' });
@@ -51,21 +50,22 @@ const root = path.resolve(__dirname, '..');
     assert.equal(instance.name, 'Настройки');
     assert.equal(instance.description, 'Твои правила.');
     assert.equal(instance.accent, 'violet');
-    await page.locator(`[data-page="instances"]`).click();
-    assert.equal(await page.locator(`[data-instance="${instance.id}"] h3`).textContent(), 'Настройки');
-    assert.equal(await page.locator(`[data-instance="${instance.id}"] p`).textContent(), 'Твои правила.');
-    await page.locator(`[data-instance="${instance.id}"] [data-action="instance-menu"]`).click();
+    await page.locator('.nav-item[data-page="instances"]').click();
+    const tile = page.locator(`[data-instance="${instance.id}"]`);
+    assert.equal(await tile.locator('strong').textContent(), 'Настройки');
+    await tile.click({ button: 'right' });
     assert.equal(await page.locator('#context-menu').getAttribute('aria-label'), 'Instance actions');
     await page.locator('#context-menu [data-action="delete-instance"]').click();
     assert.equal(await page.locator('#delete-name').textContent(), 'Настройки');
     await checkLayout('delete dialog');
     await page.locator('#delete-dialog [data-action="close-delete"]').first().click();
-    await page.locator('.add-sidebar').click();
+    await page.locator('.instance-tile-new').click();
     await page.locator('#instance-name').fill('Настройки');
     await page.locator('#instance-form [type="submit"]').click();
     await page.waitForFunction(() => document.getElementById('form-error').textContent.includes('already exists'));
     await page.locator('#instance-dialog [data-action="close-dialog"]').first().click();
-    await page.locator(`[data-id="${instance.id}"].sidebar-instance`).click();
+    await tile.click();
+    await page.locator('.nav-item[data-page="home"]').click();
     // Exercise menus with a synthetic snapshot, without starting a real game.
     await page.evaluate(id => {
       globalThis.savedUiState = state;
@@ -92,7 +92,7 @@ const root = path.resolve(__dirname, '..');
         const parts = [...context.getImageData(0,0,1,1).data].slice(0,3).map(n => n / 255).map(n => n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4);
         return .2126 * parts[0] + .7152 * parts[1] + .0722 * parts[2];
       };
-      return ['.discord-preview span', '.discord-preview small', '.account-row .quiet'].map(selector => {
+      return ['.discord-preview span', '.discord-preview small'].map(selector => {
         const color = luminance(getComputedStyle(document.querySelector(selector)).color);
         return (1.05) / (color + .05);
       });
@@ -108,8 +108,8 @@ const root = path.resolve(__dirname, '..');
     await page.locator('[data-setting="theme"]').selectOption('dark');
     assert.equal(await page.locator('[data-page="instances"]').innerText().then(s => s.replace(/\d+/g, '').trim()), 'Мои сборки');
     await page.locator('[data-page="instances"]').click();
-    assert.equal(await page.locator(`[data-instance="${instance.id}"] h3`).textContent(), 'Настройки');
+    assert.equal(await tile.locator('strong').textContent(), 'Настройки');
     assert.deepEqual(errors, []);
     console.log('PASS: all launcher pages, files, dialogs, dynamic context menus, custom RU names unchanged, form errors, accents, focus, light contrast, small window, persistence and RU↔EN.');
-  } finally { await app.close(); }
+  } finally { await close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

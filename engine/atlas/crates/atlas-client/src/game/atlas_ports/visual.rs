@@ -1,6 +1,6 @@
 //! Native adapters of the exact supplied mod versions, not similarly named replacements.
 //! MIT: Radar / slmnk; Crystal Optimizer / Author; FriendList / slmnk;
-//! KillNotification / Slmnk; RwJoiner / RwJoiner Team; TotemPops / you;
+//! KillNotification / Slmnk; TotemPops / you;
 //! CullParticles / quikjay. CC0: Lootbeams / you, NoFluid / slmnk,
 //! PvPSurvived / Slmnk. Original notices are retained in the project's mod-port notices.
 //! Java entry points/mixins are adapted to Atlas client hooks; no Java bytecode is shipped.
@@ -28,7 +28,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub(in crate::game) const IDS: [&str; 10] = [
+pub(in crate::game) const IDS: [&str; 9] = [
     "atlas-radarmod",
     "atlas-crystaloptimizer",
     "atlas-friendlist",
@@ -36,11 +36,10 @@ pub(in crate::game) const IDS: [&str; 10] = [
     "atlas-lootbeams",
     "atlas-nofluid",
     "atlas-pvpsurvived",
-    "atlas-rwjoiner",
     "atlas-totempops",
     "atlas-cullparticles",
 ];
-pub(super) const DEFINITIONS: [(&str, &str, &str); 10] = [
+pub(super) const DEFINITIONS: [(&str, &str, &str); 9] = [
     (
         IDS[0],
         "Radar",
@@ -78,16 +77,11 @@ pub(super) const DEFINITIONS: [(&str, &str, &str); 10] = [
     ),
     (
         IDS[7],
-        "RwJoiner",
-        "RwJoiner 1.0.0: the original ReallyWorld Grief menu automation; J toggles, /rwjoin help.",
-    ),
-    (
-        IDS[8],
         "TotemPops",
         "TotemPops 1.0.0: colored pop counters under player names and live YAML settings.",
     ),
     (
-        IDS[9],
+        IDS[8],
         "CullParticles",
         "CullParticles 1.21.4_1.0: the supplied JAR disables push-out-of-blocks; it does not cull particles.",
     ),
@@ -104,11 +98,6 @@ pub(super) fn keys(id: &str) -> Vec<[String; 3]> {
             "toggle".into(),
             "Переключить / Toggle".into(),
             "key.keyboard.h".into(),
-        ]],
-        "atlas-rwjoiner" => vec![[
-            "toggle".into(),
-            "Автозаход / Auto join".into(),
-            "key.keyboard.j".into(),
         ]],
         _ => Vec::new(),
     }
@@ -134,7 +123,6 @@ pub(super) struct State {
     pub(super) radar: config::Radar,
     pub(super) nofluid: config::NoFluid,
     pub(super) pvp: config::Pvp,
-    pub(super) rw: config::RwJoiner,
     pub(super) loot: config::Lootbeams,
     pub(super) kill: config::Kill,
     pub(super) totem: config::Totem,
@@ -142,10 +130,9 @@ pub(super) struct State {
     pub(super) pops: logic::Pops,
     pub(super) kills: logic::Kills,
     pub(super) pvp_state: logic::PvpState,
-    pub(super) joiner: logic::Joiner,
     pub(super) open_settings: Option<String>,
     radar_rows: Vec<RadarRow>,
-    key_down: [bool; 3],
+    key_down: [bool; 2],
     totem_modified: Option<SystemTime>,
     ui: ui::State,
     materialized: bool,
@@ -175,7 +162,6 @@ impl State {
             radar,
             nofluid: config::load(&dir, "nofluid.json"),
             pvp: config::load(&dir, "pvpsurvived.json"),
-            rw: config::load(&dir, "rwjoiner.json"),
             loot: config::load(&dir, "lootbeams.json"),
             kill: config::load(&dir, "killnotification.json"),
             totem,
@@ -184,10 +170,9 @@ impl State {
             pops: Default::default(),
             kills: Default::default(),
             pvp_state: Default::default(),
-            joiner: Default::default(),
             open_settings: None,
             radar_rows: vec![],
-            key_down: [false; 3],
+            key_down: [false; 2],
             totem_modified: fs::metadata(totem_file).and_then(|m| m.modified()).ok(),
             ui: Default::default(),
             materialized: false,
@@ -227,11 +212,6 @@ impl Game<'_> {
                             "Переключить / Toggle".into(),
                             "key.keyboard.h".into(),
                         ]],
-                        "atlas-rwjoiner" => vec![[
-                            "toggle".into(),
-                            "Автозаход / Auto join".into(),
-                            "key.keyboard.j".into(),
-                        ]],
                         _ => vec![],
                     },
                 })
@@ -258,7 +238,7 @@ impl Game<'_> {
     }
     /// This is the actual sole mixin in the provided CullParticles JAR, verified against Yarn.
     pub(in crate::game) fn atlas_visual_no_push_out(&self) -> bool {
-        self.native_window() && self.atlas_port_on(IDS[9])
+        self.native_window() && self.atlas_port_on(IDS[8])
     }
     pub(in crate::game) fn atlas_visual_disconnect(&mut self) {
         let v = &mut self.atlas_ports.visual;
@@ -283,7 +263,6 @@ impl Game<'_> {
                 (IDS[4], "lootbeams.json"),
                 (IDS[5], "nofluid.json"),
                 (IDS[6], "pvpsurvived.json"),
-                (IDS[7], "rwjoiner.json"),
             ] {
                 if self.atlas_ports.installed.contains(id)
                     && !v.dir.join(name).exists()
@@ -292,7 +271,7 @@ impl Game<'_> {
                     config::save(&v.dir, name, &value);
                 }
             }
-            if self.atlas_ports.installed.contains(IDS[8])
+            if self.atlas_ports.installed.contains(IDS[7])
                 && !v.dir.join("totempops/config.yml").exists()
             {
                 v.save_totem();
@@ -306,7 +285,6 @@ impl Game<'_> {
         for (index, (id, name, default)) in [
             (IDS[0], "open_config", "key.keyboard.r"),
             (IDS[5], "toggle", "key.keyboard.h"),
-            (IDS[7], "toggle", "key.keyboard.j"),
         ]
         .into_iter()
         .enumerate()
@@ -340,7 +318,7 @@ impl Game<'_> {
                             false,
                         );
                     }
-                    _ => self.atlas_visual_rw_enabled(!self.atlas_ports.visual.rw.enabled),
+                    _ => {}
                 }
             }
         }
@@ -390,7 +368,7 @@ impl Game<'_> {
             }
             self.atlas_ports.visual.radar_rows = rows.into_iter().map(|(_, r)| r).collect();
         }
-        if self.atlas_port_on(IDS[8]) {
+        if self.atlas_port_on(IDS[7]) {
             let v = &mut self.atlas_ports.visual;
             v.pops.tick += 1;
             if v.pops.tick % 40 == 0 {
@@ -478,9 +456,6 @@ impl Game<'_> {
                 }
             }
         }
-        if self.atlas_port_on(IDS[7]) {
-            self.atlas_visual_rw_tick(now)
-        }
     }
     pub(in crate::game) fn atlas_visual_own_uuid(&self) -> u128 {
         if let Some(remote) = &self.remote {
@@ -500,7 +475,7 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_visual_entity_status(&mut self, id: u32, status: u8) {
-        if status != 35 || !self.atlas_port_on(IDS[8]) {
+        if status != 35 || !self.atlas_port_on(IDS[7]) {
             return;
         }
         let own = self
@@ -523,7 +498,7 @@ impl Game<'_> {
         self.atlas_visual_totem(uuid, &name, own);
     }
     pub(in crate::game) fn atlas_visual_totem(&mut self, uuid: u128, name: &str, is_self: bool) {
-        if !self.atlas_port_on(IDS[8]) {
+        if !self.atlas_port_on(IDS[7]) {
             return;
         }
         let count = self.atlas_ports.visual.pops.pop(uuid);
@@ -606,9 +581,6 @@ impl Game<'_> {
                 batch.text_styled(&self.gui.atlas, &text, x - width / 2.0, y, color, true);
                 batch.scale_since(start, x, y, c.scale, c.scale);
             }
-        }
-        if self.atlas_port_on(IDS[7]) && self.atlas_ports.visual.rw.show_hud {
-            self.atlas_visual_rw_draw(batch)
         }
     }
     fn atlas_visual_radar_draw(&self, batch: &mut HudBatch) {

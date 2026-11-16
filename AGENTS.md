@@ -21,6 +21,9 @@ source is in `engine/atlas`. Read that directory's AGENTS.md before engine edits
   `python scripts/check_repository_privacy.py`.
 - Run gameplay tests only with fresh scratch profiles. Preserve original
   copyright notices and dependency licenses.
+- Do not restore upstream's official/partner server auto-insertion. Rebranding
+  and Build-Atlas.ps1 apply scripts/atlas-server-policy.cjs after engine updates;
+  review any changed injection mechanism instead of bypassing this check.
 
 ## Mod ports
 

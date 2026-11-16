@@ -8,7 +8,7 @@ use atlas_client::{
     menu::Input,
     scoreboard::{json_to_tag, tag_to_json},
     text::Text,
-    ui::EditBox,
+    ui::{self, EditBox},
 };
 use atlas_items::item_nbt::{item_from_nbt, item_to_nbt};
 use serde_json::{Value, json};
@@ -138,6 +138,10 @@ fn snapshot(stack: &Option<ItemStack>, max: u32) -> planner::Stack {
 fn inside(r: [f32; 4], x: f32, y: f32) -> bool {
     x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]
 }
+fn argb(color: i32) -> u32 {
+    let c = color as u32;
+    rgba((c >> 16) as u8, (c >> 8) as u8, c as u8, (c >> 24) as u8)
+}
 fn draw_button(
     batch: &mut HudBatch,
     atlas: &atlas_client::hud::HudAtlas,
@@ -148,40 +152,24 @@ fn draw_button(
 ) {
     let [x, y, w, h] = r;
     let base = if busy {
-        rgba(66, 66, 66, 255)
+        argb(-12434359)
     } else if hover {
-        rgba(109, 109, 109, 255)
-    } else if selected {
-        rgba(78, 85, 98, 255)
+        argb(-8946813)
     } else {
-        rgba(83, 83, 83, 255)
+        argb(-10986654)
     };
-    batch.fill(atlas, x, y, w, h, rgba(7, 7, 9, 255));
+    batch.fill(atlas, x, y, w, h, argb(-16316407));
     batch.fill(atlas, x + 1.0, y + 1.0, w - 2.0, h - 2.0, base);
-    batch.fill(
-        atlas,
-        x + 1.0,
-        y + 1.0,
-        w - 2.0,
-        1.0,
-        rgba(160, 160, 167, 255),
-    );
-    batch.fill(
-        atlas,
-        x + 1.0,
-        y + 1.0,
-        1.0,
-        h - 2.0,
-        rgba(160, 160, 167, 255),
-    );
-    batch.fill(
-        atlas,
-        x + 2.0,
-        y + h - 2.0,
-        w - 3.0,
-        1.0,
-        rgba(48, 48, 55, 255),
-    );
+    batch.fill(atlas, x + 1.0, y + 1.0, w - 2.0, 1.0, argb(-6249817));
+    batch.fill(atlas, x + 1.0, y + 1.0, 1.0, h - 2.0, argb(-6249817));
+    batch.fill(atlas, x + 2.0, y + h - 2.0, w - 3.0, 1.0, argb(-13618633));
+    if selected {
+        let c = argb(-7022471);
+        batch.fill(atlas, x, y, w, 1.0, c);
+        batch.fill(atlas, x, y + h - 1.0, w, 1.0, c);
+        batch.fill(atlas, x, y, 1.0, h, c);
+        batch.fill(atlas, x + w - 1.0, y, 1.0, h, c);
+    }
 }
 impl Game<'_> {
     fn atlas_inventory_visible(&self) -> bool {
@@ -378,6 +366,7 @@ impl Game<'_> {
         s.messages = vec![Text::tr("inventorylayouts.progress", &[&s.index, &total]).plain()];
     }
     pub(in crate::game) fn atlas_inventory_draw(&mut self, batch: &mut HudBatch) {
+        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return;
         }
@@ -387,6 +376,7 @@ impl Game<'_> {
         s.first = s.first.min(s.layouts.len().saturating_sub(rows));
         let busy = s.plan.is_some();
         let atlas = &self.gui.atlas;
+        let mut tooltip = None;
         for row in 0..rows {
             let i = s.first + row;
             let Some(layout) = s.layouts.get(i) else {
@@ -417,11 +407,11 @@ impl Game<'_> {
                     &name,
                     x + 4.0,
                     top + 5.0,
-                    if busy { 0xff9a9a9a } else { u32::MAX },
-                    false,
+                    if busy { argb(-6645094) } else { u32::MAX },
+                    true,
                 );
             }
-            for (dx, label) in [(36.0, "✎"), (16.0, "×")] {
+            for dx in [36.0, 16.0] {
                 let rect = [x + w - dx, top, 16.0, 18.0];
                 draw_button(
                     batch,
@@ -431,7 +421,52 @@ impl Game<'_> {
                     busy,
                     false,
                 );
-                batch.text(atlas, label, rect[0] + 4.0, top + 5.0, u32::MAX, false);
+            }
+            let rename_x = x + w - 36.0;
+            let delete_x = x + w - 16.0;
+            for pixel in 0..7 {
+                let p = pixel as f32;
+                batch.fill(
+                    atlas,
+                    rename_x + 4.0 + p,
+                    top + 12.0 - p,
+                    2.0,
+                    2.0,
+                    argb(-1447447),
+                );
+                batch.fill(
+                    atlas,
+                    delete_x + 4.0 + p,
+                    top + 5.0 + p,
+                    1.0,
+                    1.0,
+                    argb(-21846),
+                );
+                batch.fill(
+                    atlas,
+                    delete_x + 10.0 - p,
+                    top + 5.0 + p,
+                    1.0,
+                    1.0,
+                    argb(-21846),
+                );
+            }
+            if inside(rect, self.cursor.0, self.cursor.1) {
+                tooltip = Some(vec![
+                    Text::literal(&layout.name),
+                    Text::tr("inventorylayouts.apply_hint", &[]),
+                ]);
+            } else if inside([rename_x, top, 16.0, 18.0], self.cursor.0, self.cursor.1) {
+                tooltip = Some(vec![Text::tr(
+                    if s.editing.as_ref().is_some_and(|(editing, _)| *editing == i) {
+                        "inventorylayouts.save_name"
+                    } else {
+                        "inventorylayouts.rename"
+                    },
+                    &[],
+                )]);
+            } else if inside([delete_x, top, 16.0, 18.0], self.cursor.0, self.cursor.1) {
+                tooltip = Some(vec![Text::tr("inventorylayouts.delete", &[])]);
             }
         }
         let add_y = y + if s.layouts.len() > rows {
@@ -449,39 +484,125 @@ impl Game<'_> {
             false,
         );
         let text = lang::get("inventorylayouts.add");
+        let text = text
+            .chars()
+            .take(atlas.font.fit(&text, w - 8.0))
+            .collect::<String>();
         batch.text(
             atlas,
             &text,
             x + (w - HudBatch::text_width(atlas, &text)) / 2.0,
             add_y + 5.0,
             u32::MAX,
-            false,
+            true,
         );
+        if inside(r, self.cursor.0, self.cursor.1) {
+            tooltip = Some(vec![
+                Text::tr("inventorylayouts.add", &[]),
+                Text::tr("inventorylayouts.empty", &[]),
+            ]);
+        }
         if s.layouts.len() > rows {
             batch.text(
                 atlas,
                 "<",
                 x + 8.0,
                 y + rows as f32 * 22.0 + 3.0,
-                u32::MAX,
-                false,
+                argb(-1118482),
+                true,
             );
             batch.text(
                 atlas,
                 ">",
                 x + w - 14.0,
                 y + rows as f32 * 22.0 + 3.0,
-                u32::MAX,
-                false,
+                argb(-1118482),
+                true,
+            );
+            let text = format!(
+                "{}–{} / {}",
+                s.first + 1,
+                (s.first + rows).min(s.layouts.len()),
+                s.layouts.len()
+            );
+            batch.text(
+                atlas,
+                &text,
+                x + (w - HudBatch::text_width(atlas, &text)) / 2.0,
+                y + rows as f32 * 22.0 + 3.0,
+                argb(-5592406),
+                true,
             );
         }
-        let mut my = add_y + 24.0;
-        for msg in &s.messages {
-            batch.text(atlas, msg, x, my, 0xffdddddd, false);
-            my += 10.0;
+        let mut message_tooltip = None;
+        if !s.messages.is_empty() {
+            let mut message_width = 135.0_f32.min(x - 8.0);
+            let mut left = x - message_width - 6.0;
+            let mut top = y;
+            let mut available_height = h;
+            if message_width < 64.0 {
+                left = x;
+                top = add_y + 24.0;
+                message_width = w;
+                available_height = 13.0_f32.max(batch.height - top - 3.0);
+            }
+            let mut lines = Vec::new();
+            for message in &s.messages {
+                lines.extend(
+                    atlas
+                        .font
+                        .split_lines(&Text::legacy(message), message_width)
+                        .into_iter()
+                        .map(|(text, _)| text),
+                );
+            }
+            let visible = lines
+                .len()
+                .min((available_height / 10.0).floor().max(1.0) as usize);
+            for (i, text) in lines.iter().take(visible).enumerate() {
+                batch.text_styled(
+                    atlas,
+                    text,
+                    left,
+                    top + i as f32 * 10.0,
+                    argb(if i == 0 { -11145 } else { -990258 }),
+                    true,
+                );
+            }
+            if lines.len() > visible {
+                batch.text(
+                    atlas,
+                    "…",
+                    left + message_width - 8.0,
+                    top + visible as f32 * 10.0 - 10.0,
+                    u32::MAX,
+                    true,
+                );
+            }
+            if inside(
+                [left, top, message_width, visible as f32 * 10.0],
+                self.cursor.0,
+                self.cursor.1,
+            ) {
+                message_tooltip = Some(
+                    s.messages
+                        .iter()
+                        .map(|message| Text::legacy(message))
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+        if s.editing.is_none()
+            && let Some(lines) = tooltip
+        {
+            ui::tooltip(batch, atlas, &lines, self.cursor);
+        }
+        if let Some(lines) = message_tooltip {
+            ui::tooltip(batch, atlas, &lines, self.cursor);
         }
     }
     pub(in crate::game) fn atlas_inventory_mouse(&mut self, button: i32) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return false;
         }
@@ -518,10 +639,17 @@ impl Game<'_> {
             if my < top || my >= top + 18.0 {
                 continue;
             }
-            if mx >= x + w - 16.0 {
+            if inside([x + w - 16.0, top, 16.0, 18.0], mx, my) {
                 let s = &mut self.atlas_ports.actions.inventory;
                 s.editing = None;
                 s.layouts.remove(i);
+                s.selected = s.selected.and_then(|selected| {
+                    if selected == i {
+                        None
+                    } else {
+                        Some(selected - usize::from(selected > i))
+                    }
+                });
                 s.message(if s.save() {
                     "inventorylayouts.deleted"
                 } else {
@@ -529,7 +657,7 @@ impl Game<'_> {
                 });
                 return true;
             }
-            if mx >= x + w - 36.0 {
+            if inside([x + w - 36.0, top, 16.0, 18.0], mx, my) {
                 if self
                     .atlas_ports
                     .actions
@@ -586,6 +714,14 @@ impl Game<'_> {
     }
     fn atlas_inventory_save_name(&mut self) {
         let s = &mut self.atlas_ports.actions.inventory;
+        // The original keeps the rename field focused when Save/Enter receives
+        // an empty name, so the player can correct it instead of losing the edit.
+        if s.editing
+            .as_ref()
+            .is_some_and(|(_, field)| field.value.trim().is_empty())
+        {
+            return;
+        }
         if let Some((i, field)) = s.editing.take() {
             let name = field.value.trim();
             if !name.is_empty() {
@@ -604,6 +740,7 @@ impl Game<'_> {
         ctrl: bool,
         shift: bool,
     ) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return false;
         }
@@ -628,6 +765,7 @@ impl Game<'_> {
         true
     }
     pub(in crate::game) fn atlas_inventory_char(&mut self, text: &str) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_visible()
             && let Some((_, f)) = &mut self.atlas_ports.actions.inventory.editing
         {
@@ -638,6 +776,7 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_inventory_scroll(&mut self, delta: f32) -> bool {
+        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return false;
         }
@@ -645,7 +784,15 @@ impl Game<'_> {
             return false;
         };
         let batch = HudBatch::new([r.config.width, r.config.height]);
-        let rect = self.atlas_inventory_rect(&batch);
+        let [x, y, w, h] = self.atlas_inventory_rect(&batch);
+        let rows = ((h - 38.0) / 22.0).floor().max(1.0) as usize;
+        let count = self.atlas_ports.actions.inventory.layouts.len();
+        let add_y = y + if count > rows {
+            rows as f32 * 22.0 + 16.0
+        } else {
+            count as f32 * 22.0
+        };
+        let rect = [x, y, w, add_y + 18.0 - y];
         if !inside(rect, self.cursor.0, self.cursor.1) {
             return false;
         }
@@ -653,8 +800,10 @@ impl Game<'_> {
         s.editing = None;
         s.first = if delta > 0.0 {
             s.first.saturating_sub(1)
-        } else {
+        } else if delta < 0.0 {
             s.first + 1
+        } else {
+            s.first
         };
         true
     }

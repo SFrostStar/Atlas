@@ -1117,6 +1117,7 @@ pub struct Renderer {
     /// operation fails on a lost device (no error scope sees it).
     device_lost: Arc<std::sync::atomic::AtomicBool>,
     pub config: wgpu::SurfaceConfiguration,
+    projection_aspect: Option<f32>,
     solid: SolidPipeline,
     /// `solid` split in two passes for the world pass (terrain.wgsl's `opaque_quad`).
     solid_opaque: SolidPipeline,
@@ -4797,6 +4798,7 @@ impl Renderer {
             deferred: None,
             device_lost,
             config,
+            projection_aspect: None,
             solid,
             solid_opaque,
             solid_cutout,
@@ -7387,8 +7389,15 @@ impl Renderer {
         )
     }
     fn screen_view(&self, fov_degrees: f32, yaw: f32, pitch: f32, far: f32) -> View {
-        let aspect = self.config.width as f32 / self.config.height.max(1) as f32;
+        let aspect = self.projection_aspect.unwrap_or_else(|| {
+            self.config.width as f32 / self.config.height.max(1) as f32
+        });
         View::screen(yaw, pitch, fov_degrees, aspect, far)
+    }
+
+    /// Changes the world lens without resizing the framebuffer or the GUI.
+    pub fn set_projection_aspect(&mut self, aspect: Option<f32>) {
+        self.projection_aspect = aspect;
     }
     fn update_lightmap(
         &mut self,
@@ -8029,10 +8038,12 @@ impl Renderer {
         laps.lap("r_targets");
         // GameRenderer.render3dHud: the hand's projection at hudFov, with the
         // bob in its pose rather than the projection (same product).
+        let hand_height = self.config.height.max(1) as f32;
         let hand_projection = Mat4::from_cols_array(&crate::camera::hand_projection(
             frame.hand_fov_degrees,
-            self.config.width as f32,
-            self.config.height.max(1) as f32,
+            self.projection_aspect
+                .map_or(self.config.width as f32, |aspect| aspect * hand_height),
+            hand_height,
             frame.depth_far,
         ));
         let hand_view_proj = hand_projection * frame.bob * view;

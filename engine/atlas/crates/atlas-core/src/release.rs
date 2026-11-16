@@ -8,11 +8,14 @@ pub const RELEASE: Option<&str> = match option_env!("ATLAS_VERSION") {
     _ => None,
 };
 
-/// [`RELEASE`], or this crate's Cargo.toml version for a build from source: what `--version`, user
-/// agents and reports say.
+/// Product version for `--version`, user agents and reports. Standalone engine
+/// checkouts fall back to the crate's own version.
 pub const VERSION: &str = match RELEASE {
     Some(version) => version,
-    None => env!("CARGO_PKG_VERSION"),
+    None => match option_env!("ATLAS_PACKAGE_VERSION") {
+        Some(version) => version,
+        None => env!("CARGO_PKG_VERSION"),
+    },
 };
 
 /// A nightly's date and commit (`2026-10-28 0c02067`): nightly-build.yml builds the opt-in Nightly
@@ -53,14 +56,16 @@ mod tests {
     }
 
     #[test]
-    fn the_version_is_the_release_or_the_crate() {
+    fn the_version_prefers_release_then_package_then_crate() {
         assert_eq!(
             super::RELEASE,
             option_env!("ATLAS_VERSION").filter(|v| !v.is_empty())
         );
         assert_eq!(
             super::VERSION,
-            super::RELEASE.unwrap_or(env!("CARGO_PKG_VERSION"))
+            super::RELEASE
+                .or(option_env!("ATLAS_PACKAGE_VERSION"))
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
         );
         assert!(!super::VERSION.starts_with('v'));
     }

@@ -5,7 +5,7 @@ $env:CARGO_HOME = Join-Path $atlasProject 'tools\cargo'
 $env:RUSTUP_HOME = Join-Path $atlasProject 'tools\rustup'
 $llvmDirectory = Get-ChildItem -LiteralPath (Join-Path $atlasProject 'tools') -Directory -Filter 'llvm-mingw-*-ucrt-x86_64' | Select-Object -First 1
 $env:PATH = (Join-Path $llvmDirectory.FullName 'bin') + ';' + (Join-Path $env:CARGO_HOME 'bin') + ';' + $env:PATH
-$scratch = Join-Path $atlasProject ('work\native-tests-' + [guid]::NewGuid().ToString())
+$scratch = Join-Path ([IO.Path]::GetTempPath()) ('atlas-native-tests-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $scratch -Force | Out-Null
 $env:ATLAS_HOME = $scratch
 $env:ATLAS_LAUNCHER_HOME = $scratch
@@ -37,4 +37,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Mod API marker regression failed' }
   & cargo test --locked --profile fast -p atlas-memory
   if ($LASTEXITCODE -ne 0) { throw 'Native memory limit tests failed' }
-} finally { Pop-Location }
+} finally {
+  Pop-Location
+  & (Join-Path $PSScriptRoot 'Remove-AtlasScratch.ps1') -Directory $scratch
+}

@@ -509,6 +509,24 @@ impl Game<'_> {
                 json!({"enabled":s.password.enabled,"maskCharacter":s.password.mask,"preserveSpaces":s.password.preserve_spaces,"protectedCommands":s.password.protected_commands,"protectChatHistory":s.protect_history,"suppressSuggestions":s.suppress_suggestions}),
             ),
             id if id == IDS[9] => Some(s.gamma.config.clone()),
+            id if id == IDS[8] => Some(json!({
+                "mode": match s.chunk_mode {
+                    chunk::Mode::Below => "BELOW", chunk::Mode::Above => "ABOVE",
+                    chunk::Mode::Hybrid => "HYBRID", chunk::Mode::HorizontalSlide => "HORIZONTAL_SLIDE",
+                    chunk::Mode::HorizontalSlideAlternate => "HORIZONTAL_SLIDE_ALTERNATE",
+                },
+                "easingFunction": format!("{:?}", s.easing).to_uppercase(),
+                "animationDuration": s.duration, "disableAroundPlayer": s.disable_near,
+            })),
+            _ => None,
+        }
+    }
+    pub(in crate::game) fn atlas_actions_default_config(&self, id: &str) -> Option<Value> {
+        match id {
+            "atlas-gammautils" => Some(gamma::State::default().config),
+            "atlas-chunkanimator" => Some(
+                json!({"mode":"BELOW","easingFunction":"SINE","animationDuration":1000,"disableAroundPlayer":false}),
+            ),
             _ => None,
         }
     }
@@ -552,6 +570,41 @@ impl Game<'_> {
                 .map(str::to_owned)
                 .collect();
             s.save_password();
+            Ok(())
+        } else if id == IDS[8] {
+            let mode = match value["mode"].as_str() {
+                Some("BELOW") => chunk::Mode::Below,
+                Some("ABOVE") => chunk::Mode::Above,
+                Some("HYBRID") => chunk::Mode::Hybrid,
+                Some("HORIZONTAL_SLIDE") => chunk::Mode::HorizontalSlide,
+                Some("HORIZONTAL_SLIDE_ALTERNATE") => chunk::Mode::HorizontalSlideAlternate,
+                _ => return Err(atlas_client::lang::get("atlas.ports.invalid_config")),
+            };
+            let easing = match value["easingFunction"].as_str() {
+                Some("LINEAR") => chunk::Easing::Linear,
+                Some("QUAD") => chunk::Easing::Quad,
+                Some("CUBIC") => chunk::Easing::Cubic,
+                Some("QUART") => chunk::Easing::Quart,
+                Some("QUINT") => chunk::Easing::Quint,
+                Some("EXPO") => chunk::Easing::Expo,
+                Some("SINE") => chunk::Easing::Sine,
+                Some("CIRC") => chunk::Easing::Circ,
+                Some("BACK") => chunk::Easing::Back,
+                Some("BOUNCE") => chunk::Easing::Bounce,
+                Some("ELASTIC") => chunk::Easing::Elastic,
+                _ => return Err(atlas_client::lang::get("atlas.ports.invalid_config")),
+            };
+            let Some(duration) = value["animationDuration"].as_u64().filter(|n| *n <= 10000) else {
+                return Err(atlas_client::lang::get("atlas.ports.invalid_config"));
+            };
+            let Some(disable_near) = value["disableAroundPlayer"].as_bool() else {
+                return Err(atlas_client::lang::get("atlas.ports.invalid_config"));
+            };
+            s.chunk_mode = mode;
+            s.easing = easing;
+            s.duration = duration;
+            s.disable_near = disable_near;
+            s.save_chunks();
             Ok(())
         } else if id == IDS[9] {
             s.gamma.apply_config(value);

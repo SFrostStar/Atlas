@@ -1361,6 +1361,7 @@ enum Act {
     ModSettings(usize),
     /// A native mod's key (mod, key) waits for a key; a button of its page.
     NativeKey(usize, usize),
+    ResetNativeKey(usize, usize),
     NativeButton(usize, usize),
     OpenModFolder,
     /// Browse mods: the page of listing `.0` of `mod_browser`.
@@ -1995,6 +1996,27 @@ fn narrate_widget(
                     title: t("narrator.controls.reset", &[tr(name)]),
                     active,
                 };
+            }
+            Act::NativeKey(i, k) | Act::ResetNativeKey(i, k) => {
+                if let Some(m) = s.mods.installed.get(*i)
+                    && let Some([name, label, default]) =
+                        m.native.as_ref().and_then(|p| p.keys.get(*k))
+                {
+                    let key = s
+                        .mods
+                        .keys
+                        .get(&m.id)
+                        .and_then(|keys| keys.get(name))
+                        .unwrap_or(default);
+                    n.what = What::Named {
+                        title: if matches!(act, Act::ResetNativeKey(..)) {
+                            t("narrator.controls.reset", &[Text::literal(label)])
+                        } else {
+                            bind(Text::literal(label), key != "key.keyboard.unknown")
+                        },
+                        active,
+                    };
+                }
             }
             _ => {}
         }
@@ -2670,6 +2692,43 @@ impl OptionsUi {
         rows
     }
 
+    fn native_key_conflicts(
+        s: &Settings,
+        key: &str,
+        default: bool,
+        skip: Option<(usize, usize)>,
+    ) -> bool {
+        key != "key.keyboard.unknown"
+            && s.mods.installed.iter().enumerate().any(|(i, m)| {
+                m.native.as_ref().is_some_and(|page| {
+                    page.keys
+                        .iter()
+                        .enumerate()
+                        .any(|(k, [name, _, original])| {
+                            let bound = s
+                                .mods
+                                .keys
+                                .get(&m.id)
+                                .and_then(|keys| keys.get(name))
+                                .unwrap_or(original);
+                            skip != Some((i, k)) && bound == key && (!default || bound != original)
+                        })
+                })
+            })
+    }
+
+    fn reset_native_key(s: &mut Settings, i: usize, k: usize) {
+        if let Some(m) = s.mods.installed.get(i)
+            && let Some([name, _, default]) = m.native.as_ref().and_then(|page| page.keys.get(k))
+        {
+            s.mods
+                .keys
+                .entry(m.id.clone())
+                .or_default()
+                .insert(name.clone(), default.clone());
+        }
+    }
+
     fn list_rows(&self, s: &Settings) -> Vec<Row> {
         match self.page() {
             Page::SplitSetup => Vec::new(),
@@ -3262,8 +3321,9 @@ impl OptionsUi {
                     });
                     let key = s.keys.get(name).to_owned();
                     let mut message = keybinds::display_name(&key);
-                    let conflicts = s.keys.conflicts(name);
-                    if !conflicts.is_empty() {
+                    let conflicts = !s.keys.conflicts(name).is_empty()
+                        || Self::native_key_conflicts(s, &key, s.keys.is_default(name), None);
+                    if conflicts {
                         message = Text::literal("[ ")
                             .append(message.with_color(text::WHITE))
                             .append(" ]")
@@ -3283,7 +3343,7 @@ impl OptionsUi {
                     let change_x = reset_x - 5.0 - 75.0;
                     let name_static = all_mappings().find(|m| m.0 == name).map_or("", |m| m.0);
                     out.push(button(change_x, y, 75.0, message, Act::Key(name_static)));
-                    if !conflicts.is_empty() {
+                    if conflicts {
                         out.push(Widget {
                             x: change_x - 6.0,
                             y: y + 1.0,
@@ -3312,6 +3372,120 @@ impl OptionsUi {
                     });
                     y += 20.0;
                     rows.end(&mut out, y);
+                }
+                let mut native: Vec<_> = s.mods.installed.iter().enumerate().collect();
+                native.sort_by(|a, b| a.1.title.cmp(&b.1.title));
+                for (i, m) in native {
+                    let Some(page) = &m.native else {
+                        continue;
+                    };
+                    let mut bindings: Vec<_> = page
+                        .keys
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, [_, label, _])| {
+                            query.is_empty()
+                                || label.to_lowercase().contains(&query)
+                                || m.title.to_lowercase().contains(&query)
+                        })
+                        .collect();
+                    if bindings.is_empty() {
+                        continue;
+                    }
+                    bindings.sort_by(|a, b| a.1[1].cmp(&b.1[1]));
+                    rows.begin(&out, y);
+                    out.push(Widget {
+                        x: 0.0,
+                        y: y + 7.0,
+                        w,
+                        h: 9.0,
+                        kind: WKind::Text {
+                            text: Text::literal(&m.title).with_style(&Style {
+                                bold: Some(true),
+                                underlined: Some(true),
+                                ..Style::default()
+                            }),
+                            color: u32::MAX,
+                            centered: true,
+                        },
+                        list: false,
+                        row: 0,
+                    });
+                    y += 20.0;
+                    rows.end(&mut out, y);
+                    for (k, [name, label, default]) in bindings {
+                        rows.begin(&out, y);
+                        out.push(Widget {
+                            x: row_left + 2.0,
+                            y: y + 6.0,
+                            w: 200.0,
+                            h: 9.0,
+                            kind: WKind::Text {
+                                text: Text::literal(label),
+                                color: u32::MAX,
+                                centered: false,
+                            },
+                            list: false,
+                            row: 0,
+                        });
+                        let key = s
+                            .mods
+                            .keys
+                            .get(&m.id)
+                            .and_then(|keys| keys.get(name))
+                            .unwrap_or(default);
+                        let is_default = key == default;
+                        let conflicts = key != "key.keyboard.unknown"
+                            && (all_mappings().any(|(other, _, _)| {
+                                s.keys.get(other) == key
+                                    && (!is_default || !s.keys.is_default(other))
+                            }) || Self::native_key_conflicts(s, key, is_default, Some((i, k))));
+                        let mut message = keybinds::display_name(key);
+                        if conflicts {
+                            message = Text::literal("[ ")
+                                .append(message.with_color(text::WHITE))
+                                .append(" ]")
+                                .with_color(text::YELLOW);
+                        }
+                        if self.selected_native_key == Some((i, k)) {
+                            message = Text::literal("> ")
+                                .append(message.with_style(&Style {
+                                    color: Some(text::WHITE),
+                                    underlined: Some(true),
+                                    ..Style::default()
+                                }))
+                                .append(" <")
+                                .with_color(text::YELLOW);
+                        }
+                        let reset_x = scrollbar_x - 60.0;
+                        let change_x = reset_x - 80.0;
+                        out.push(button(change_x, y, 75.0, message, Act::NativeKey(i, k)));
+                        if conflicts {
+                            out.push(Widget {
+                                x: change_x - 6.0,
+                                y: y + 1.0,
+                                w: 3.0,
+                                h: 18.0,
+                                kind: WKind::Text {
+                                    text: Text::empty(),
+                                    color: rgba(255, 255, 0, 255),
+                                    centered: false,
+                                },
+                                list: false,
+                                row: 0,
+                            });
+                        }
+                        let reset = button(
+                            reset_x,
+                            y,
+                            50.0,
+                            tr("controls.reset"),
+                            Act::ResetNativeKey(i, k),
+                        );
+                        out.push(if is_default { inactive(reset) } else { reset });
+                        y += 20.0;
+                        rows.end(&mut out, y);
+                    }
                 }
                 content = y + self.scroll - top + 2.0;
                 out[list_start..].iter_mut().for_each(|w| w.list = true);
@@ -4262,6 +4436,11 @@ impl OptionsUi {
                         }
                         Act::ResetKeys => {
                             s.keys.reset_all();
+                            s.mods.keys.clear();
+                            events.push(Event::Changed);
+                        }
+                        Act::ResetNativeKey(i, k) => {
+                            Self::reset_native_key(s, i, k);
                             events.push(Event::Changed);
                         }
                         Act::ToggleMod(i) => {
@@ -5224,6 +5403,11 @@ impl OptionsUi {
                         }
                         Act::ResetKeys => {
                             s.keys.reset_all();
+                            s.mods.keys.clear();
+                            events.push(Event::Changed);
+                        }
+                        Act::ResetNativeKey(i, k) => {
+                            Self::reset_native_key(s, i, k);
                             events.push(Event::Changed);
                         }
                         Act::ToggleMod(i) => {
@@ -5876,6 +6060,91 @@ mod tests {
                 .unwrap()
                 .configurable
         );
+    }
+
+    #[test]
+    fn native_only_keybinds_are_searchable_rebindable_and_reset_with_vanilla_controls() {
+        let atlas = atlas();
+        let mut s = Settings::default();
+        let mut ui = OptionsUi::default();
+        let size = (480.0, 240.0);
+        s.mods.installed.push(crate::mod_list::Installed {
+            id: "native_only".into(),
+            title: "Native Only 1.0".into(),
+            description: String::new(),
+            problem: None,
+            dev: false,
+            native: Some(crate::mod_list::NativePage {
+                keys: vec![[
+                    "toggle".into(),
+                    "Toggle native".into(),
+                    "key.keyboard.z".into(),
+                ]],
+                buttons: Vec::new(),
+            }),
+        });
+        ui.open_at(false, Page::KeyBinds);
+        ui.settings_search.set_value("Native Only");
+        let widget = |ui: &mut OptionsUi, s: &Settings, action: Act| {
+            ui.layout(s, size.0, size.1)
+                .0
+                .into_iter()
+                .find(|w| matches!(&w.kind, WKind::Button { act, .. } if *act == action))
+                .expect("the native key is reachable without a Configure screen")
+        };
+        let click = |ui: &mut OptionsUi, s: &mut Settings, action: Act| {
+            let w = widget(ui, s, action);
+            ui.click(
+                s,
+                &atlas,
+                w.x + 1.0,
+                w.y + 1.0,
+                size,
+                [480, 240],
+                false,
+                false,
+            )
+        };
+        click(&mut ui, &mut s, Act::NativeKey(0, 0));
+        assert_eq!(
+            ui.key(&mut s, &atlas, winit::keyboard::KeyCode::KeyW, Some("w")),
+            vec![Event::Changed]
+        );
+        let saved = crate::mod_list::ModList::parse(&s.mods.serialize());
+        assert_eq!(
+            saved.keys_of("native_only"),
+            vec![("toggle", "key.keyboard.w")]
+        );
+        assert!(
+            matches!(widget(&mut ui, &s, Act::NativeKey(0, 0)).kind, WKind::Button { label, .. } if label.plain() == "[ W ]")
+        );
+        assert_eq!(
+            click(&mut ui, &mut s, Act::ResetNativeKey(0, 0)),
+            vec![Event::ButtonClick, Event::Changed]
+        );
+        assert!(
+            matches!(widget(&mut ui, &s, Act::NativeKey(0, 0)).kind, WKind::Button { label, .. } if label.plain() == "Z")
+        );
+        s.mods
+            .keys
+            .get_mut("native_only")
+            .unwrap()
+            .insert("toggle".into(), "key.keyboard.r".into());
+        s.keys.set("key.jump", "key.keyboard.r");
+        assert_eq!(
+            click(&mut ui, &mut s, Act::ResetKeys),
+            vec![Event::ButtonClick, Event::Changed]
+        );
+        assert!(s.mods.keys.is_empty());
+        assert!(s.keys.is_default("key.jump"));
+        ui.settings_search.set_value("nothing matches this");
+        assert!(!ui.layout(&s, size.0, size.1).0.iter().any(|w| matches!(
+            w.kind,
+            WKind::Button {
+                act: Act::NativeKey(..),
+                ..
+            }
+        )));
     }
 
     #[test]

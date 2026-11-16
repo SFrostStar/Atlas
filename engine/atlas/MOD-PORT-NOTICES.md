@@ -15,6 +15,8 @@ The version is the actual `fabric.mod.json` value, even when a filename says som
 
 | Reference JAR | Metadata version | Original author(s) | Metadata license | Embedded notice |
 | --- | --- | --- | --- | --- |
+| `aspectratio-1.0.0.jar` | 1.0.0 | usaryy | Unspecified | None found |
+| `esc-music-controller-1.0.0.jar` | 1.0.0 | AntiJOPA | MIT | None found |
 | `ArmorIndicator-1.0.0.jar` | `1.0.0` | ArmorIndicator Dev | MIT | CC0-1.0 |
 | `AutoSprint-1.21.4-Fabric.jar` | `${version}` | Manus | MIT | not supplied |
 | `NoShakeHand-1.0.0.jar` | `1.0.0` | slmnk | MIT | MIT |
@@ -27,7 +29,6 @@ The version is the actual `fabric.mod.json` value, even when a filename says som
 | `lootbeams-2.1.0.jar` | `1.1.0` | you | CC0-1.0 | not supplied |
 | `nofluid-1.21.4.jar` | `1.0.0` | slmnk | MIT | CC0-1.0 |
 | `pvpsurvived-1.0.0.jar` | `1.0.0` | Slmnk | MIT | CC0-1.0 |
-| `RwJoiner-fabric-1.21.4-1.0.0.jar` | `1.0.0` | RwJoiner Team | MIT | not supplied |
 | `totempops-1.0.0.jar` | `1.0.0` | you | MIT | not supplied |
 | `CullParticles-1_21_4_1_0_0.jar` | `1.21.4_1.0` | quikjay | MIT | not supplied |
 | `autocraft-1.0.0.jar` | `1.0.0` | AutoCraft Developer | MIT | CC0-1.0 |
@@ -72,12 +73,11 @@ the references must not be described as MIT-licensed upstream source. Their orig
 - Fabric callbacks, mixins, Brigadier commands and rendering calls are adapted to the native Rust client.
 - Native game data and per-instance configuration replace Java runtime objects.
 - HUD positions, colors, constants, food/equipment calculations and state timers are taken from the supplied versions.
-- Atlas intentionally uses a shared configuration editor while preserving the mod mechanics and persisted JSON/YAML settings. This chosen settings interface differs from RadarConfigScreen and the Java configuration libraries.
-- RwJoiner retains its ReallyWorld-specific menu/scoreboard assumptions, including the original hardcoded `11` material exception.
+- The native configuration screens independently reproduce the observed original custom, Cloth and YACL layouts and their save/cancel/reset behavior. Original EN/RU labels and tooltips from AppleSkin, Zoomify, Gamma Utils, Cloth Config (shedaniel, LGPLv3) and YACL (isXander, LGPL-3.0-or-later) retain their original authorship. Full LGPL/GPL texts are retained in `mod-port-licenses/LGPL-3.0-GammaUtils.txt` and `mod-port-licenses/GPL-3.0.txt`. Java configuration libraries are not bundled or executed in Atlas.
 - Lootbeams uses vanilla item silhouettes. Its original `lineWidth`, `expand`, `visibleAlpha` and `xrayAlpha` settings were already unused by the supplied renderer and are retained without invented behavior.
 - The supplied CullParticles JAR contains only a mixin cancelling `ClientPlayerEntity.pushOutOfBlocks(DD)V`; it does not cull particles. Atlas gates the corresponding `closest_space_nudge` push-out step. This entry must not be advertised as particle optimization.
-- The native Mod Menu displays the original supplied icons for AppleSkin, ArmorIndicator, AutoCraft, Chunk Animator, Crystal Optimizer, CullParticles, Gamma Utils, NoFluid, NoShakeHand, PvPSurvived, Radar/BetterNear, RwJoiner, StreamerMode, ViewModel and Zoomify. They retain the corresponding reference authorship and licenses listed above; AppleSkin has its separate retained notice. Mods without an original icon use the menu's fallback image. Original MIT English/Russian localization entries from HotCommands (Slmnk) and Inventory Layouts are adapted into Atlas's native language bundle.
-- Gamma Utils' optional custom status-effect icon is not reproduced in the current independent native adapter; brightness control must not be presented as complete parity with that additional display feature.
+- The native Mod Menu displays the original supplied icons for AppleSkin, ArmorIndicator, AutoCraft, Chunk Animator, Crystal Optimizer, CullParticles, Gamma Utils, NoFluid, NoShakeHand, PvPSurvived, Radar/BetterNear, StreamerMode, ViewModel and Zoomify. They retain the corresponding reference authorship and licenses listed above; AppleSkin has its separate retained notice. Mods without an original icon use the menu's fallback image. Original MIT English/Russian localization entries from HotCommands (Slmnk) and Inventory Layouts are adapted into Atlas's native language bundle.
+- Gamma Utils retains its original optional status-effect artwork with separate LGPL/GPL provenance below; visual equivalence beyond the checked scenarios is not claimed.
 
 No blanket claim of visual or behavior equivalence is made without in-game comparison.
 The chosen configuration-screen layout is recorded separately from gameplay and HUD equivalence.
@@ -108,6 +108,8 @@ These hashes identify the exact local reference archives, without uploading the 
 
 | Reference | SHA-256 |
 | --- | --- |
+| `aspectratio-1.0.0.jar` | `c946bf3c49bdfb77daf65b4dbd47dfb09f6106469c706409d85e6358a93bc073` |
+| `esc-music-controller-1.0.0.jar` | `581c91c385841b8bd625c8a08ca591dbda94af2fbc652182d037e89934f03390` |
 | `ArmorIndicator-1.0.0.jar` | `6ba9dbae528902568e06a4ab40ca17f07a3e5e184a0584d2baebed213ef8952b` |
 | `AutoSprint-1.21.4-Fabric.jar` | `860e3fe65289193a48c12bc186965e7be93951e12f32f211a41a9756d72ec05a` |
 | `NoShakeHand-1.0.0.jar` | `592ee550f3c4e71def7074df85bdf5b22a870d4a144ea285af302e2563568b5e` |
@@ -120,7 +122,6 @@ These hashes identify the exact local reference archives, without uploading the 
 | `lootbeams-2.1.0.jar` | `6900904e07f1fad2c4392020e1e89de4342c168d6d7f4f6c95c8be54ce902d6f` |
 | `nofluid-1.21.4.jar` | `55829dc26a89be449fa1bb91b47d8f57e5012ec6210317fd5ea3dce8c1cf2ad4` |
 | `pvpsurvived-1.0.0.jar` | `5ec09ff7a09109ed6a449b12b8a0c6b082b942b01a7ad395e191dd9030135ebd` |
-| `RwJoiner-fabric-1.21.4-1.0.0.jar` | `593ab1675435191557b40b0c7f5dab7557e0067e2ad19514f5a16de536ae00ee` |
 | `totempops-1.0.0.jar` | `b6b30b03a3256224c9c2698b1b27f2a7f8df949ce3000c07f61815b95ba451bd` |
 | `CullParticles-1_21_4_1_0_0.jar` | `3503b616c432074415c7c7f50898e168f9ab3e7eed0efdce9f523ccc15e2ca59` |
 | `autocraft-1.0.0.jar` | `a1db1a41dfd0e25508b9ba3fb1a74992c1ccf0fbadc48130d511026e1e9d1c6b` |

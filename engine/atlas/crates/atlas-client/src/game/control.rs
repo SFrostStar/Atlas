@@ -1312,6 +1312,9 @@ impl Game<'_> {
     }
 
     fn screen_name(&self) -> &'static str {
+        if self.screen == Screen::Mod {
+            return "mod";
+        }
         if self.screen == Screen::Win {
             return "win";
         }
