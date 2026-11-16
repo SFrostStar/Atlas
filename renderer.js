@@ -289,6 +289,9 @@ function updateLabel() {
   return tr(labels[update.status]||labels.idle)+suffix;
 }
 function updateSettingsPanel() {
+  if (state.bootstrapManaged) {
+    return `<section class="panel"><div class="panel-heading">${icon('download')}<h3>${tr('Обновления')}</h3><span class="tag">atlas-${escapeHtml(state.version)}</span></div><div class="settings-row"><strong>${tr('Atlas проверяет обновления перед открытием лаунчера.')}</strong></div></section>`;
+  }
   const update=state.update;
   const working=update?.applying||['checking','downloading','installing'].includes(update?.status);
   const ready=update?.status==='ready';
@@ -566,19 +569,39 @@ document.getElementById('delete-form').addEventListener('submit',async event=>{
 });
 window.atlas.onGameEvent(next=>{state=next;if(next.game?.running)busy=false;render();});
 document.getElementById('install-dialog').addEventListener('cancel',event=>{event.preventDefault();cancelInstall();});
-const initialStateReady = (async()=>{try{state=await window.atlas.getState();render();}catch(error){document.getElementById('content').textContent='Не удалось загрузить Atlas: '+error.message;}})();
+const initialStateReady = (async () => {
+  try {
+    state = await window.atlas.getState();
+    render();
+    return true;
+  } catch (error) {
+    document.getElementById('content').textContent = 'Не удалось загрузить Atlas: ' + error.message;
+    return false;
+  }
+})();
 {
   const splash = document.getElementById('boot-splash');
-  const deadline = Number(new URLSearchParams(location.search).get('startupDeadline'));
-  const remaining = deadline > 0 ? Math.max(0, Math.min(1000, deadline - Date.now())) : 1000;
-  splash?.style.setProperty('--boot-offset', `${remaining - 1000}ms`);
+  const query = new URLSearchParams(location.search);
+  const handoff = query.get('bootstrapHandoff') === '1';
+  const deadline = Number(query.get('startupDeadline'));
+  const remaining = handoff ? 0 : deadline > 0 ? Math.max(0, Math.min(1000, deadline - Date.now())) : 1000;
+  if (handoff) splash?.remove();
+  else splash?.style.setProperty('--boot-offset', `${remaining - 1000}ms`);
   const startedAt = performance.now();
   setTimeout(async () => {
-    await initialStateReady;
+    const ready = await initialStateReady;
     splash?.remove();
     document.querySelector('.app-shell').inert = false;
     performance.mark('atlas:ready');
     window.dispatchEvent(new CustomEvent('atlas:ready', { detail: { splashDuration: performance.now() - startedAt } }));
+    if (handoff && ready) {
+      const landscape = new Image();
+      landscape.src = 'assets/atlas-landscape.png';
+      await Promise.all([landscape.decode().catch(() => {}), document.fonts.ready]);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.atlas.startupReady().catch(console.error);
+      }));
+    }
   }, remaining);
 }
 

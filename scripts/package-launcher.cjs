@@ -10,7 +10,8 @@ const path = require('node:path');
     asar: true, prune: true,
     electronZipDir: process.env.ATLAS_ELECTRON_ZIP_DIR || undefined,
     ignore: [
-      /^\/(engine|data|dist|docs|scripts|tests|work|tools|runtime|bundle|website)(\/|$)/,
+      /^\/(engine|data|dist|docs|scripts|tests|work|tools|runtime|bundle|bootstrap|versions|website)(\/|$)/,
+      /^\/(Atlas-Launcher\.exe|atlas-bootstrap-version\.txt|atlas-bootstrap\.lock)$/i,
       /^\/\./,
       /^\/[^/]+\.(lnk|cmd|md|png)$/i,
       /^\/(options(?:of)?\.txt|(?:atlas|horizon)-(?:extras|graphics|player|controller)\.txt|(?:atlas|horizon)-shaders\.toml)$/i,

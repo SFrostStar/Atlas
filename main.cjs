@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, screen } = require('electron');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const { LauncherStore } = require('./lib/launcher-store.cjs');
@@ -9,7 +10,7 @@ const manifest = require('./package.json');
 const { AccountManager } = require('./lib/account-manager.cjs');
 const { t } = require('./i18n.js');
 const { GameInstallManager } = require('./lib/game-install.cjs');
-const { resolvePortableRoot } = require('./lib/portable-root.cjs');
+const { resolveLauncherLayout } = require('./lib/portable-root.cjs');
 const { ModManager } = require('./lib/mod-manager.cjs');
 const { ReleaseUpdater } = require('./lib/release-updater.cjs');
 
@@ -33,7 +34,8 @@ let discordObserved;
 const launcherVersion = manifest.version;
 const logs = [];
 let publishTimer;
-const projectRoot = app.isPackaged ? resolvePortableRoot(process.execPath) : __dirname;
+const layout = app.isPackaged ? resolveLauncherLayout(process.execPath) : { projectRoot: __dirname };
+const { projectRoot, bundleDirectory, bootstrapManaged = false } = layout;
 const startupDeadline = performance.timeOrigin + 1000;
 const guiTestRoot = !app.isPackaged && process.env.ATLAS_GUI_TEST;
 const guiTest = Boolean(guiTestRoot);
@@ -45,6 +47,28 @@ if (guiTestRoot) {
   app.setPath('sessionData', profile);
 }
 
+function bootstrapHandoff() {
+  if (process.platform !== 'win32') return null;
+  const token = process.env.ATLAS_BOOTSTRAP_HANDOFF || '';
+  const coordinates = /^(-?\d{1,7}),(-?\d{1,7}),(\d{1,5}),(\d{1,5})$/.exec(process.env.ATLAS_BOOTSTRAP_BOUNDS || '');
+  if (!/^[a-f0-9]{32}$/.test(token) || !coordinates) return null;
+  const [x, y, width, height] = coordinates.slice(1).map(Number);
+  if (width < 1 || height < 1 || width > 16384 || height > 16384) return null;
+  const bounds = screen.screenToDipRect(null, { x, y, width, height });
+  const workArea = screen.getDisplayMatching(bounds).workArea;
+  const w = Math.min(Math.max(1, bounds.width), workArea.width);
+  const h = Math.min(Math.max(1, bounds.height), workArea.height);
+  return {
+    marker: path.join(os.tmpdir(), `atlas-handoff-${token}.ready`),
+    bounds: {
+      x: Math.min(Math.max(bounds.x, workArea.x), workArea.x + workArea.width - w),
+      y: Math.min(Math.max(bounds.y, workArea.y), workArea.y + workArea.height - h),
+      width: w,
+      height: h,
+    },
+  };
+}
+
 function appendLog(message, level = 'info') {
   const entry = { time: new Date().toISOString(), level, message: String(message).slice(0, 8000) };
   logs.push(entry);
@@ -53,7 +77,7 @@ function appendLog(message, level = 'info') {
 }
 
 function state() {
-  return { ...store.getState(), mods: mods?.snapshot(store.config.selectedId), version: launcherVersion, update: updater ? { ...updater.snapshot(), applying: updateApplying } : undefined, game: { ...games.snapshot(), busy: gameBusy() }, supportVisible, install: installer ? { ...installer.snapshot(), ...installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}), needsSetup } : null, accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs] };
+  return { ...store.getState(), mods: mods?.snapshot(store.config.selectedId), version: launcherVersion, bootstrapManaged, update: updater ? { ...updater.snapshot(), applying: updateApplying } : undefined, game: { ...games.snapshot(), busy: gameBusy() }, supportVisible, install: installer ? { ...installer.snapshot(), ...installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}), needsSetup } : null, accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs] };
 }
 
 function gameBusy() {
@@ -142,7 +166,13 @@ function publishSoon() {
 
 async function launch(id, additional = false) {
   assertUpdateIdle();
-  if(!installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}).ready){needsSetup=true;publish();return state();}
+  const options = { runtimePath: store.config.settings.runtimePath, sourceRoot: store.config.settings.sourceRoot };
+  const availability = installer.inspect(options);
+  if (bootstrapManaged && availability.missingRuntime && !availability.missingResources &&
+      availability.bundledRuntime && !gameBusy() && options.runtimePath === store.defaultRuntime) {
+    await installer.start(options);
+  }
+  if (!installer.inspect(options).ready) { needsSetup = true; publish(); return state(); }
   needsSetup=false;
   if (additional) await games.launchAnother(id);
   else await games.launch(id);
@@ -163,7 +193,7 @@ function startInstall(options={}) {
   return state();
 }
 
-function registerHandlers() {
+function registerHandlers(onStartupReady) {
   function handle(name, callback) {
     ipcMain.handle(`atlas:${name}`, async (event, ...args) => {
       if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Недопустимый источник команды.');
@@ -171,6 +201,7 @@ function registerHandlers() {
       catch (error) { const message = t(error.message, store.config.settings.language); appendLog(message, 'error'); publish(); throw new Error(message); }
     });
   }
+  if (onStartupReady) handle('startup-ready', onStartupReady);
   handle('get-state', () => state());
   handle('check-updates', async () => { await checkUpdates(); return state(); });
   handle('apply-update', () => applyUpdate(true));
@@ -286,20 +317,49 @@ else {
       }
       publish();
     } });
-    installer = new GameInstallManager({projectRoot,dataRoot:store.dataRoot,onChange:()=>{if(installer?.snapshot().status==='ready')needsSetup=false;publishSoon();}});
+    installer = new GameInstallManager({projectRoot,dataRoot:store.dataRoot,bundleDirectory,onChange:()=>{if(installer?.snapshot().status==='ready')needsSetup=false;publishSoon();}});
     mods = new ModManager(store);
     for (const {id} of store.config.instances) {
       try { mods.syncPortFiles(id); }
       catch (error) { appendLog(error.message, 'error'); }
     }
-    if (app.isPackaged && process.env.ATLAS_LAUNCHER_NO_SELF_UPDATE !== '1') {
+    if (app.isPackaged && !bootstrapManaged && process.env.ATLAS_LAUNCHER_NO_SELF_UPDATE !== '1') {
       updater = new ReleaseUpdater({ projectRoot, dataRoot: store.dataRoot, executable: process.execPath,
         currentVersion: launcherVersion, onChange: publishSoon,
         isGameRunning: () => Boolean(gameBusy() || installer?.snapshot().active) });
     }
-    registerHandlers();
+    const handoff = bootstrapHandoff();
+    let painted = false;
+    let rendered = false;
+    let shown = false;
+    let displayDeadline;
+    const showLauncher = (handoffReady = false) => {
+      if (shown || window.isDestroyed()) return;
+      shown = true;
+      clearTimeout(displayDeadline);
+      if (handoffReady) {
+        window.showInactive();
+        try { fs.writeFileSync(handoff.marker, '', { flag: 'wx' }); }
+        catch (error) { appendLog(error.message, 'error'); }
+      } else {
+        window.show();
+      }
+      setImmediate(startDiscord);
+      if (updater) {
+        setTimeout(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 2500).unref();
+        updatePoll = setInterval(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 30 * 60 * 1000);
+        updatePoll.unref();
+      }
+    };
+    registerHandlers(handoff && (() => {
+      rendered = true;
+      if (painted) showLauncher(true);
+    }));
     window = new BrowserWindow({
-      width: 1360, height: 900, minWidth: 1050, minHeight: 740,
+      width: 1360, height: 900,
+      minWidth: Math.min(1050, handoff?.bounds.width ?? 1050),
+      minHeight: Math.min(740, handoff?.bounds.height ?? 740),
+      ...handoff?.bounds,
       title: 'Atlas Launcher', frame: false, backgroundColor: '#171717', show: false,
       ...(fs.existsSync(path.join(__dirname, 'assets', 'icon.png')) ? { icon: path.join(__dirname, 'assets', 'icon.png') } : {}),
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: !app.isPackaged },
@@ -308,13 +368,10 @@ else {
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.once('ready-to-show', () => {
-      window.show(); setImmediate(startDiscord);
-      if (updater) {
-        setTimeout(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 2500).unref();
-        updatePoll = setInterval(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 30 * 60 * 1000);
-        updatePoll.unref();
-      }
+      painted = true;
+      if (!handoff || rendered) showLauncher(Boolean(handoff));
     });
+    if (handoff) displayDeadline = setTimeout(showLauncher, 5000).unref();
     if (guiTest) window.webContents.on('did-finish-load', () => window.setTitle('Atlas Launcher — проверка'));
     window.on('close', (event) => {
       if (updateClosing) return;
@@ -326,7 +383,8 @@ else {
       }
     });
     appendLog('Atlas Launcher готов. Сборки хранятся в отдельных папках.');
-    window.loadFile(path.join(__dirname, 'index.html'), { query: { startupDeadline: String(startupDeadline) } });
+    const query = handoff ? { bootstrapHandoff: '1' } : { startupDeadline: String(startupDeadline) };
+    window.loadFile(path.join(__dirname, 'index.html'), { query });
   });
   app.on('window-all-closed', () => app.quit());
   app.on('will-quit', () => { clearInterval(discordPoll); clearInterval(updatePoll); discordPresence?.dispose(); accounts?.dispose(); installer?.cancel(); });

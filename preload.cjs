@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('atlas', {
   getState: () => ipcRenderer.invoke('atlas:get-state'),
+  startupReady: () => ipcRenderer.invoke('atlas:startup-ready'),
   checkUpdates: () => ipcRenderer.invoke('atlas:check-updates'),
   applyUpdate: () => ipcRenderer.invoke('atlas:apply-update'),
   refreshMods: () => ipcRenderer.invoke('atlas:refresh-mods'),

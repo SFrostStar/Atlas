@@ -14,6 +14,11 @@ const messages = {
     stepOneTitle: 'Распакуй архив', stepOneText: 'Полностью извлеки ZIP в отдельную папку.',
     stepTwoTitle: 'Открой Atlas Launcher.exe', stepTwoText: 'Создай профиль и свою первую сборку.',
     stepThreeTitle: 'Нажми «Играть»', stepThreeText: 'Если нужны игровые файлы, лаунчер предложит их скачать.',
+    bootstrap: {
+      downloadDescription: 'Загрузчик для Windows установит Atlas и будет проверять обновления при запуске.',
+      stepOneTitle: 'Скачай Atlas-Launcher.exe', stepOneText: 'После установки открывай Atlas с рабочего стола.',
+      stepTwoTitle: 'Запусти загрузчик', stepTwoText: 'Когда файлы будут готовы, лаунчер откроется автоматически.'
+    },
     madeBy: 'Разрабатывает', basedOn: 'На основе', legal: '. Неофициальный проект, не связанный с Mojang или Microsoft.', footerNote: 'Сделано для своих миров.',
     pageTitle: 'Atlas — Minecraft на Rust', metaDescription: 'Atlas — независимый клиент Minecraft на Rust. Свой лаунчер, сборки и нативные моды. Скачать для Windows и посмотреть исходный код.'
   },
@@ -30,10 +35,17 @@ const messages = {
     stepOneTitle: 'Extract the archive', stepOneText: 'Extract the entire ZIP into a separate folder.',
     stepTwoTitle: 'Open Atlas Launcher.exe', stepTwoText: 'Create a profile and your first instance.',
     stepThreeTitle: 'Press Play', stepThreeText: 'If game files are needed, the launcher will offer to download them.',
+    bootstrap: {
+      downloadDescription: 'The Windows loader installs Atlas and checks for updates at launch.',
+      stepOneTitle: 'Download Atlas-Launcher.exe', stepOneText: 'After setup, open Atlas from the desktop.',
+      stepTwoTitle: 'Run the loader', stepTwoText: 'The launcher opens automatically when the files are ready.'
+    },
     madeBy: 'Developed by', basedOn: 'Based on', legal: '. An unofficial project, not affiliated with Mojang or Microsoft.', footerNote: 'Made for your worlds.',
     pageTitle: 'Atlas — Minecraft on Rust', metaDescription: 'Atlas is an independent Rust Minecraft client. Its own launcher, instances and native mods. Download for Windows and explore the source.'
   }
 };
+
+let bootstrapDownload = false;
 
 function setLanguage(language) {
   const lang = Object.hasOwn(messages, language) ? language : 'ru';
@@ -42,7 +54,8 @@ function setLanguage(language) {
   document.title = copy.pageTitle;
   document.querySelector('meta[name="description"]').content = copy.metaDescription;
   for (const element of document.querySelectorAll('[data-i18n]')) {
-    const value = copy[element.dataset.i18n];
+    const key = element.dataset.i18n;
+    const value = (bootstrapDownload ? copy.bootstrap[key] : undefined) ?? copy[key];
     if (Array.isArray(value)) {
       element.replaceChildren(document.createTextNode(value[0]), document.createElement('br'), document.createTextNode(value[1]));
     } else if (typeof value === 'string') element.textContent = value;
@@ -67,14 +80,22 @@ async function refreshRelease() {
     const release = await response.json();
     if (release.draft || release.prerelease || !Array.isArray(release.assets) || !/^atlas-\d+\.\d+\.\d+$/.test(release.tag_name)) return;
     const version = release.tag_name.slice('atlas-'.length);
-    const portable = release.assets.find(asset => asset.name === `Atlas-${version}-Windows-x64.zip`)
+    const asset = release.assets.find(file => file.name === 'Atlas-Launcher.exe'
+        && Number.isSafeInteger(file.size) && file.size > 0 && file.size <= 50_000_000)
+      ?? release.assets.find(asset => asset.name === `Atlas-${version}-Windows-x64.zip`)
       ?? release.assets.find(asset => asset.name === `Atlas-${version}-Update.zip`);
-    if (!portable) return;
-    const url = new URL(portable.browser_download_url);
-    if (url.origin !== 'https://github.com' || url.pathname !== `/SFrostStar/Atlas/releases/download/${release.tag_name}/${portable.name}` || url.search || url.hash) return;
+    if (!asset) return;
+    const url = new URL(asset.browser_download_url);
+    if (url.origin !== 'https://github.com' || url.pathname !== `/SFrostStar/Atlas/releases/download/${release.tag_name}/${asset.name}`
+        || url.username || url.password || url.search || url.hash) return;
     for (const link of document.querySelectorAll('[data-download]')) link.href = url.href;
     document.querySelector('[data-version]').textContent = release.tag_name.replace('atlas-', 'v');
-    if (Number.isFinite(portable.size) && portable.size > 0) document.querySelector('[data-size]').textContent = `${Math.round(portable.size / 1048576)} MB`;
+    if (Number.isFinite(asset.size) && asset.size > 0) {
+      document.querySelector('[data-size]').textContent = asset.size < 1048576
+        ? `${Math.ceil(asset.size / 1024)} KB` : `${Math.round(asset.size / 1048576)} MB`;
+    }
+    bootstrapDownload = asset.name === 'Atlas-Launcher.exe';
+    setLanguage(document.documentElement.lang);
   } catch { /* The verified published download remains available if GitHub is unreachable. */ }
   finally { clearTimeout(timeout); }
 }

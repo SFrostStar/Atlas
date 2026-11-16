@@ -31,6 +31,7 @@
   }
   const en = {
     'Обновления':'Updates','Проверить обновления':'Check for updates','Проверка обновлений…':'Checking for updates…',
+    'Atlas проверяет обновления перед открытием лаунчера.':'Atlas checks for updates before the launcher opens.',
     'Скачивание обновления':'Downloading update','Обновление готово':'Update ready','Перезапустить':'Restart',
     'Установлена последняя версия':'You have the latest version','Обновления проверяются автоматически.':'Updates are checked automatically.',
     'Обновление установится при закрытии лаунчера.':'The update will install when the launcher closes.',

@@ -5,6 +5,9 @@ runtime/
 /bundle/
 /tools/
 /docs/
+/versions/
+/atlas-bootstrap-version.txt
+/atlas-bootstrap.lock
 node_modules/
 dist/
 target/

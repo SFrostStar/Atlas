@@ -12,6 +12,7 @@ PRIVATE_DIRS = {"data", "work", "runtime", "bundle", "node_modules", "target", "
 PRIVATE_NAMES = {"options.txt", "optionsof.txt", "accounts.json", "launcher.json",
                  "atlas-ports.json", "atlas-runtime.json", "atlas-mods.txt", "mod-catalog.json",
                  "session.json", "control.json", "credentials.json", "tokens.json",
+                 "atlas-bootstrap-version.txt", "atlas-bootstrap.lock",
                  "servers.dat", "usercache.json", "ops.json", "whitelist.json",
                  "banned-players.json", "banned-ips.json", "server.properties"}
 PRIVATE_SUFFIXES = {".mca", ".mcr", ".dat", ".dat_old", ".jar", ".class", ".jfr",
@@ -25,8 +26,7 @@ SECRET = re.compile(rb"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,
 def prohibited(name):
     path = PurePosixPath(name)
     return (any(p in PRIVATE_DIRS for p in path.parts)
-            or (path.parts and path.parts[0] == "docs")
-            or (path.parts and path.parts[0] == "tools")
+            or (path.parts and path.parts[0] in {"docs", "tools", "versions"})
             or path.name in PRIVATE_NAMES or path.suffix.lower() in PRIVATE_SUFFIXES
             or (path.name.startswith(".env") and path.name != ".env.example")
             or re.fullmatch(r"(?:atlas|horizon)-(?:extras|graphics|player|controller)\.txt", path.name)
