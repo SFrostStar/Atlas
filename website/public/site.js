@@ -65,11 +65,13 @@ async function refreshRelease() {
     const response = await fetch('https://api.github.com/repos/SFrostStar/Atlas/releases/latest', { signal: controller.signal, headers: { Accept: 'application/vnd.github+json' } });
     if (!response.ok) return;
     const release = await response.json();
-    if (release.draft || release.prerelease || !Array.isArray(release.assets)) return;
-    const portable = release.assets.find(asset => /^Atlas-\d+\.\d+\.\d+-Windows-x64\.zip$/i.test(asset.name));
-    if (!portable || !/^atlas-\d+\.\d+\.\d+$/.test(release.tag_name)) return;
+    if (release.draft || release.prerelease || !Array.isArray(release.assets) || !/^atlas-\d+\.\d+\.\d+$/.test(release.tag_name)) return;
+    const version = release.tag_name.slice('atlas-'.length);
+    const portable = release.assets.find(asset => asset.name === `Atlas-${version}-Windows-x64.zip`)
+      ?? release.assets.find(asset => asset.name === `Atlas-${version}-Update.zip`);
+    if (!portable) return;
     const url = new URL(portable.browser_download_url);
-    if (url.origin !== 'https://github.com' || !url.pathname.startsWith('/SFrostStar/Atlas/releases/download/') || url.search || url.hash) return;
+    if (url.origin !== 'https://github.com' || url.pathname !== `/SFrostStar/Atlas/releases/download/${release.tag_name}/${portable.name}` || url.search || url.hash) return;
     for (const link of document.querySelectorAll('[data-download]')) link.href = url.href;
     document.querySelector('[data-version]').textContent = release.tag_name.replace('atlas-', 'v');
     if (Number.isFinite(portable.size) && portable.size > 0) document.querySelector('[data-size]').textContent = `${Math.round(portable.size / 1048576)} MB`;
