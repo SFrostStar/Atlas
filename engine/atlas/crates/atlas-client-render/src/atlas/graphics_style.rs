@@ -149,7 +149,18 @@ pub fn button(
     atlas: &HudAtlas,
     rect: [f32; 4],
     label: &Text,
+    flags: (bool, bool, bool),
+) {
+    button_with_room(batch, atlas, rect, label, flags, 0.0);
+}
+/// Leave room for the controller glyph beside the vanilla button label.
+pub fn button_with_room(
+    batch: &mut HudBatch,
+    atlas: &HudAtlas,
+    rect: [f32; 4],
+    label: &Text,
     (hover, live, _primary): (bool, bool, bool),
+    room: f32,
 ) {
     let [x, y, w, h] = rect;
     let sprite = if !live {
@@ -164,7 +175,7 @@ pub fn button(
         batch,
         atlas,
         label,
-        [x + 2.0, y + ((h - 8.0) / 2.0).floor(), w - 4.0],
+        [x + 2.0 + room, y + ((h - 8.0) / 2.0).floor(), (w - 4.0 - room).max(1.0)],
         (y, h),
         if live { WHITE } else { MUTED },
     );

@@ -30,7 +30,7 @@ pub fn main() -> atlas_client::Result<()> {
     let names = atlas_client::creative::Names::load(root);
     let translate = |k: &str| names.get(k).map(str::to_owned);
     let tooltip = |s: &atlas_client::items::ItemStack| {
-        atlas_client::item_tooltip::lines(s, items.get(&s.item), &translate)
+        atlas_client::item_tooltip::lines(s, items.get(&s.item), &items.enchantments, &translate)
     };
     let mut out = String::new();
     for line in cases.lines() {

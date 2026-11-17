@@ -16,6 +16,10 @@
 //! `icons`: renders the icon masters in `docs/media/brand` (with `rsvg-convert`, from librsvg)
 //! into every size the platforms and the website use, and packs `packaging/icons/atlas.ico`
 //! and `atlas.icns`. `docs/media/brand/README.md` lists what goes where.
+//!
+//! `perf-wasm`: builds `crates/atlas-perf` for `wasm32-unknown-unknown` with the `wasm` feature
+//! and writes `target/perf-wasm/{atlas_perf.wasm,atlas_perf.js}`, which atlas-rust/atlas-site imports into
+//! its static assets (docs/perf-platform.md §7.1).
 
 mod mod_api;
 
@@ -23,7 +27,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-const USAGE: &str = "usage: cargo run -p xtask -- package BINARY OUTDIR | package-server ENGINE OUTDIR | tokens | icons";
+const USAGE: &str = "usage: cargo run -p xtask -- package BINARY OUTDIR | package-server ENGINE OUTDIR | tokens | icons | perf-wasm";
 
 /// What the release folder takes from the repository at HEAD, as `git archive` writes it.
 const ARCHIVED: [&str; 5] = [
@@ -53,6 +57,7 @@ fn main() -> ExitCode {
         [task] if task == "mod-api" => mod_api::run(),
         [task] if task == "tokens" => tokens(),
         [task] if task == "icons" => icons(),
+        [task] if task == "perf-wasm" => perf_wasm(),
         _ => Err(USAGE.to_string()),
     };
     match result {
@@ -79,6 +84,54 @@ fn git(repo: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
         ));
     }
     Ok(output.stdout)
+}
+
+/// Builds the web UI's wasm and puts it and its JS wrapper in `target/perf-wasm/`.
+fn perf_wasm() -> Result<(), String> {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("xtask has no parent folder")?;
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let status = Command::new(&cargo)
+        .current_dir(repo)
+        .args([
+            "build",
+            "--release",
+            "--lib",
+            "-p",
+            "atlas-perf",
+            "--features",
+            "wasm",
+            "--target",
+            "wasm32-unknown-unknown",
+        ])
+        .status()
+        .map_err(|e| format!("{cargo} build: {e}"))?;
+    if !status.success() {
+        return Err(
+            "the wasm build failed; `rustup target add wasm32-unknown-unknown` installs the target"
+                .to_string(),
+        );
+    }
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| repo.join("target"), PathBuf::from);
+    let wasm = target.join("wasm32-unknown-unknown/release/atlas_perf.wasm");
+    let script = repo.join("crates/atlas-perf/web/atlas_perf.js");
+    let out = target.join("perf-wasm");
+    fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
+    fs::copy(&wasm, out.join("atlas_perf.wasm"))
+        .map_err(|e| format!("{}: {e}", wasm.display()))?;
+    fs::copy(&script, out.join("atlas_perf.js"))
+        .map_err(|e| format!("{}: {e}", script.display()))?;
+    let size = fs::metadata(out.join("atlas_perf.wasm"))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    println!(
+        "wrote {} ({} KiB) and atlas_perf.js",
+        out.join("atlas_perf.wasm").display(),
+        size / 1024
+    );
+    Ok(())
 }
 
 fn tokens() -> Result<(), String> {

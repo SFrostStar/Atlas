@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
 const {GameInstallManager,safeUrl,relative,prepared}=require('../lib/game-install.cjs');
 const hash=b=>crypto.createHash('sha1').update(b).digest('hex');
-function fixture(t,overrides={}){
+function fixture(t,overrides={},resourceOutputVersion=3){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'atlas-installer-test-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const bundle=path.join(root,'bundle','game'),source=path.join(bundle,'game-root');fs.mkdirSync(source,{recursive:true});
  for(const name of ['atlas-client.exe','atlas-ctl.exe','atlas-prepare.exe','libc++.dll','libunwind.dll','libwinpthread-1.dll'])fs.writeFileSync(path.join(bundle,name),'original payload');
@@ -19,6 +19,7 @@ function fixture(t,overrides={}){
  const pins={version:'26.3',manifest_sha1:hash(manifest),client_sha1:client.sha1,server_sha1:server.sha1,java_major:25};
  bodies.set(`https://piston-meta.mojang.com/v1/packages/${pins.manifest_sha1}/26.3.json`,manifest);
  fs.writeFileSync(path.join(source,'research-lock.json'),JSON.stringify({minecraft:pins}));
+ fs.writeFileSync(path.join(source,'ATLAS-UPSTREAM.json'),JSON.stringify({resourceSchema:7,resourceOutputVersion}));
  let requests=0;const updates=[];
  const manager=new GameInstallManager({projectRoot:root,dataRoot:path.join(root,'data'),onChange:s=>updates.push(s),fetch:async url=>{requests++;const body=bodies.get(url);return new Response(body||'missing',{status:body?200:404});},runPreparer:async({args})=>{
   assert.ok(args.includes('--complete'),'the new preparer must verify complete resources including sounds');
@@ -27,7 +28,7 @@ function fixture(t,overrides={}){
   assert.equal(preparing.progress,null,'native preparation has indeterminate progress');
   for(const key of ['completed','total','bytesDone','bytesTotal'])assert.equal(preparing[key],0,`preparation must clear stale download ${key}`);
   const preparation=args[args.indexOf('--root')+1],result=path.join(preparation,'.local','atlas-client','26.3');
-  fs.mkdirSync(path.join(result,'assets'),{recursive:true});fs.mkdirSync(path.join(result,'data'),{recursive:true});fs.writeFileSync(path.join(result,'facts.json'),'{}');fs.writeFileSync(path.join(result,'atlas-resources.json'),JSON.stringify({schema:7,minecraft:'26.3'}));fs.writeFileSync(path.join(result,'atlas-prepare.json'),JSON.stringify({output_version:3}));
+  fs.mkdirSync(path.join(result,'assets'),{recursive:true});fs.mkdirSync(path.join(result,'data'),{recursive:true});fs.writeFileSync(path.join(result,'facts.json'),'{}');fs.writeFileSync(path.join(result,'atlas-resources.json'),JSON.stringify({schema:7,minecraft:'26.3'}));fs.writeFileSync(path.join(result,'atlas-prepare.json'),JSON.stringify({output_version:resourceOutputVersion}));
  },...overrides});
  return {root,manager,updates,bodies,get requests(){return requests}};
 }
@@ -46,14 +47,14 @@ test('unsafe URLs and path traversal are rejected before fetch',()=>{
 });
 
 test('the upgraded engine rejects old prepared output even when its schema is unchanged',async t=>{
- const f=fixture(t);await f.manager.start();
+ const f=fixture(t,{},4);await f.manager.start();
  const resources=f.manager.inspect().resourcesPath;
- assert.equal(prepared(resources,'26.3'),true);
- fs.writeFileSync(path.join(resources,'atlas-prepare.json'),JSON.stringify({output_version:2}));
+ assert.equal(prepared(resources,'26.3',{resourceOutputVersion:4}),true);
+ fs.writeFileSync(path.join(resources,'atlas-prepare.json'),JSON.stringify({output_version:3}));
  assert.equal(f.manager.inspect().ready,false);
  fs.unlinkSync(path.join(resources,'atlas-prepare.json'));
  assert.equal(f.manager.inspect().ready,false);
- fs.writeFileSync(path.join(resources,'atlas-prepare.json'),JSON.stringify({output_version:3}));
+ fs.writeFileSync(path.join(resources,'atlas-prepare.json'),JSON.stringify({output_version:4}));
  assert.equal(f.manager.inspect().ready,true);
 });
 

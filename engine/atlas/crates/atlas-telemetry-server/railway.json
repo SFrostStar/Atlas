@@ -5,6 +5,11 @@
     "dockerfilePath": "crates/atlas-telemetry-server/Dockerfile",
     "watchPatterns": [
       "/crates/atlas-telemetry/**",
+      "/crates/atlas-addresses/**",
+      "/crates/atlas-core/**",
+      "/crates/atlas-hooks/**",
+      "/crates/atlas-platform/**",
+      "/crates/atlas-system/**",
       "/crates/atlas-telemetry-server/**",
       "/Cargo.toml"
     ]

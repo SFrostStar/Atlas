@@ -1,0 +1,29 @@
+[package]
+name = "atlas-official"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The official game executable: the platform's game with Atlas's own in-game parts plugged in (docs/layers.md)"
+
+[[bin]]
+name = "atlas-official"
+path = "src/main.rs"
+
+[dependencies]
+atlas-game = { path = "../atlas-game" }
+atlas-platform = { path = "../atlas-platform" }
+atlas-heartbeat = { path = "../atlas-heartbeat" }
+atlas-friends = { path = "../atlas-friends", features = ["game"] }
+atlas-official-servers = { path = "../atlas-official-servers" }
+atlas-discord = { path = "../atlas-discord" }
+atlas-perf-share = { path = "../atlas-perf-share" }
+log = "0.4"
+
+[build-dependencies]
+atlas-core = { path = "../atlas-core" }
+# The build script runs on the host, but embeds resources based on the target OS.
+winresource = "0.1"
+
+[lints]
+workspace = true

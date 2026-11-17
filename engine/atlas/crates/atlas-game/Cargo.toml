@@ -1,0 +1,15 @@
+[package]
+name = "atlas-game"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The game as the platform runs it: the engine's entry with the platform's parts registered, for an executable to start (docs/layers.md)"
+
+[dependencies]
+atlas-client = { path = "../atlas-client" }
+atlas-threads = { path = "../atlas-threads" }
+atlas-mods = { path = "../atlas-mods", default-features = false, features = ["index"] }
+
+[lints]
+workspace = true

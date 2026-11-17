@@ -15,8 +15,11 @@ export RUSTFLAGS='-C target-feature=-crt-static'
 target=x86_64-unknown-linux-musl
 bin="target/$target/release"
 cargo build --release --locked --target "$target" \
-  -p atlas-client -p atlas-client-lib --bin atlas-client --bin atlas-ctl \
+  -p atlas-official --bin atlas-official -p atlas-client-lib --bin atlas-ctl \
   -p atlas-prepare --bin atlas-prepare -p atlas-server --bin atlas-server
+# The official game (atlas-client's with Atlas's own parts, docs/layers.md) is what players
+# get, under the game's name.
+cp -f "$bin/atlas-official" "$bin/atlas-client"
 
 set -- "$bin/atlas-client" "$bin/atlas-ctl" "$bin/atlas-prepare" "$bin/atlas-server"
 python3 tools/check_imports.py --musl "$@"

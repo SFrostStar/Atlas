@@ -1,12 +1,9 @@
 //! Atlas: native Rust client for Minecraft Java Edition 26.3 gameplay.
 #![forbid(unsafe_code)]
 
-#[cfg(not(any(feature = "system-allocator", feature = "alloc-census")))]
+#[cfg(not(feature = "system-allocator"))]
 #[global_allocator]
-static ALLOCATOR: atlas_threads::Allocator = atlas_threads::ALLOCATOR;
-#[cfg(all(feature = "alloc-census", not(feature = "system-allocator")))]
-#[global_allocator]
-static ALLOCATOR: atlas_threads::CensusAllocator = atlas_threads::CensusAllocator;
+static ALLOCATOR: atlas_threads::GameAllocator = atlas_threads::GAME_ALLOCATOR;
 
 /// The mod API level this game serves, kept in the program for the launcher
 /// to read without running it (`atlas_mods::api_level::MARK`). `main`

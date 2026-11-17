@@ -93,7 +93,7 @@ pub fn launcher_entry(exe: &Path) -> String {
          StartupWMClass=atlas-launcher\n",
         quote(exe),
         exe.display(),
-        minecraft = atlas_core::VANILLA_VERSION,
+        minecraft = atlas_platform::version::VANILLA_VERSION,
     )
 }
 

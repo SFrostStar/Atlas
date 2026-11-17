@@ -6,10 +6,10 @@
 //! the time left. Vanilla has no such commands: they reach operators' command trees (completions included)
 //! as a native mod's commands do (`moderation_commands`), and the game runs them itself.
 use super::{Game, chat_filter::Reply, dedicated, lan::LanHost};
-use atlas_chat_filter::{duration_text, now_millis, parse_duration};
 use atlas_client::{mod_api::NativeCommand, text::Text};
 use atlas_protocol::packets::play::{self, Clientbound as C};
 use atlas_protocol::text::translatable;
+use atlas_server_files::duration::{duration_text, now_millis, parse_duration};
 use atlas_server_files::user_lists::{BanEntry, BanList, NameAndId, format_date};
 
 /// The operator level `/tempban` needs, as `/ban`'s.

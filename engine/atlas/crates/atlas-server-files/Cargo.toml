@@ -11,6 +11,7 @@ atlas-core = { path = "../atlas-core" }
 atlas-protocol = { path = "../atlas-protocol" }
 atlas-world = { path = "../atlas-world" }
 log = "0.4"
+getrandom = "0.3"
 # Online mode: finding accounts by name (the services' profiles endpoint).
 # Secure chat: the services' public keys arrive base64-encoded.
 base64 = "0.22"

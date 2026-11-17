@@ -13,9 +13,26 @@ pub fn main_with(mods: crate::mod_api::Mods) {
         log::warn!("Trait mods already installed; ignoring the second list");
     }
     atlas_threads::configure_allocator();
+    // The platform's features the dedicated server loads from server.toml, through the engine's hooks.
+    atlas_chat_filter::install();
+    crate::atlas_look::give();
+    // OptiFine's and Polytone's pack formats (platform, docs/layers.md), before any pack loads.
+    atlas_client::pack_formats::install();
+    // atlas-extras (docs/forking.md): without the feature, no Atlas Settings or Mods page.
+    if !cfg!(feature = "atlas-extras") {
+        atlas_client::options_ui::ATLAS_EXTRAS
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+    }
     atlas_client::telemetry::mark_start();
+    // Opt-in telemetry keeps each crash report (docs/telemetry.md), whatever the mode.
+    crash::on_report(atlas_client::telemetry::keep_crash);
+    // Crates above the engine registered their hooks before this (atlas-official's `main`),
+    // then the Atlas parts still in this crate; none registers after this point.
+    game::player_hooks::register();
+    atlas_hooks::engine::seal();
+    // The text crates ship (`atlas_hooks::lang`), loaded with the game's own languages.
+    atlas_client::lang::install_crate_files(atlas_hooks::lang::engine::all());
     atlas_client::spans::startup::init(std::time::Instant::now());
-    atlas_client::spans::trace::start_from_env();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let game_args = args.iter().take_while(|a| *a != "--dedicated");
     let help = game_args
@@ -146,6 +163,26 @@ pub fn main_with(mods: crate::mod_api::Mods) {
                 cancel,
             );
         },
+        player_chat_v2: |player, name, level, message, replies, cancel| {
+            crate::mod_api::dispatch_player_chat_v2(
+                crate::mod_api::mods(),
+                player,
+                name,
+                level,
+                message,
+                replies,
+                cancel,
+            );
+        },
+        chat_decorate: |player, name, message, decorated| {
+            crate::mod_api::dispatch_chat_decorate(
+                crate::mod_api::mods(),
+                player,
+                name,
+                message,
+                decorated,
+            );
+        },
         sound_play: |sound, volume, pitch, cancel| {
             crate::mod_api::dispatch_sound_play(
                 crate::mod_api::mods(),
@@ -191,6 +228,14 @@ pub fn main_with(mods: crate::mod_api::Mods) {
         },
         living_jump: |entity, kind| {
             crate::mod_api::dispatch_living_jump(crate::mod_api::mods(), entity, kind);
+        },
+        living_death_message: |entity, kind, message| {
+            crate::mod_api::dispatch_living_death_message(
+                crate::mod_api::mods(),
+                entity,
+                kind,
+                message,
+            );
         },
         register_goals: |mob| {
             crate::mod_api::dispatch_register_goals(crate::mod_api::mods(), mob);
@@ -272,6 +317,7 @@ pub fn main_with(mods: crate::mod_api::Mods) {
             game::exit_code::ERROR
         });
     }
+    atlas_hooks::engine::shutdown();
     logging::flush();
 }
 

@@ -15,13 +15,15 @@ from integration_env import suite_lock
 
 
 if __name__ == '__main__':
-    subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'atlas-client', '-p', 'atlas-client-lib',
-                    '-p', 'atlas-relay', '--bin', 'atlas-client', '--bin', 'atlas-ctl',
+    # The official executable: joining a friend is Play with Friends' hook, which atlas-client's
+    # own executable doesn't register (docs/layers.md, "How a Atlas crate plugs in").
+    subprocess.run(['cargo', 'build', '--locked', '--profile', 'fast', '-p', 'atlas-official', '-p', 'atlas-client-lib',
+                    '-p', 'atlas-relay', '--bin', 'atlas-official', '--bin', 'atlas-ctl',
                     '--bin', 'atlas-relay'], cwd=lab.ROOT, check=True)
     metadata = json.loads(subprocess.check_output(
         ['cargo', 'metadata', '--format-version', '1', '--no-deps'], cwd=lab.ROOT, text=True))
     bins = Path(metadata['target_directory']) / 'fast'
-    sys.argv = [sys.argv[0], '--client', str(bins / 'atlas-client'),
+    sys.argv = [sys.argv[0], '--client', str(bins / 'atlas-official'),
                 '--relay', str(bins / 'atlas-relay'), '--baseline',
                 *(['--offscreen'] if sys.platform == 'darwin' else [])]
     with suite_lock():

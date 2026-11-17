@@ -9,15 +9,15 @@ description = "The client's input layer: key bindings and their names, mouse, co
 [dependencies]
 atlas-client-core = { path = "../atlas-client-core" }
 winit = "0.30.13"
-# The window icon.
-atlas-theme = { path = "../atlas-theme" }
 png = "0.18"
 arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
-# The DualSense's trigger effects (the `controllers` feature).
-atlas-dualsense = { path = "../atlas-dualsense", optional = true }
+
+[dev-dependencies]
+# The window icon test decodes Atlas's icon.
+atlas-theme = { path = "../atlas-theme" }
 
 [features]
-controllers = ["dep:atlas-dualsense"]
+controllers = []
 
 [lints]
 workspace = true

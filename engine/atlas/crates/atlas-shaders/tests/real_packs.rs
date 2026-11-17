@@ -186,8 +186,16 @@ fn real_packs_read() {
                     item_id_declared: true,
                     ..terrain.clone()
                 }),
-                // As the game's (`pack_atlas::terrain_parts`): solid, then cutout terrain.
+                // As the game's (`pack_atlas::game_terrain`): solid, then cutout terrain.
                 terrain_parts: Some([terrain.clone(), terrain.clone()]),
+                // And both in one pass.
+                terrain_one_pass: Some(atlas_shaders::GbuffersInputs {
+                    parts: Some(atlas_shaders::Parts {
+                        solid: "hz_v_pos.x > 0.0".into(),
+                        cutout_alpha_test: None,
+                    }),
+                    ..terrain.clone()
+                }),
                 terrain_geometry: Some(atlas_shaders::GeometryInputs {
                     inputs: atlas_shaders::GbuffersInputs {
                         declarations: format!(

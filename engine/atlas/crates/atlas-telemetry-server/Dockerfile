@@ -3,6 +3,12 @@ FROM rust:1-slim AS build
 WORKDIR /src
 # The root manifest only for the shared crate's workspace settings (edition, lints).
 COPY Cargo.toml Cargo.toml
+# Every crate the server's Cargo.lock builds from a path (tests/test_service_images.py checks the list).
+COPY crates/atlas-addresses crates/atlas-addresses
+COPY crates/atlas-core crates/atlas-core
+COPY crates/atlas-hooks crates/atlas-hooks
+COPY crates/atlas-platform crates/atlas-platform
+COPY crates/atlas-system crates/atlas-system
 COPY crates/atlas-telemetry crates/atlas-telemetry
 COPY crates/atlas-telemetry-server crates/atlas-telemetry-server
 RUN cargo build --release --locked --manifest-path crates/atlas-telemetry-server/Cargo.toml

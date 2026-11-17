@@ -21,10 +21,13 @@ atlas-client-render = { path = "../atlas-client-render" }
 atlas-command = { path = "../atlas-command" }
 atlas-items = { path = "../atlas-items" }
 atlas-core = { path = "../atlas-core" }
+# Extension points for the crates above the engine (docs/layers.md, "How a Atlas crate plugs in").
+atlas-hooks = { path = "../atlas-hooks" }
 # OptiFine-format pack files: custom entity models, random entity textures.
 atlas-optifine = { path = "../atlas-optifine" }
 # The server thread ahead of the workers (MinecraftServer.spin's Thread.setPriority).
 atlas-threads = { path = "../atlas-threads" }
+atlas-perf-format = { path = "../atlas-perf-format" }
 atlas-hdr = { path = "../atlas-hdr" }
 atlas-world = { path = "../atlas-world" }
 atlas-protocol = { path = "../atlas-protocol" }
@@ -32,7 +35,8 @@ atlas-protocol = { path = "../atlas-protocol" }
 atlas-server-files = { path = "../atlas-server-files" }
 # The dedicated server's anticheat, off unless server.toml's [anticheat] turns it on (docs/anticheat.md).
 atlas-anticheat = { path = "../atlas-anticheat" }
-# The dedicated server's chat filter: [chat_filter], the slur list, mutes (docs/chat-filter.md).
+# The dedicated server's chat filter: [chat_filter], the slur list, mutes (docs/chat-filter.md);
+# `entry` installs it into the engine's hook (`atlas_server_files::chat_guard`).
 atlas-chat-filter = { path = "../atlas-chat-filter" }
 # Shader packs: reading them and turning their GLSL into naga modules.
 atlas-shaders = { path = "../atlas-shaders" }
@@ -68,9 +72,11 @@ chrono = { version = "0.4.42", default-features = false, features = ["clock", "s
 flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", "runtime_detection"] }
 atlas-theme = { path = "../atlas-theme" }
 # Opt-in data collection: the game keeps, the launcher sends (docs/telemetry.md). The
-# anonymous "I'm playing" ping is atlas-client-lib's (`heartbeat.rs`), the `heartbeat` feature.
+# anonymous "I'm playing" ping is the Atlas layer's (`atlas-heartbeat`, in the official executable).
 atlas-telemetry = { path = "../atlas-telemetry", default-features = false }
 atlas-bench = { path = "../atlas-bench" }
+# The machine and process probes (the dedicated server's performance report).
+atlas-system = { path = "../atlas-system" }
 crc32fast = "1"
 zip = { version = "9.1.3", default-features = false, features = ["deflate"] }
 # Controllers (evdev + libudev on Linux, IOKit on macOS, Windows.Gaming.Input); the `controllers` feature.
@@ -94,8 +100,8 @@ dunce = "1.0.5"
 # Use the registered URI handler without routing links through Explorer/cmd.
 open = { version = "5.4.5", features = ["shellexecute-on-windows"] }
 # DirectX 12, where Vulkan has no adapter or device, or by choice (`graphicsApi`, graphics.rs).
-# Shaders compile with FXC (d3dcompiler_47.dll, part of Windows), or DXC when dxcompiler.dll is
-# on the PATH.
+# Shaders compile with FXC (d3dcompiler_47.dll, part of Windows), or on integrated GPUs with DXC
+# (dxcompiler.dll beside the game, gfx/dx12_compiler.rs).
 wgpu = { version = "30.0.1", default-features = false, features = ["dx12"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -111,24 +117,29 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
 
 [features]
-default = ["audio", "controllers", "discord", "friends", "heartbeat"]
+default = ["audio"]
 # Sound output. Without it (and `controllers`) the program links neither libasound nor libudev on
 # Linux: the server build (`--no-default-features`, released as atlas-engine; docs/server.md).
 audio = ["atlas-client-render/audio", "atlas-client-lib/audio"]
 # Controllers: gilrs, and the DualSense's own output. Without it only `atlas-ctl pad`'s virtual pad.
 controllers = ["atlas-client-lib/controllers", "dep:gilrs", "dep:atlas-dualsense", "atlas-client-input/controllers"]
-# Online extras a server or a port can leave out; the server build has none of them. "Playing Atlas"
-# on Discord (game/discord.rs).
-discord = ["atlas-client-lib/discord"]
-# Play with Friends: sharing a world behind an invite code (game/friends.rs) and joining one.
-friends = ["atlas-client-lib/friends", "dep:atlas-friends"]
-# The anonymous "I'm playing" ping (docs/telemetry.md).
-heartbeat = ["atlas-client-lib/heartbeat"]
+# Atlas's own extras over the vanilla game, for a fork that wants them out (docs/forking.md):
+# cosmetics and emotes, the "Atlas player" presence, the official server added to
+# the server list, the Atlas Settings and Mods pages and Play with Friends, and ray tracing on
+# request (`ATLAS_RAY_TRACING=1`). Players always get them; there is no switch. `grep -rn atlas-extras crates/` lists
+# every place it gates. Without it (`--no-default-features --features audio,controllers`) the
+# client is best effort: CI builds only the default.
+atlas-extras = ["atlas-client-render/atlas-extras", "friends"]
+# Play with Friends: sharing a world behind an invite code (game/friends.rs). Joining one is
+# atlas-friends' `game` side, which atlas-official registers (`atlas_hooks::tunnel`).
+friends = ["dep:atlas-friends"]
 # Records the call sites of mob random draws (`mob_ai_probe` traces).
 rng-trace = ["atlas-core/rng-trace", "atlas-client-lib/rng-trace"]
 # Rust's allocations go to the system heap instead of mimalloc, where heap profilers that replace
 # malloc (heaptrack, valgrind's massif) see them. For profiling only: mimalloc is faster.
-system-allocator = []
+system-allocator = ["atlas-threads/system-allocator"]
+# mimalloc that counts each thread's allocations and frees (`stats` replies with `alloc`).
+alloc-count = ["atlas-threads/alloc-count"]
 # mimalloc with a tag on each block: `atlas-ctl memory` lists the live heap by startup step and
 # thread (`heap_by_tag_mb`). For measuring only: each block costs 16 bytes more.
 alloc-census = ["atlas-threads/alloc-census"]
@@ -173,5 +184,6 @@ workspace = true
 [dev-dependencies]
 atlas-client-render = { path = "../atlas-client-render", features = ["test-support"] }
 atlas-items = { path = "../atlas-items", features = ["test-support"] }
+atlas-perf = { path = "../atlas-perf" }
 # Every WGSL shader translated as wgpu's DirectX 12 backend does (gfx.rs tests).
 naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out", "msl-out", "spv-out"] }

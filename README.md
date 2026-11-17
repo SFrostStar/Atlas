@@ -137,6 +137,6 @@ python scripts/check_repository_privacy.py
 
 Автор собственных частей и изменений Atlas — **SFrostStar**: [AUTHORS.md](AUTHORS.md).
 
-Основа движка — Horizon `nightly-source/2026-11-07-2ebf00a`, commit `2ebf00a0281c592f79191e76fce0e7d522c6f425`. Оформление и ускорение Atlas выделены в [собственный модуль](engine/atlas/crates/atlas-client-render/src/atlas). Первоначальное авторство и условия MIT сохранены: [лицензия движка](engine/atlas/LICENSE), [сторонние компоненты](engine/atlas/THIRD_PARTY_NOTICES.md).
+Основа движка — Horizon `nightly-source/2026-11-13-9f42064`, commit `9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0`. Оформление и ускорение Atlas выделены в [собственный модуль](engine/atlas/crates/atlas-client-render/src/atlas). Первоначальное авторство и условия MIT сохранены: [лицензия движка](engine/atlas/LICENSE), [сторонние компоненты](engine/atlas/THIRD_PARTY_NOTICES.md).
 
 Atlas — неофициальный проект, не связанный с Mojang или Microsoft. Minecraft и его материалы принадлежат соответствующим правообладателям.

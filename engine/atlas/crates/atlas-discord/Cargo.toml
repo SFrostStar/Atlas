@@ -1,0 +1,15 @@
+[package]
+name = "atlas-discord"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Discord Rich Presence: \"Playing Atlas\" on the player's Discord profile (docs/native-client.md)"
+
+[dependencies]
+atlas-platform = { path = "../atlas-platform" }
+log = "0.4"
+serde_json = "1.0.151"
+
+[lints]
+workspace = true

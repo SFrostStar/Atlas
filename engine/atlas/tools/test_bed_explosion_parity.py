@@ -244,6 +244,7 @@ def main():
     atlas_server = [binary, '--resources', lab.LOCAL / 'atlas-client/26.3', '--dedicated', '--nogui']
     client = ['java', '-Xmx1g', '-cp', str(classes) + os.pathsep + dependencies, 'dev.atlaslab.parity.KnockbackClient']
     kb.CASES, kb.SETUP, kb.PLAYERS = CASES, SETUP, ('Alice',)
+    kb.PROPERTIES['allow-flight'] = 'true'
     world = generate_world(vanilla_server, build)
     vanilla = compared(kb.run_side('vanilla', vanilla_server, client, build, world))
     atlas = compared(kb.run_side('atlas', atlas_server, client, build, world))

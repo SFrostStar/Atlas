@@ -18,9 +18,13 @@ pub mod consent;
 pub mod live;
 pub mod outbox;
 pub mod payload;
-pub mod scrub;
 pub mod server_status;
-pub mod system;
+/// The machine's probes, from the platform (`atlas-system`). Kept at this path for the
+/// launcher and the benchmark.
+pub use atlas_platform::system;
+/// Takes private text out before it leaves (`atlas_system::scrub`). Kept at this path for the
+/// launcher.
+pub use atlas_platform::system::scrub;
 #[cfg(feature = "upload")]
 pub mod upload;
 

@@ -474,12 +474,13 @@ impl Game<'_> {
             p.position.y.floor() as i32 + 1,
             p.position.z.floor() as i32,
         ];
-        let mut sky = self
-            .res
-            .environment()
-            .sample(self.world.day_time, None, None);
         let (rain, thunder) = self.weather_levels(1.0);
-        atlas_client::environment::apply_weather(&mut sky, rain, thunder);
+        let sky = self.res.environment().sample(&atlas_client::environment::Sample {
+            day_time: self.world.day_time,
+            rain,
+            thunder,
+            ..Default::default()
+        });
         let brightness = f64::from(sky.sky_light_level).max(sky_override);
         let light = |at| {
             let (block, sky) = self.native_light(at);

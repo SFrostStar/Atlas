@@ -897,13 +897,13 @@ mod tests {
     /// builders bakes what vanilla baked for the zombie
     /// (`minecraft:zombie#main` in the prepared `entity-models.json`):
     /// `cargo test -p atlas-client-lib --lib model_layers -- --ignored`
-    /// with ATLAS_RESOURCES set to the prepared resources.
+    /// with ATLAS_TEST_RESOURCES set to the prepared resources.
     #[test]
-    #[ignore = "needs the prepared resources"]
+    #[ignore = "needs prepared resources in ATLAS_TEST_RESOURCES"]
     fn the_humanoid_mesh_bakes_as_vanillas_zombie() {
-        let Some(root) = std::env::var_os("ATLAS_RESOURCES").map(std::path::PathBuf::from) else {
-            return;
-        };
+        let root = std::path::PathBuf::from(
+            std::env::var_os("ATLAS_TEST_RESOURCES").expect("ATLAS_TEST_RESOURCES"),
+        );
         let vanilla =
             super::super::load_model(&root, "minecraft:zombie#main").expect("zombie#main");
         let vanilla = ModelPart::from_part(&vanilla);

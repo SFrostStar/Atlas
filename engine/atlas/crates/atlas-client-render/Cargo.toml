@@ -7,11 +7,11 @@ rust-version.workspace = true
 description = "The client's world data, rendering and screens: chunks, meshing, light, streaming, the renderer, the HUD, menus and settings; no gameplay"
 
 [dependencies]
-atlas-cosmetics = { path = "../atlas-cosmetics" }
+# The settings stores of the crates above the engine (docs/layers.md, "Platform registries").
+atlas-hooks = { path = "../atlas-hooks" }
 # The GUI atlas's pixels, kept compressed once uploaded (hud.rs `pack_pixels`).
 lz4_flex = { version = "0.14", default-features = false, features = ["std", "safe-encode", "safe-decode", "checked-decode"] }
 atlas-assets = { path = "../atlas-assets" }
-atlas-bench = { path = "../atlas-bench" }
 atlas-client-core = { path = "../atlas-client-core" }
 atlas-client-input = { path = "../atlas-client-input" }
 atlas-command = { path = "../atlas-command" }
@@ -23,11 +23,12 @@ atlas-narrator = { path = "../atlas-narrator" }
 # OptiFine-format pack files: random entity textures (hud.rs), connected textures
 # (connected.rs) and custom item texture rules (cit.rs).
 atlas-optifine = { path = "../atlas-optifine" }
+atlas-perf-format = { path = "../atlas-perf-format" }
+atlas-polytone = { path = "../atlas-polytone" }
 atlas-protocol = { path = "../atlas-protocol" }
 atlas-shader-api = { path = "../atlas-shader-api" }
 atlas-shaders = { path = "../atlas-shaders" }
-atlas-telemetry = { path = "../atlas-telemetry", default-features = false }
-atlas-theme = { path = "../atlas-theme" }
+atlas-system = { path = "../atlas-system" }
 atlas-threads = { path = "../atlas-threads" }
 atlas-world = { path = "../atlas-world" }
 ab_glyph = "0.2.32"
@@ -75,13 +76,20 @@ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
 audio = ["dep:cpal"]
 # Helpers atlas-client's tests build their fixtures with.
 test-support = []
+# The `scene_replay` example's allocator counts allocations (atlas-threads' `alloc-count`).
+alloc-count = ["atlas-threads/alloc-count"]
 
-[build-dependencies]
-atlas-mod-api-gen = { path = "../atlas-mod-api-gen" }
+# atlas-client's `atlas-extras`: asking the device for hardware ray tracing on request
+# (`gfx/ray_query.rs`, `ATLAS_RAY_TRACING=1`). Without it the device is requested as without
+# the variable.
+atlas-extras = []
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+atlas-perf = { path = "../atlas-perf" }
+# Tests: a TrueType font to load, and the design system the menus' motion curves match.
+atlas-theme = { path = "../atlas-theme" }
 atlas-items = { path = "../atlas-items", features = ["test-support"] }
 naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out", "glsl-out", "msl-out", "spv-out"] }

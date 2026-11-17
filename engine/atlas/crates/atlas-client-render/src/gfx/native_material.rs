@@ -22,7 +22,9 @@ const ENTRIES: &str = "
 override atlas_material_fog: bool = true;
 fn atlas_material_fogged(color: vec4<f32>, spherical: f32, cylindrical: f32) -> vec4<f32> {
     if atlas_material_fog {
-        return atlas_terrain_apply_fog(color, spherical, cylindrical);
+        // In vanilla's gamma, as vanilla mixes it: on a frame of linear light, encoded for it.
+        let gamma = atlas_terrain_frame_gamma(color);
+        return atlas_terrain_frame_stored(atlas_terrain_apply_fog(gamma, spherical, cylindrical));
     }
     return color;
 }
@@ -49,9 +51,26 @@ struct AtlasMaterialOut {
     @location(14) @interpolate(flat) normal: vec3<f32>,
 }
 fn atlas_material_vertex(position: vec3<f32>, uv: vec2<f32>, layer: u32, color: vec4<f32>,
-    light: vec2<u32>, origin: vec3<f32>) -> AtlasMaterialOut {
-    let pos = atlas_material_displace(position + origin, uv, layer, color, light);
-    return atlas_material_out(pos, uv, layer, color, vec2<f32>(light));
+    light: vec2<u32>, origin: vec4<f32>) -> AtlasMaterialOut {
+    let pos = atlas_material_displace(position + origin.xyz, uv, layer, color, light);
+    var out = atlas_material_out(pos, uv, layer, color, vec2<f32>(light));
+    // The section's fade-in (`RenderSection.getVisibility`), as how far it is from whole, in the
+    // high 16 bits of `hdr_code`: no varying of its own, and 0 (whole) where nothing fades. It is
+    // the same for the whole section, so the flat varying loses nothing.
+    let instance = atlas_terrain_instance_visibility(origin.w);
+    out.hdr_code |= u32(round((1.0 - instance) * 65535.0)) << 16u;
+    return out;
+}
+// terrain.wgsl's fade-in (terrain.vsh's chunkVisibility): whole within 16 blocks, the section's
+// own visibility from 32 out, toward the fog colour, alpha kept. The distance blend runs here on
+// the interpolated distance, as vanilla's interpolated `visibility`, not once per triangle. In
+// vanilla's gamma, as the fog: on a frame of linear light, encoded for it.
+fn atlas_material_faded(in: AtlasMaterialOut, color: vec4<f32>) -> vec4<f32> {
+    let instance = 1.0 - f32(in.hdr_code >> 16u) / 65535.0;
+    let visibility = mix(1.0, instance, clamp((in.spherical - 16.0) / 16.0, 0.0, 1.0));
+    let gamma = atlas_terrain_frame_gamma(color);
+    let faded = mix(atlas_terrain_globals.fog_color.rgb, gamma.rgb, visibility);
+    return atlas_terrain_frame_stored(vec4(faded, color.a));
 }
 // `light`: sky, block, 16 per level.
 fn atlas_material_out(pos: vec3<f32>, uv: vec2<f32>, layer: u32, color: vec4<f32>,
@@ -94,7 +113,7 @@ fn atlas_material_out(pos: vec3<f32>, uv: vec2<f32>, layer: u32, color: vec4<f32
     @location(2) layer: u32, @location(3) color: vec4<f32>, @location(4) light: vec2<u32>,
     @location(5) origin: vec4<f32>) -> AtlasMaterialOut {
     return atlas_material_vertex(position, atlas_terrain_terrain_uv(uv, origin.w), layer,
-        color, light, origin.xyz);
+        color, light, origin);
 }
 @vertex fn atlas_material_vs_flat(
     @builtin(vertex_index) vertex: u32,
@@ -103,7 +122,7 @@ fn atlas_material_out(pos: vec3<f32>, uv: vec2<f32>, layer: u32, color: vec4<f32
 ) -> AtlasMaterialOut {
     let origin = atlas_terrain_slot_origins[atlas_terrain_block_slots[vertex >> 8u]];
     return atlas_material_vertex(position, atlas_terrain_terrain_uv(uv, origin.w), layer,
-        color, light, origin.xyz);
+        color, light, origin);
 }
 // The prelude's `block_normal_map` and `block_specular_map`: the resource packs' LabPBR maps
 // in the pack's frame group (3), one array each, a blank 1x1 without them.
@@ -181,9 +200,11 @@ struct AtlasMaterialSolid {
 // What `fs_solid` leaves in the frame's alpha for HDR output, from the sprite before the pack's
 // material: the pack decides the colour, Atlas still knows which pixels are light sources.
 fn atlas_material_mark(in: AtlasMaterialOut, texel: vec4<f32>) -> f32 {
-    if in.hdr_code > 0u {
-        let whole = in.hdr_code > 4u;
-        let tier = select(in.hdr_code, in.hdr_code - 4u, whole);
+    if atlas_terrain_HDR_WRITE_LIGHT { return 1.0; }
+    let code = in.hdr_code & 15u;
+    if code > 0u {
+        let whole = code > 4u;
+        let tier = select(code, code - 4u, whole);
         let l = in.layer & 0x7fffu;
         let t = textureLoad(atlas_terrain_emission_thresholds,
             vec2(i32(l % atlas_terrain_SPRITE_SPLIT), i32(l / atlas_terrain_SPRITE_SPLIT)), 0);
@@ -202,7 +223,7 @@ fn atlas_material_mark(in: AtlasMaterialOut, texel: vec4<f32>) -> f32 {
     return atlas_material_solid(in);
 }
 fn atlas_material_solid(in: AtlasMaterialOut) -> AtlasMaterialSolid {
-    let color = atlas_material_color(in, false);
+    let color = atlas_material_faded(in, atlas_material_color(in, false));
     let texel = atlas_terrain_sprite(in.uv, in.layer & 0x7fffu);
     // Bit 15 of the layer marks opaque leaves (forceOpaque): no alpha cutout.
     if color.a < 0.5 && (in.layer & 0x8000u) == 0u { discard; }
@@ -216,7 +237,7 @@ fn atlas_material_solid(in: AtlasMaterialOut) -> AtlasMaterialSolid {
     return out;
 }
 @fragment fn atlas_material_fs_translucent(in: AtlasMaterialOut) -> @location(0) vec4<f32> {
-    let color = atlas_material_color(in, true);
+    let color = atlas_material_faded(in, atlas_material_color(in, true));
     if color.a < 0.01 { discard; }
     return atlas_material_fogged(color, in.spherical, in.cylindrical);
 }
@@ -261,8 +282,9 @@ pub struct TerrainShape<'a> {
     pub flat: Option<&'a wgpu::BindGroupLayout>,
     /// terrain.wgsl's `SPRITE_ARRAYS` and `SPRITE_SPLIT`.
     pub sprites: [f64; 2],
-    /// The world target's colour format.
+    /// The world target's colour format, and whether it holds linear light (`linear_blend`).
     pub format: wgpu::TextureFormat,
+    pub linear: bool,
     /// The pack's tags of each tagged sprite layer, as `(layer, bits)`
     /// (`Manifest::sprite_tags`).
     pub sprite_tags: &'a [(u32, u32)],
@@ -294,7 +316,8 @@ pub struct NativeMaterial {
 /// every name it declares prefixed.
 fn vanilla_terrain() -> String {
     prefixed(
-        section(TERRAIN, "struct Globals {", "// Sky (SkyRenderer)"),
+        &(include_str!("../hdr_light.wgsl").to_owned()
+            + section(TERRAIN, "struct Globals {", "// Sky (SkyRenderer)")),
         PREFIX,
     )
 }
@@ -352,12 +375,12 @@ fn shader_source(
     tags: &[(u32, u32)],
     materials: &[(u32, u32)],
     (vertex, displaced): (bool, bool),
-    api: atlas_shader_api::Api,
+    (api, linear): (atlas_shader_api::Api, bool),
 ) -> String {
     format!(
         "{source}\n// Atlas's terrain (terrain.wgsl)\n{}{}{}{}{}{ENTRIES}{}{}",
         vanilla_terrain(),
-        super::native_post::line_helpers(api),
+        super::native_post::line_helpers(api, linear),
         if vertex {
             DISPLACE_PACK
         } else {
@@ -381,9 +404,9 @@ fn module(
     materials: &[(u32, u32)],
     vertex: bool,
     displaced: bool,
-    api: atlas_shader_api::Api,
+    line: (atlas_shader_api::Api, bool),
 ) -> Result<naga::Module, String> {
-    let text = shader_source(&stage.source, tags, materials, (vertex, displaced), api);
+    let text = shader_source(&stage.source, tags, materials, (vertex, displaced), line);
     naga::front::wgsl::parse_str(&text)
         .map_err(|e| format!("{}: {}", stage.file, e.emit_to_string(&text)))
 }
@@ -407,7 +430,7 @@ impl NativeMaterial {
             shape.sprite_materials,
             vertex,
             displaced.is_some(),
-            frame.api,
+            (frame.api, frame.linear),
         )?;
         let mut constants = present_constants(&module, constants);
         let sprite_names = [
@@ -416,6 +439,10 @@ impl NativeMaterial {
         ];
         constants.extend(sprite_names.into_iter().zip(shape.sprites));
         constants.push(("atlas_material_fog", f64::from(u8::from(fog))));
+        let [(_, write_light), (_, linear)] =
+            super::linear_blend::frame_constants(shape.format, frame.linear);
+        constants.push(("atlas_terrain_HDR_WRITE_LIGHT", write_light));
+        constants.push(("atlas_terrain_FRAME_LINEAR", linear));
         constants.push((
             "atlas_displace_distance",
             displaced.map_or(0.0, |d| f64::from(d.distance)),
@@ -565,6 +592,41 @@ impl NativeMaterial {
 }
 
 #[cfg(test)]
+/// A material pack's terrain shader on shader API line `api`, its frame holding linear light
+/// where `linear`, with a full-screen `test_vertex`.
+pub(super) fn coverage_test_shader((api, linear): (atlas_shader_api::Api, bool)) -> String {
+    use atlas_shader_api::{MANIFEST, Pack, StageKind, check};
+    let manifest = format!(
+        "schema = 1\nid = \"coverage\"\nname = \"Coverage\"\nversion = \"1\"\napi = \"{api}\"\n[material]\nfile = \"material.wgsl\"\n[displacement]\n"
+    );
+    let material = "fn material(input: MaterialInput) -> Surface { return Surface(vec4<f32>(1.4, 0.3, 0.1, 0.7)); }\nfn displacement(input: DisplacementInput) -> f32 { return 0.0; }\n";
+    let files = [(MANIFEST, manifest.as_str()), ("material.wgsl", material)]
+        .map(|(n, text)| (n.to_owned(), text.as_bytes().to_vec()))
+        .into();
+    let report = check(&Pack::from_files(files).unwrap()).unwrap();
+    let stage = report
+        .stages
+        .iter()
+        .find(|s| s.kind == StageKind::Material)
+        .unwrap();
+    shader_source(&stage.source, &[], &[], (false, true), (api, linear))
+        + r#"
+override TEST_TIER: u32 = 0u;
+override TEST_OVERLAY: u32 = 0u;
+@vertex fn test_vertex(@builtin(vertex_index) i: u32) -> AtlasMaterialOut {
+    var o: AtlasMaterialOut;
+    o.clip = vec4(vec2(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0, 0.0, 1.0);
+    o.uv = vec2(0.5);
+    o.tint = vec4(1.0);
+    o.lightmap = vec3(1.0);
+    o.hdr_code = TEST_TIER;
+    o.base = vec3(1.0);
+    return o;
+}
+"#
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use atlas_shader_api::{Api, MANIFEST, Pack, StageKind, check};
@@ -580,6 +642,25 @@ mod tests {
         let mut report = check(&Pack::from_files(files).unwrap()).unwrap();
         assert_eq!(report.stages[0].kind, StageKind::Material);
         report.stages.remove(0)
+    }
+
+    /// The fade-in packed above the HDR code: a section a quarter visible (`section_instance`
+    /// with step 1: mantissa `1 - visibility` = 0.75) keeps its visibility through the code, and
+    /// a fragment 24 blocks away, half-way into the 16-block blend, is 1 - (1 - 0.25) / 2 = 0.625
+    /// visible; the code's low nibble survives.
+    #[test]
+    fn the_fade_in_rides_the_hdr_code() {
+        let w = f32::from_bits(1.0f32.to_bits() | (0.75 * 8_388_608.0) as u32);
+        // `atlas_material_vertex`.
+        let instance = 1.0 - (w.to_bits() & 0x7fffff) as f32 / 8_388_608.0;
+        let code = 7u32 | (((1.0 - instance) * 65535.0).round() as u32) << 16;
+        // `atlas_material_faded` and `atlas_material_mark`.
+        let unpacked = 1.0 - (code >> 16) as f32 / 65535.0;
+        assert!((unpacked - 0.25).abs() < 1.0 / 65535.0);
+        let blend = ((24.0f32 - 16.0) / 16.0).clamp(0.0, 1.0);
+        let visibility = 1.0 + (unpacked - 1.0) * blend;
+        assert!((visibility - 0.625).abs() < 1.0 / 65535.0);
+        assert_eq!(code & 15, 7);
     }
 
     #[test]
@@ -614,7 +695,7 @@ mod tests {
         let tags = [(7, 1), (3, 1), (9, 2)];
         let materials = [(5, 1000)];
         assert!(layer_table("t", &tags).contains("case 3u, 7u: { return 1u; }"));
-        let module = module(&stage, &tags, &materials, false, false, Api::V0_1).unwrap();
+        let module = module(&stage, &tags, &materials, false, false, (Api::V0_1, false)).unwrap();
         let info = naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),
             naga::valid::Capabilities::all(),
@@ -628,7 +709,7 @@ mod tests {
                     &tags,
                     &materials,
                     (false, false),
-                    Api::V0_1
+                    (Api::V0_1, false)
                 ))
             )
         });
@@ -670,7 +751,7 @@ mod tests {
         .into();
         let report = check(&Pack::from_files(files).unwrap()).unwrap();
         let stage = report.stages.iter().find(|s| s.kind == StageKind::Material);
-        let module = module(stage.unwrap(), &[], &[], true, false, Api::V0_2).unwrap();
+        let module = module(stage.unwrap(), &[], &[], true, false, (Api::V0_2, false)).unwrap();
         naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),
             naga::valid::Capabilities::all(),
@@ -693,14 +774,20 @@ mod tests {
         let mut report = check(&Pack::from_files(files).unwrap()).unwrap();
         let stage = report.stages.remove(0);
         let materials = [(5, 1000)];
-        let module = module(&stage, &[], &materials, false, true, Api::V0_1).unwrap();
+        let module = module(&stage, &[], &materials, false, true, (Api::V0_1, false)).unwrap();
         naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),
             naga::valid::Capabilities::all(),
         )
         .validate(&module)
         .unwrap_or_else(|e| {
-            let text = shader_source(&stage.source, &[], &materials, (false, true), Api::V0_1);
+            let text = shader_source(
+                &stage.source,
+                &[],
+                &materials,
+                (false, true),
+                (Api::V0_1, false),
+            );
             panic!("{}", e.emit_to_string(&text))
         });
         for entry in [
@@ -757,7 +844,7 @@ mod tests {
             let report = check(&Pack::from_files(files).unwrap()).unwrap();
             let source = report.stages[0].source.clone()
                 + atlas_shader_api::stages::PBR_STUB
-                + super::super::native_post::line_helpers(api)
+                + super::super::native_post::line_helpers(api, false)
                 + entry;
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,

@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const SKIP = new Set(['.git', 'target', '.local', 'third_party', 'vendor', 'vendored', 'node_modules', '.cache', '.gradle', '.venv', 'venv', '__pycache__', 'benchmark-deps']);
-const TEXT = new Set(['.rs','.toml','.lock','.md','.txt','.json','.json5','.yaml','.yml','.py','.java','.kt','.kts','.gradle','.sh','.ps1','.cjs','.js','.mjs','.ts','.css','.html','.wgsl','.wgslh','.wit','.svg','.desktop','.xml','.properties','.nix','.service','.socket','.conf','.cfg','.ini','.example','.in','.sql','.csv','.bat','.cmd']);
+const TEXT = new Set(['.rs','.toml','.lock','.md','.txt','.json','.json5','.yaml','.yml','.py','.java','.kt','.kts','.gradle','.sh','.ps1','.cjs','.js','.mjs','.ts','.css','.html','.wgsl','.wgslh','.wit','.proto','.svg','.desktop','.xml','.properties','.nix','.service','.socket','.conf','.cfg','.ini','.example','.in','.sql','.csv','.bat','.cmd']);
 const PROTECTED = /^(?:licen[cs]e|copying|ofl|third[_-]party[_-]notices)(?:[._-]|$)/i;
 const HASH = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 // Horizontal/horizontally are mathematical and external format/API vocabulary,

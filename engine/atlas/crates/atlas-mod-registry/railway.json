@@ -5,6 +5,8 @@
     "dockerfilePath": "crates/atlas-mod-registry/Dockerfile",
     "watchPatterns": [
       "/crates/atlas-mods/**",
+      "/crates/atlas-release-sign/**",
+      "/crates/atlas-shader-api/**",
       "/crates/atlas-mod-registry/**",
       "/Cargo.toml"
     ]

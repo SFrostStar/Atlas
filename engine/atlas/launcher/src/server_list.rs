@@ -5,7 +5,7 @@
 //! The launcher only adds and removes entries: every other field of every entry is written back
 //! as it was read.
 use base64::Engine;
-use atlas_world::nbt::{self, Compound, JavaString, Limits, NamedTag, Tag};
+use atlas_platform::world::nbt::{self, Compound, JavaString, Limits, NamedTag, Tag};
 use std::fs;
 use std::path::Path;
 
