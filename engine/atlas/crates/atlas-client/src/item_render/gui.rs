@@ -377,7 +377,7 @@ fn draw_now(
 
 /// Lights, culls, sorts far to near and clips `quads` (GUI positions) to
 /// `rect`.
-fn draw_quads(
+pub fn draw_quads(
     quads: &[ItemQuad],
     lights: (Vec3, Vec3),
     batch: &mut HudBatch,

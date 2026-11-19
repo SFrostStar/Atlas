@@ -1599,9 +1599,9 @@ impl Menu {
         (may_place, max_stack.clamp(1, CONTAINER_MAX))
     }
 
-    /// `Slot.getMaxStackSize(stack)`.
-    pub fn slot_max(&self, env: &Env, s: usize, stack: &ItemStack) -> u32 {
-        let own = match self.slots[s].role {
+    /// `Slot.getMaxStackSize()`, before an item's own stack limit.
+    pub fn slot_capacity(&self, s: usize) -> u32 {
+        match self.slots[s].role {
             Role::Armor(_)
             | Role::MountEquip(_)
             | Role::Potion
@@ -1609,10 +1609,23 @@ impl Menu {
             | Role::BeaconPay => 1,
             // The lectern's bookAccess holds one.
             Role::Plain if self.kind == Kind::Lectern && self.slots[s].container == MAIN => 1,
-            Role::Fuel if Self::is_bucket(stack) => return 1,
-            Role::Mod | Role::ModResult => self.mod_slot(s, stack).1,
             // `Container.getMaxStackSize` is vanilla's 99, which no data pack's
             // item reaches; a native mod's item may, and its own size is the cap.
+            _ => CONTAINER_MAX,
+        }
+    }
+
+    /// `Slot.getMaxStackSize(stack)`.
+    pub fn slot_max(&self, env: &Env, s: usize, stack: &ItemStack) -> u32 {
+        let own = match self.slots[s].role {
+            Role::Fuel if Self::is_bucket(stack) => 1,
+            Role::Mod | Role::ModResult => self.mod_slot(s, stack).1,
+            Role::Armor(_)
+            | Role::MountEquip(_)
+            | Role::Potion
+            | Role::EnchantItem
+            | Role::BeaconPay => 1,
+            Role::Plain if self.kind == Kind::Lectern && self.slots[s].container == MAIN => 1,
             _ => u32::MAX,
         };
         own.min(Self::max_stack(env, stack))

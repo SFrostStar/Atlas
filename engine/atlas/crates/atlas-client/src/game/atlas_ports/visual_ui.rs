@@ -7,7 +7,7 @@ use atlas_client::{
     clipboard::EditShortcut,
     hud::{HudBatch, rgba},
     text::Text,
-    ui::{self, EditBox},
+    ui::EditBox,
 };
 use serde_json::Value;
 use winit::keyboard::KeyCode;
@@ -166,6 +166,12 @@ impl Game<'_> {
             u32::MAX,
             true,
         );
+        atlas_client::atlas::mod_style::panel(
+            batch,
+            atlas,
+            [x - 8.0, 34.0, width + 16.0, (h - 87.0).max(1.0)],
+            11.0,
+        );
         if s.dialog.is_none() {
             let max = ((h - 94.0) / 26.0).max(1.0) as usize;
             let Some(obj) = s.value.as_object() else {
@@ -197,7 +203,7 @@ impl Game<'_> {
                 } else {
                     value
                 };
-                ui::button(
+                atlas_client::atlas::mod_style::button(
                     batch,
                     atlas,
                     field[0],
@@ -214,7 +220,7 @@ impl Game<'_> {
                 batch.text(atlas, &hint, x, h - 45.0, rgba(150, 160, 175, 255), false);
             }
             let done = local("Готово", "Done");
-            ui::button(
+            atlas_client::atlas::mod_style::button(
                 batch,
                 atlas,
                 w / 2.0 - 70.0,
@@ -270,7 +276,7 @@ impl Game<'_> {
                 (4., local("Отмена", "Cancel")),
             ] {
                 let rect = [w / 2.0 + dx, 148., 140., 20.];
-                ui::button(
+                atlas_client::atlas::mod_style::button(
                     batch,
                     atlas,
                     rect[0],

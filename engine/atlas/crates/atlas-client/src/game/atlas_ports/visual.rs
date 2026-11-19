@@ -114,7 +114,7 @@ struct RadarRow {
     name: String,
     hp: i32,
     distance: i32,
-    arrow: &'static str,
+    arrow: logic::RadarTurn,
     skin: String,
     uuid: u128,
 }
@@ -132,6 +132,7 @@ pub(super) struct State {
     pub(super) pvp_state: logic::PvpState,
     pub(super) open_settings: Option<String>,
     radar_rows: Vec<RadarRow>,
+    radar_count: usize,
     key_down: [bool; 2],
     totem_modified: Option<SystemTime>,
     ui: ui::State,
@@ -172,6 +173,7 @@ impl State {
             pvp_state: Default::default(),
             open_settings: None,
             radar_rows: vec![],
+            radar_count: 0,
             key_down: [false; 2],
             totem_modified: fs::metadata(totem_file).and_then(|m| m.modified()).ok(),
             ui: Default::default(),
@@ -247,6 +249,7 @@ impl Game<'_> {
         v.pvp_state.duration_ticks = 0;
         v.pvp_state.display_start = None;
         v.radar_rows.clear();
+        v.radar_count = 0;
     }
     pub(in crate::game) fn atlas_visual_tick(&mut self) {
         if !self.native_window() {
@@ -327,11 +330,13 @@ impl Game<'_> {
         }
         if self.player.is_none() {
             self.atlas_ports.visual.radar_rows.clear();
+            self.atlas_ports.visual.radar_count = 0;
             return;
         }
         let names = self.remote_player_names();
         if self.atlas_port_on(IDS[0]) {
             let pos = self.player.as_ref().unwrap().position;
+            let clock = self.hud_clock();
             let cfg = &self.atlas_ports.visual.radar;
             let mut rows: Vec<_> = names
                 .iter()
@@ -346,13 +351,16 @@ impl Game<'_> {
                         return None;
                     }
                     let uuid = self.remote_player_uuid(*id)?;
+                    let angle = logic::direction(delta.x, delta.z, self.yaw);
+                    let arrow = self.atlas_ports.visual.radar_rows.iter().find(|row| row.uuid == uuid)
+                        .map_or_else(|| logic::RadarTurn::new(angle, clock), |row| row.arrow.toward(angle, clock));
                     Some((
                         distance,
                         RadarRow {
                             name: name.clone(),
                             hp: (m.health + m.absorption).ceil().max(0.0) as i32,
                             distance: (distance.sqrt() as f32).round() as i32,
-                            arrow: logic::direction(delta.x, delta.z, self.yaw),
+                            arrow,
                             skin: m.skin.clone().unwrap_or_else(|| {
                                 atlas_client::tab_list::default_skin(uuid).into()
                             }),
@@ -361,12 +369,14 @@ impl Game<'_> {
                     ))
                 })
                 .collect();
+            let count = rows.len();
             rows.sort_by(|a, b| a.0.total_cmp(&b.0));
             rows.truncate(cfg.max_players);
             for (_, row) in &mut rows {
                 row.skin = self.face_skin(row.uuid, &row.skin)
             }
             self.atlas_ports.visual.radar_rows = rows.into_iter().map(|(_, r)| r).collect();
+            self.atlas_ports.visual.radar_count = count;
         }
         if self.atlas_port_on(IDS[7]) {
             let v = &mut self.atlas_ports.visual;
@@ -582,126 +592,6 @@ impl Game<'_> {
                 batch.scale_since(start, x, y, c.scale, c.scale);
             }
         }
-    }
-    fn atlas_visual_radar_draw(&self, batch: &mut HudBatch) {
-        let c = &self.atlas_ports.visual.radar;
-        let rows = &self.atlas_ports.visual.radar_rows;
-        let atlas = &self.gui.atlas;
-        let start = batch.vertices.len();
-        let (x, y, w, h) = (
-            c.x as f32,
-            c.y as f32,
-            c.hud_width as f32,
-            if rows.is_empty() {
-                40.0
-            } else {
-                26.0 + rows.len() as f32 * 24.0
-            },
-        );
-        let alpha = (c.background_opacity * 255.0) as u8;
-        let bg = rgba(17, 17, 24, alpha);
-        let outline = rgba(43, 43, 58, alpha.saturating_add(40));
-        batch.fill(atlas, x + 1.0, y, w - 2.0, h, bg);
-        batch.fill(atlas, x, y + 1.0, w, h - 2.0, bg);
-        for (dx, dy, dw, dh) in [
-            (1., 0., w - 2., 1.),
-            (1., h - 1., w - 2., 1.),
-            (0., 1., 1., h - 2.),
-            (w - 1., 1., 1., h - 2.),
-        ] {
-            batch.fill(atlas, x + dx, y + dy, dw, dh, outline)
-        }
-        self.native_text(batch, "Игроки рядом", [x + 8., y + 7.], 0xeeeeee, true);
-        for (dx, dy, dw, dh) in [
-            (3., 0., 4., 1.),
-            (3., 9., 4., 1.),
-            (0., 3., 1., 4.),
-            (9., 3., 1., 4.),
-            (1., 1., 2., 2.),
-            (7., 1., 2., 2.),
-            (1., 7., 2., 2.),
-            (7., 7., 2., 2.),
-            (4., 2., 2., 2.),
-            (3., 6., 4., 2.),
-        ] {
-            batch.fill(
-                atlas,
-                x + w - 18. + dx,
-                y + 6. + dy,
-                dw,
-                dh,
-                rgba(204, 204, 204, 255),
-            )
-        }
-        batch.fill(atlas, x + 4., y + 21., w - 8., 1., argb(587202559));
-        if rows.is_empty() {
-            self.native_text(
-                batch,
-                "Поблизости никого нет",
-                [x + 8., y + 26.],
-                0x888888,
-                false,
-            )
-        }
-        for (index, row) in rows.iter().enumerate() {
-            let ry = y + 24. + index as f32 * 24.;
-            if let Some(r) = atlas.sprites.get(&row.skin).copied() {
-                for (u, v) in [(8., 8.), (40., 8.)] {
-                    let mut face = r;
-                    let du = r.u1 - r.u0;
-                    let dv = r.v1 - r.v0;
-                    face.u0 = r.u0 + du * u / 64.;
-                    face.v0 = r.v0 + dv * v / 64.;
-                    face.u1 = face.u0 + du * 8. / 64.;
-                    face.v1 = face.v0 + dv * 8. / 64.;
-                    batch.rect_uv(x + 6., ry + 3., 18., 18., face, u32::MAX)
-                }
-            }
-            let width = |s: &str| HudBatch::text_width(atlas, s);
-            let ax = if c.show_arrows {
-                x + w - width(row.arrow) - 8.
-            } else {
-                x + w - 4.
-            };
-            if c.show_arrows {
-                self.native_text(batch, row.arrow, [ax, ry + 7.], 0xa855f7, true)
-            }
-            let dist = format!("{}м", row.distance);
-            let dx = if c.show_distance {
-                ax - width(&dist) - 8.
-            } else {
-                ax
-            };
-            if c.show_distance {
-                self.native_text(batch, &dist, [dx, ry + 7.], 0xffffff, true)
-            }
-            let available = dx - x - 28. - 4.;
-            let mut name = row.name.clone();
-            if width(&name) > available && available > 15. {
-                while !name.is_empty() && width(&name) > available - 6. {
-                    name.pop();
-                }
-                name.push('…')
-            }
-            self.native_text(batch, &name, [x + 28., ry + 2.], 0xffffff, true);
-            if c.show_health {
-                self.native_text(
-                    batch,
-                    "HP: ",
-                    [x + 28., ry + 12.],
-                    if row.hp < 20 { 0xff6666 } else { 0x999999 },
-                    true,
-                );
-                self.native_text(
-                    batch,
-                    &row.hp.to_string(),
-                    [x + 28. + width("HP: "), ry + 12.],
-                    logic::health_color(row.hp),
-                    true,
-                )
-            }
-        }
-        batch.scale_since(start, x, y, c.scale, c.scale);
     }
 }
 

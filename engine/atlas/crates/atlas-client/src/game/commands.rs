@@ -239,6 +239,13 @@ fn non_player_entity_id(t: Target) -> Option<i32> {
     i32::try_from(id).ok()
 }
 impl Game<'_> {
+    pub(in crate::game) fn command_dispatcher(&self) -> &'static atlas_client::command::Dispatcher {
+        vanilla::game_dispatcher_for_world(
+            &self.level.enabled_features,
+            self.ui.rules.saturation_plus().is_some(),
+        )
+    }
+
     /// `native_player_level_change` for a level that was `from` before an experience change.
     pub(super) fn native_player_level_changed(&mut self, from: i32) {
         let to = self.experience.level;
@@ -270,7 +277,7 @@ impl Game<'_> {
         if self.client_mod_command(command) {
             return true;
         }
-        let d = vanilla::game_dispatcher_with_features(&self.level.enabled_features);
+        let d = self.command_dispatcher();
         let parse = d.parse(command, &self.ui.registries);
         let result = match parse.executable() {
             Err(e) => {
@@ -1111,6 +1118,9 @@ impl Game<'_> {
             "experience" => self.cmd_experience(ctx),
             "advancement" => self.cmd_advancement(ctx),
             "gamerule" => self.cmd_gamerule(ctx),
+            "getSaturation" | "addSaturation" | "setSaturation" => {
+                self.cmd_saturation_plus(id, ctx)
+            }
             "difficulty" => self.cmd_difficulty(ctx),
             "seed" => {
                 let seed = self.level.seed.to_string();
@@ -1207,7 +1217,7 @@ impl Game<'_> {
         }
     }
     fn cmd_help(&mut self, ctx: &Context) -> R<i32> {
-        let d = vanilla::game_dispatcher_with_features(&self.level.enabled_features);
+        let d = self.command_dispatcher();
         let level = self.ui.registries.permission;
         match ctx.get("command") {
             None => {
@@ -3542,6 +3552,11 @@ impl Game<'_> {
     pub(super) fn set_game_rule(&mut self, rule: &gamerules::Rule, value: Value) {
         self.ui.rules.set(rule.name, value);
         self.sync_rules();
+        if gamerules::SATURATION_PLUS_RULES.iter().any(|r| r.name == rule.name) {
+            if let Err(error) = super::atlas_ports::saturation_plus::save_rules(&self.world_root, &self.ui.rules) {
+                log::warn!("Could not save Saturation Plus game rules: {error}");
+            }
+        }
         if self.options.dedicated.is_some() {
             let (value_type, json) = match value {
                 Value::Bool(b) => ("boolean", serde_json::json!(b)),
@@ -3561,7 +3576,7 @@ impl Game<'_> {
         let Some(name) = ctx.literals.get(1).cloned() else {
             return Ok(0);
         };
-        let Some(rule) = gamerules::rule(&name) else {
+        let Some(rule) = self.ui.rules.rule(&name) else {
             return Ok(0);
         };
         let current = self.ui.rules.get(rule.name).unwrap_or(rule.default);
@@ -3588,6 +3603,38 @@ impl Game<'_> {
             Value::Bool(b) => i32::from(b),
             Value::Int(i) => i,
         })
+    }
+    fn cmd_saturation_plus(&mut self, id: &str, ctx: &Context) -> R<i32> {
+        use super::atlas_ports::saturation_plus::{change_text, saturation_text};
+        let Some(rules) = self.ui.rules.saturation_plus() else {
+            return Ok(0);
+        };
+        let target = self.command_source.unwrap_or_else(|| self.player_source()).entity;
+        let food = match target {
+            Some(Target::Player) => self.player.as_mut().map(|p| &mut p.health.food),
+            Some(Target::Guest(conn)) => self
+                .lan
+                .as_mut()
+                .and_then(|host| host.hub.guest_mut(conn))
+                .and_then(|guest| guest.motion.as_mut())
+                .map(|motion| &mut motion.health.food),
+            _ => None,
+        };
+        let Some(food) = food else { return Ok(1) };
+        let before = food.saturation;
+        if let Some(Arg::Double(value)) = ctx.get("value") {
+            let raw = match id {
+                "addSaturation" => before + *value as f32,
+                _ => *value as f32,
+            };
+            food.saturation = raw.clamp(0.0, f32::MAX);
+            let after = rules.clamp_saturation(food.food, food.saturation);
+            self.feedback_unbroadcast(change_text(before, after));
+            self.feedback_unbroadcast(saturation_text(after));
+        } else {
+            self.feedback_unbroadcast(saturation_text(before));
+        }
+        Ok(1)
     }
     fn cmd_difficulty(&mut self, ctx: &Context) -> R<i32> {
         let name = |d: u8| {

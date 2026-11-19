@@ -211,13 +211,17 @@ pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons:
             );
         }
     }
+    let mut label = super::NAME.to_owned();
+    if super::mod_menu::config::current().mod_count_location.title() {
+        label.push_str(&super::mod_menu::count_text(true));
+    }
     ui.text(
         Face::Regular,
         4.7 * k,
         4.0 * k,
         (h - 10.0) * k,
         rgba(133, 153, 165, 255),
-        &format!("{}{}", super::version_label(), if super::mod_menu::config::current().mod_count_location.title() { super::mod_menu::count_text() } else { String::new() }),
+        &label,
     );
     let notice = super::NOTICE;
     let tw = ui.measure(Face::Regular, 4.7 * k, notice);

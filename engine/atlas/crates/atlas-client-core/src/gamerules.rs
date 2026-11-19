@@ -129,6 +129,14 @@ pub const RULES: &[Rule] = &[
 pub const MAX_MINECART_SPEED: Rule = i("max_minecart_speed", "misc", 8, 1, 1000);
 pub const MINECART_IMPROVEMENTS: &str = "minecraft:minecart_improvements";
 
+pub const SATURATION_PLUS_RULES: &[Rule] = &[
+    b("hungerLimitsSaturation", "player", false),
+    i("maxSaturation", "player", -1, -1, i32::MAX),
+    b("alwaysHungry", "player", false),
+    i("maxExhaustion", "player", 4, 0, i32::MAX),
+    i("saturationEffectDecayRate", "player", 2, 0, i32::MAX),
+];
+
 pub fn available_rules(minecart_improvements: bool) -> impl Iterator<Item = &'static Rule> {
     RULES
         .iter()
@@ -145,6 +153,7 @@ pub fn rule(name: &str) -> Option<&'static Rule> {
 pub struct GameRules {
     values: BTreeMap<&'static str, Value>,
     minecart_improvements: bool,
+    saturation_plus_enabled: bool,
 }
 impl GameRules {
     pub fn with_features(features: &[String]) -> Self {
@@ -157,19 +166,38 @@ impl GameRules {
     /// newly enabled rules and discard rules absent from the target feature set.
     pub fn copy_with_features(&self, features: &[String]) -> Self {
         let mut rules = Self::with_features(features);
+        rules.saturation_plus_enabled = self.saturation_plus_enabled;
         for (&name, &value) in &self.values {
             rules.set(name, value);
         }
         rules
     }
     pub fn available_rules(&self) -> impl Iterator<Item = &'static Rule> + use<> {
-        available_rules(self.minecart_improvements)
+        available_rules(self.minecart_improvements).chain(
+            self.saturation_plus_enabled
+                .then_some(SATURATION_PLUS_RULES)
+                .into_iter()
+                .flatten(),
+        )
+    }
+    pub fn enable_saturation_plus(&mut self) {
+        self.saturation_plus_enabled = true;
+    }
+    pub fn saturation_plus(&self) -> Option<atlas_world::saturation_plus::Rules> {
+        self.saturation_plus_enabled.then(|| atlas_world::saturation_plus::Rules {
+            hunger_limits_saturation: self.bool("hungerLimitsSaturation"),
+            max_saturation: self.int("maxSaturation"),
+            always_hungry: self.bool("alwaysHungry"),
+            max_exhaustion: self.int("maxExhaustion"),
+            saturation_effect_decay_rate: self.int("saturationEffectDecayRate"),
+        })
+    }
+    pub fn rule(&self, name: &str) -> Option<&'static Rule> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        self.available_rules().find(|r| r.name == name)
     }
     pub fn get(&self, name: &str) -> Option<Value> {
-        let r = rule(name)?;
-        if r.name == MAX_MINECART_SPEED.name && !self.minecart_improvements {
-            return None;
-        }
+        let r = self.rule(name)?;
         Some(self.values.get(r.name).copied().unwrap_or(r.default))
     }
     pub fn bool(&self, name: &str) -> bool {
@@ -192,7 +220,7 @@ impl GameRules {
     }
     /// Set a rule; false if the name or value type is wrong.
     pub fn set(&mut self, name: &str, value: Value) -> bool {
-        let Some(r) = rule(name).filter(|r| self.get(r.name).is_some()) else {
+        let Some(r) = self.rule(name) else {
             return false;
         };
         let ok = match (r.default, value) {
@@ -210,7 +238,7 @@ impl GameRules {
     /// Every rule's value by name without namespace, as `save::Level` holds
     /// them (booleans as 0 or 1).
     pub fn by_name(&self) -> BTreeMap<String, i32> {
-        self.available_rules()
+        available_rules(self.minecart_improvements)
             .map(|r| {
                 let v = match self.values.get(r.name).copied().unwrap_or(r.default) {
                     Value::Bool(b) => i32::from(b),
@@ -222,8 +250,7 @@ impl GameRules {
     }
     /// GameRuleMap codec: `{data: {"minecraft:<rule>": value...}, DataVersion}`.
     pub fn to_nbt(&self) -> NamedTag {
-        let data: Vec<(atlas_world::nbt::JavaString, Tag)> = self
-            .available_rules()
+        let data: Vec<(atlas_world::nbt::JavaString, Tag)> = available_rules(self.minecart_improvements)
             .map(|r| {
                 let v = self.values.get(r.name).copied().unwrap_or(r.default);
                 let tag = match v {

@@ -77,7 +77,7 @@ impl Game<'_> {
                 let Some(key) = update["key"].as_str() else {
                     return json!({ "invalid": format!("No key key in MapLike[{update}]") });
                 };
-                let rule = gamerules::rule(key).filter(|r| self.ui.rules.get(r.name).is_some());
+                let rule = self.ui.rules.rule(key);
                 let Some(rule) = rule else {
                     let key = if key.contains(':') {
                         key.to_owned()

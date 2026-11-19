@@ -1,4 +1,6 @@
 //! Hunger, saturation, exhaustion and server-side natural regeneration.
+use crate::saturation_plus;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Difficulty {
     Peaceful,
@@ -52,6 +54,18 @@ impl FoodData {
         self.food = nutrition.wrapping_add(self.food).clamp(0, 20);
         self.saturation = clamp(saturation + self.saturation, 0.0, self.food as f32);
     }
+    pub fn eat_with_rules(
+        &mut self,
+        nutrition: i32,
+        saturation: f32,
+        rules: Option<saturation_plus::Rules>,
+    ) {
+        if rules.is_some() {
+            saturation_plus::add_food(self, nutrition, saturation);
+        } else {
+            self.eat_properties(nutrition, saturation);
+        }
+    }
     pub fn add_exhaustion(&mut self, value: f32) {
         self.exhaustion = min(self.exhaustion + value, 40.0);
     }
@@ -62,10 +76,17 @@ impl FoodData {
         self.food < 20
     }
     pub fn tick<W: FoodWorld>(&mut self, world: &mut W) -> Result<(), W::Error> {
+        self.tick_with_exhaustion_threshold(world, 4.0)
+    }
+    pub fn tick_with_exhaustion_threshold<W: FoodWorld>(
+        &mut self,
+        world: &mut W,
+        exhaustion_threshold: f32,
+    ) -> Result<(), W::Error> {
         let level = world.level(self)?;
         let difficulty = world.difficulty(level, self)?;
-        if self.exhaustion > 4.0 {
-            self.exhaustion -= 4.0;
+        if self.exhaustion > exhaustion_threshold {
+            self.exhaustion -= exhaustion_threshold;
             if self.saturation > 0.0 {
                 self.saturation = max(self.saturation - 1.0, 0.0);
             } else if difficulty != Difficulty::Peaceful {

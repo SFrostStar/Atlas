@@ -1,7 +1,6 @@
 //! Atlas-owned page content; the options adapter translates actions into engine widgets.
 #[derive(Clone, Copy)]
 pub enum Page {
-    Graphics,
     AdvancedGraphics,
     ShaderPacks,
     Mods,
@@ -10,7 +9,6 @@ pub enum Page {
 #[derive(Clone, Copy)]
 pub enum Toggle {
     NoAi,
-    DiscordPresence,
     Fullbright,
     DynamicLights,
 }
@@ -21,13 +19,10 @@ pub enum Entry {
 }
 pub fn rows(no_ai: bool) -> Vec<(Entry, Option<Entry>)> {
     use Entry::{Page as Open, Toggle as Switch};
-    let mut rows = vec![
-        (
-            Open("options.video", Page::Graphics),
-            Some(Open("atlas.pages.shader_packs", Page::ShaderPacks)),
-        ),
-        (Switch(Toggle::DiscordPresence), Some(Switch(Toggle::NoAi))),
-    ];
+    let mut rows = vec![(
+        Open("atlas.pages.shader_packs", Page::ShaderPacks),
+        Some(Switch(Toggle::NoAi)),
+    )];
     if !no_ai {
         rows.push((Open("atlas.pages.agent", Page::Agent), None));
     }
@@ -43,12 +38,12 @@ mod tests {
     fn no_ai_keeps_its_position_and_hides_agent_navigation() {
         for disabled in [false, true] {
             let menu = rows(disabled);
-            assert!(matches!(menu[0].1, Some(Entry::Page(_, Page::ShaderPacks))));
-            assert!(matches!(menu[1].1, Some(Entry::Toggle(Toggle::NoAi))));
+            assert!(matches!(menu[0].0, Entry::Page(_, Page::ShaderPacks)));
+            assert!(matches!(menu[0].1, Some(Entry::Toggle(Toggle::NoAi))));
             if disabled {
-                assert_eq!(menu.len(), 2);
+                assert_eq!(menu.len(), 1);
             } else {
-                assert!(matches!(menu[2], (Entry::Page(_, Page::Agent), None)));
+                assert!(matches!(menu[1], (Entry::Page(_, Page::Agent), None)));
             }
         }
     }

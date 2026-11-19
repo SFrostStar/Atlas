@@ -4,7 +4,12 @@ const messages = {
   ru: {
     skip: 'К содержимому', navigation: 'Навигация', language: 'Язык', navAbout: 'О проекте', navDownload: 'Установка',
     heroTitle: 'Знакомый Minecraft. Другая основа.', heroDescription: 'Независимый клиент на Rust и свой лаунчер. На основе Horizon, с характером Atlas.',
-    download: 'Скачать лаунчер', viewSource: 'Смотреть код', explore: 'Чуть ближе к Atlas',
+    download: 'Скачать лаунчер', viewSource: 'Смотреть код', joinDiscord: 'В Discord', explore: 'Чуть ближе к Atlas',
+    benchmarkTitle: 'Замер рендера', benchmarkScenes: 'Сцена теста',
+    benchmark_village: 'Деревня', benchmark_forest: 'Лес', benchmark_ocean: 'Океан', benchmark_mountain: 'Горы',
+    benchmarkAverage: 'Средний FPS', benchmarkLowest: 'Самый низкий фпс', benchmarkSettings: '1920×1080 · Vulkan · 16 чанков · без модов',
+    benchmarkMethod: 'Условия замера', benchmarkDetails: 'Рендер в текстуру. Один 12-секундный пролёт на сцену, 2 с разогрева. Дальность симуляции 12 чанков, VSync выключен. Для деревни 1474 FPS — ориентир.',
+    benchmarkLow: 'Нижний показатель FPS вычисляется по среднему времени 1% самых медленных кадров.',
     aboutTitle: ['Твой мир.', 'Твоя сборка.'], aboutDescription: 'Minecraft на нативной основе Rust. Atlas объединяет игру и лаунчер: меньше возни с файлами, больше места для своих идей.',
     landscapeAlt: 'Горная долина Minecraft на закате', worldCaption: 'Начинается с одного мира.',
     instancesTitle: 'Всё по сборкам', instancesText: 'Отдельные миры, ресурспаки и настройки. Переключайся между сборками в лаунчере.',
@@ -25,7 +30,12 @@ const messages = {
   en: {
     skip: 'Skip to content', navigation: 'Navigation', language: 'Language', navAbout: 'About', navDownload: 'Get started',
     heroTitle: 'Familiar Minecraft. A different foundation.', heroDescription: 'An independent Rust client with its own launcher. Based on Horizon, shaped into Atlas.',
-    download: 'Download launcher', viewSource: 'View source', explore: 'A little more Atlas',
+    download: 'Download launcher', viewSource: 'View source', joinDiscord: 'Join Discord', explore: 'A little more Atlas',
+    benchmarkTitle: 'Rendering benchmark', benchmarkScenes: 'Test scene',
+    benchmark_village: 'Village', benchmark_forest: 'Forest', benchmark_ocean: 'Ocean', benchmark_mountain: 'Mountains',
+    benchmarkAverage: 'Average FPS', benchmarkLowest: 'Lowest FPS', benchmarkSettings: '1920×1080 · Vulkan · 16 chunks · no mods',
+    benchmarkMethod: 'Test conditions', benchmarkDetails: 'Rendered to a texture. One 12-second flyover per scene after a 2-second warm-up. Simulation distance 12 chunks, VSync off. Village uses a reference value of 1474 FPS.',
+    benchmarkLow: 'The lower FPS figure is calculated from the average frame time of the slowest 1% of frames.',
     aboutTitle: ['Your world.', 'Your instance.'], aboutDescription: 'Minecraft on a native Rust foundation. Atlas brings the game and launcher together: less time managing files, more room for your ideas.',
     landscapeAlt: 'A mountainous Minecraft valley at sunset', worldCaption: 'It starts with a single world.',
     instancesTitle: 'Keep worlds separate', instancesText: 'Separate worlds, resource packs and settings. Switch between your instances in the launcher.',
@@ -70,6 +80,58 @@ let initialLanguage = navigator.language.toLowerCase().startsWith('ru') || navig
 try { initialLanguage = localStorage.getItem('atlas-site-language') || initialLanguage; } catch { /* Storage can be unavailable in private browsers. */ }
 setLanguage(initialLanguage);
 for (const button of document.querySelectorAll('[data-language]')) button.addEventListener('click', () => setLanguage(button.dataset.language));
+
+const benchmarkScenes = document.querySelector('.benchmark-scenes');
+const benchmarkMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const benchmarkDuration = 3500;
+const benchmarkResults = new Map();
+let benchmarkFrame;
+
+for (const scene of document.querySelectorAll('.benchmark-results')) {
+  const rows = Array.from(scene.querySelectorAll('.benchmark-row'), row => {
+    const meter = row.querySelector('meter');
+    const number = row.querySelector('strong');
+    const accessibleNumber = document.createElement('span');
+    accessibleNumber.className = 'benchmark-static-value';
+    accessibleNumber.textContent = number.textContent;
+    number.setAttribute('aria-hidden', 'true');
+    number.before(accessibleNumber);
+    return { meter, number, target: meter.value };
+  });
+  benchmarkResults.set(scene.dataset.scene, rows);
+}
+
+function animateBenchmark() {
+  cancelAnimationFrame(benchmarkFrame);
+  const scene = benchmarkScenes.querySelector(':checked').value;
+  const rows = benchmarkResults.get(scene);
+  const start = performance.now();
+
+  function render(progress) {
+    const eased = progress * progress * (3 - 2 * progress);
+    for (const { meter, number, target } of rows) {
+      meter.value = target * eased;
+      number.textContent = Math.floor(meter.value);
+    }
+  }
+
+  if (benchmarkMotion.matches) {
+    render(1);
+    return;
+  }
+
+  render(0);
+  function tick(now) {
+    const progress = Math.max(0, Math.min(1, (now - start) / benchmarkDuration));
+    render(progress);
+    if (progress < 1) benchmarkFrame = requestAnimationFrame(tick);
+  }
+  benchmarkFrame = requestAnimationFrame(tick);
+}
+
+benchmarkScenes.addEventListener('change', animateBenchmark);
+benchmarkMotion.addEventListener('change', animateBenchmark);
+animateBenchmark();
 
 async function refreshRelease() {
   const controller = new AbortController();

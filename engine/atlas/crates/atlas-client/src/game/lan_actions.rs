@@ -13,7 +13,6 @@ use super::{
     respawn_anchor::RespawnConfig,
 };
 use atlas_client::{
-    command::vanilla,
     containers::BlockEntity,
     entities::Experience,
     first_person::{Hand, SwingAnimation},
@@ -2863,6 +2862,12 @@ impl Game<'_> {
             S::SetGameRule(p) if host.hub.guests[gi].permission >= 2 => {
                 for entry in p.entries {
                     if self.ui.rules.set_string(&entry.name, &entry.value) {
+                        if let Some(rule) = self.ui.rules.rule(&entry.name)
+                            && atlas_client::gamerules::SATURATION_PLUS_RULES.iter().any(|r| r.name == rule.name)
+                            && let Some(value) = self.ui.rules.get(rule.name)
+                        {
+                            self.set_game_rule(rule, value);
+                        }
                         let guest = &host.hub.guests[gi];
                         self.native_world_game_rule_change(
                             guest.uuid,
@@ -3787,7 +3792,7 @@ impl Game<'_> {
         };
         let skip = usize::from(text.starts_with('/'));
         let command = &text[skip..];
-        let d = vanilla::game_dispatcher_with_features(&self.level.enabled_features);
+        let d = self.command_dispatcher();
         // The completions come from the server's players and lists, not from the host's own registries: a
         // dedicated server has no local player (they would list "Player"), and a LAN world's guests are not in
         // the host's list.

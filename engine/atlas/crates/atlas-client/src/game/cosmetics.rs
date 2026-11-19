@@ -13,6 +13,7 @@ mod fx;
 mod settings;
 
 use super::Game;
+use atlas_client::auth::{self, AuthSession};
 use atlas_client::fast_hash::FxHashMap;
 use atlas_cosmetics::prefs::{self, Others};
 use atlas_cosmetics::{Item, Slot};
@@ -51,10 +52,11 @@ struct EmoteOut {
 
 /// Tells the service the player plays `emote` (`None`: stopped).
 fn send_emote(
+    session: Option<Arc<AuthSession>>,
     kept: &std::sync::Mutex<atlas_cosmetics::account::Kept>,
     emote: Option<&str>,
 ) -> Result<(), String> {
-    let Some(session) = atlas_client::auth::current() else {
+    let Some(session) = session else {
         return Ok(());
     };
     let mut kept = kept
@@ -71,11 +73,9 @@ fn send_emote(
 
 /// The emotes the signed-in account owns, for the wheel (none signed in: none).
 fn load_owned_emotes(
+    session: &AuthSession,
     kept: &std::sync::Mutex<atlas_cosmetics::account::Kept>,
 ) -> Result<Vec<atlas_cosmetics::account::OwnedEmote>, String> {
-    let Some(session) = atlas_client::auth::current() else {
-        return Ok(Vec::new());
-    };
     let service = http();
     let mut kept = kept
         .lock()
@@ -84,7 +84,7 @@ fn load_owned_emotes(
         &mut kept,
         &service,
         &session.name,
-        |id| atlas_client::auth::join_server(&session, id).map_err(|e| format!("{e:?}")),
+        |id| atlas_client::auth::join_server(session, id).map_err(|e| format!("{e:?}")),
         |path| atlas_cosmetics::Transport::get(&service, path),
     )
 }
@@ -111,20 +111,20 @@ fn backoff(last: Option<(Instant, Duration)>) -> Option<(Instant, Duration)> {
 }
 
 /// The signed-in account's UUID as the service writes it, and the game folder.
-fn account() -> Option<(
-    Arc<atlas_client::auth::AuthSession>,
+fn account(session: Option<Arc<AuthSession>>) -> Option<(
+    Arc<AuthSession>,
     String,
     std::path::PathBuf,
 )> {
-    let session = atlas_client::auth::current()?;
+    let session = session?;
     let uuid = format!("{:032x}", session.uuid);
     Some((session, uuid, std::env::current_dir().ok()?))
 }
 
 /// Asks the service whether the signed-in account owns a cosmetic and keeps the answer in the
 /// game folder. An offline account owns none and asks nothing.
-fn check_owner() -> Result<bool, String> {
-    let Some((session, uuid, home)) = account() else {
+fn check_owner(session: Option<Arc<AuthSession>>) -> Result<bool, String> {
+    let Some((session, uuid, home)) = account(session) else {
         return Ok(false);
     };
     let owns = atlas_cosmetics::account::owns(&http(), &session.name, |id| {
@@ -180,15 +180,16 @@ impl AccountSync {
     }
 
     /// Sends `wish` on a thread.
-    fn start(&mut self, wish: bool, send: fn(bool) -> Result<(), String>) {
+    fn start(&mut self, wish: bool, send: fn(Option<Arc<AuthSession>>, bool) -> Result<(), String>) {
         self.wish = Some(wish);
         self.again = None;
         let (tx, rx) = channel();
         self.sending = Some(rx);
+        let session = auth::current();
         std::thread::Builder::new()
             .name("Cosmetics account".into())
             .spawn(move || {
-                let _ = tx.send(send(wish));
+                let _ = tx.send(send(session, wish));
             })
             .ok();
     }
@@ -196,8 +197,8 @@ impl AccountSync {
 
 /// Tells the service whether the signed-in account may be shown as a Atlas player (listed: it
 /// plays now). An offline account has nothing to send.
-fn send_listed(listed: bool) -> Result<(), String> {
-    let Some(session) = atlas_client::auth::current() else {
+fn send_listed(session: Option<Arc<AuthSession>>, listed: bool) -> Result<(), String> {
+    let Some(session) = session else {
         return Ok(());
     };
     atlas_cosmetics::account::set_listed(
@@ -211,8 +212,8 @@ fn send_listed(listed: bool) -> Result<(), String> {
 
 /// Makes the service keep `wish` for the signed-in account, unless it already confirmed it
 /// (`prefs::confirmed`, in the game folder). An offline account has nothing to send.
-fn send_mine(wish: bool) -> Result<(), String> {
-    let Some((session, uuid, home)) = account() else {
+fn send_mine(session: Option<Arc<AuthSession>>, wish: bool) -> Result<(), String> {
+    let Some((session, uuid, home)) = account(session) else {
         return Ok(());
     };
     if prefs::confirmed(&home, &uuid).unwrap_or(true) == wish {
@@ -524,7 +525,7 @@ impl Seat {
         let o = &mut self.owner;
         if !o.started {
             o.started = true;
-            o.owns = account()
+            o.owns = account(auth::current())
                 .is_some_and(|(_, uuid, home)| prefs::owned(&home, &uuid).unwrap_or(false));
         }
         if let Some(done) = o.asking.as_ref().and_then(|rx| rx.try_recv().ok()) {
@@ -540,10 +541,11 @@ impl Seat {
         {
             let (tx, rx) = channel();
             o.asking = Some(rx);
+            let session = auth::current();
             std::thread::Builder::new()
                 .name("Cosmetics account".into())
                 .spawn(move || {
-                    let _ = tx.send(check_owner());
+                    let _ = tx.send(check_owner(session));
                 })
                 .ok();
         }
@@ -595,10 +597,11 @@ impl Seat {
             let (tx, rx) = channel();
             o.sending = Some(rx);
             let kept = o.kept.clone();
+            let session = auth::current();
             std::thread::Builder::new()
                 .name("Cosmetics emote".into())
                 .spawn(move || {
-                    let _ = tx.send(send_emote(&kept, wish.as_deref()));
+                    let _ = tx.send(send_emote(session, &kept, wish.as_deref()));
                 })
                 .ok();
         } else if self.mine.due(self.settings.mine) {
@@ -900,14 +903,27 @@ impl Game<'_> {
         self.cosmetics.local = service(|s| s.local);
     }
 
+    /// Drop account-specific caches and results from old cosmetics jobs.
+    pub(super) fn reset_account_cosmetics(&mut self) {
+        self.cosmetics.emotes = Default::default();
+        self.cosmetics.wheel = Default::default();
+        service(|seat| {
+            seat.owner = Default::default();
+            seat.mine = Default::default();
+            seat.listed = Default::default();
+            seat.emote_out = Default::default();
+            seat.said = Default::default();
+        });
+    }
+
     /// Asks the service which emotes the account owns, for the wheel: when it opens, at most
     /// every 10 minutes (a folder's emotes need no asking; an offline account has none).
     pub(super) fn refresh_owned_emotes(&mut self) {
         const AGAIN: Duration = Duration::from_secs(600);
+        let Some(session) = auth::current() else { return; };
         let e = &mut self.cosmetics.emotes;
         if self.cosmetics.local
             || !enabled()
-            || atlas_client::auth::current().is_none()
             || e.loading.is_some()
             || e.loaded.is_some_and(|at| at.elapsed() < AGAIN)
         {
@@ -919,7 +935,7 @@ impl Game<'_> {
         std::thread::Builder::new()
             .name("Cosmetics emotes owned".into())
             .spawn(move || {
-                let _ = tx.send(load_owned_emotes(&kept));
+                let _ = tx.send(load_owned_emotes(&session, &kept));
             })
             .ok();
     }

@@ -41,7 +41,10 @@ function fixture(t, overrides = {}) {
     if (!overrides.neverExit) setImmediate(() => { record.child.exitCode = 0; record.child.emit('close', 0); });
     return { stdout: '{"ok":true}\n', stderr: '' };
   };
-  manager = new GameSessions(store, { spawn, execFile, prepareAccount: overrides.prepareAccount, onLog: (message, level) => logs.push({message,level}), stopTimeoutMs: 80, startTimeoutMs: 20 });
+  manager = new GameSessions(store, { spawn, execFile, prepareAccount: overrides.prepareAccount,
+    prepareRuntime: overrides.prepareRuntime, getAccounts: overrides.getAccounts,
+    accountActions: overrides.accountActions, builtinAccountSwitch: overrides.builtinAccountSwitch,
+    onLog: (message, level) => logs.push({message,level}), stopTimeoutMs: 80, startTimeoutMs: 20 });
   t.after(async () => {
     for (const record of manager.sessions.values()) record.child.emit('close', 0);
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -51,6 +54,76 @@ function fixture(t, overrides = {}) {
   });
   return { root, store, manager, spawned, calls, logs };
 }
+
+test('native account switch uses the built client and a private per-window broker for public profile details', async t => {
+  const profiles = [{id:'first',type:'local',name:'First'}, {id:'second',type:'local',name:'Second',vault:'private'}];
+  const { manager, spawned, store } = fixture(t, {
+    prepareRuntime: async () => ({ executable: 'test-native-atlas.exe', mods: new Set(['ias']) }),
+    getAccounts: () => ({ selectedId:'first', accounts:profiles }),
+    prepareAccount: async (_home, id) => {
+      assert.equal(id, 'first');
+      return { args:['--name', 'First'], cleanup:async()=>{} };
+    },
+  });
+  await manager.launch('atlas');
+  assert.equal(spawned[0].executable, 'test-native-atlas.exe');
+  const env = spawned[0].options.env;
+  assert.ok(env.ATLAS_ACCOUNT_SWITCH_FILE.startsWith(path.join(store.dataRoot,'control') + path.sep));
+  const catalog = JSON.parse(fs.readFileSync(env.ATLAS_ACCOUNT_SWITCH_FILE,'utf8'));
+  assert.equal(catalog.currentId, 'first');
+  assert.deepEqual(catalog.accounts[1], {id:'second', type:'local', name:'Second'});
+  fs.writeFileSync(env.ATLAS_ACCOUNT_SWITCH_REQUEST, JSON.stringify({ requestId:'knownrequest', accountId:'second' }));
+  const until = Date.now() + 2000;
+  while (!fs.existsSync(env.ATLAS_ACCOUNT_SWITCH_REPLY) && Date.now() < until) {
+    await new Promise(resolve => setTimeout(resolve, 30));
+  }
+  assert.deepEqual(JSON.parse(fs.readFileSync(env.ATLAS_ACCOUNT_SWITCH_REPLY,'utf8')),
+    {requestId:'knownrequest', name:'Second'});
+  assert.equal(spawned.length, 1, 'switching does not relaunch the game');
+});
+
+test('built-in account switcher manages profiles without compiling or relaunching the game', async t => {
+  let accounts;
+  const actions = Object.fromEntries(['addLocal', 'editLocal', 'remove', 'move'].map(key => [key, (...args) => accounts[key](...args)]));
+  const { manager, spawned, store } = fixture(t, {
+    builtinAccountSwitch: id => id === 'atlas',
+    prepareRuntime: async (_home, builtIn) => { assert.equal(builtIn, true); return null; },
+    getAccounts: () => accounts.snapshot(),
+    accountActions: actions,
+  });
+  const { AccountManager } = require('../lib/account-manager.cjs');
+  accounts = new AccountManager({ dataRoot: store.dataRoot });
+  const initial = accounts.snapshot().selectedId;
+  await manager.launch('atlas');
+  const env = spawned[0].options.env;
+  const request = env.ATLAS_ACCOUNT_SWITCH_REQUEST, reply = env.ATLAS_ACCOUNT_SWITCH_REPLY;
+  const catalog = () => JSON.parse(fs.readFileSync(env.ATLAS_ACCOUNT_SWITCH_FILE, 'utf8'));
+  async function send(requestId, payload) {
+    fs.writeFileSync(request, JSON.stringify({ requestId, ...payload }));
+    for (let tries = 0; tries < 40; tries++) {
+      if (fs.existsSync(reply)) {
+        const result = JSON.parse(fs.readFileSync(reply, 'utf8'));
+        if (result.requestId === requestId) return result;
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.fail('No account bridge reply');
+  }
+  const added = await send('add', { action: 'add', name: 'Second' });
+  assert.ok(added.accountId);
+  assert.equal(accounts.snapshot().selectedId, initial);
+  assert.equal(catalog().currentId, initial);
+  await send('edit', { action: 'edit', accountId: added.accountId, name: 'Changed' });
+  await send('move', { action: 'move', accountId: added.accountId, direction: -1 });
+  assert.deepEqual(catalog().accounts.map(row => row.id), [added.accountId, initial]);
+  const switched = await send('login', { action: 'switch', accountId: added.accountId, offline: true });
+  assert.equal(switched.name, 'Changed');
+  assert.equal(catalog().currentId, added.accountId);
+  assert.equal((await send('signin', { action: 'microsoft' })).error, 'atlas.ias.microsoft_setup');
+  await send('remove', { action: 'delete', accountId: added.accountId });
+  assert.deepEqual(catalog().accounts.map(row => row.id), [initial]);
+  assert.equal(spawned.length, 1);
+});
 
 test('additional windows get distinct data homes and sockets without copying saved worlds or secrets', async t => {
   const { store, manager, spawned } = fixture(t);
@@ -94,7 +167,7 @@ test('additional windows get distinct data homes and sockets without copying sav
 test('stop closes only the selected session and waits for its exit before restart', async t => {
   const { manager, spawned, calls } = fixture(t);
   await manager.launch('atlas');
-  await manager.launchAnother('atlas');
+  await manager.launchAnother('atlas', 'Test world');
   const [main, extra] = manager.snapshot().sessions;
   await manager.restart(extra.id);
   const sessions = manager.snapshot().sessions;
@@ -103,12 +176,43 @@ test('stop closes only the selected session and waits for its exit before restar
   assert.equal(sessions[0].id, main.id);
   assert.equal(sessions[1].home, extra.home);
   assert.notEqual(sessions[1].id, extra.id);
+  assert.equal(sessions[1].logId, extra.logId);
+  assert.equal(sessions[1].name, 'Atlas - Test world');
+  assert.equal(spawned[2].options.env.ATLAS_WINDOW_TITLE, sessions[1].name);
+  assert.equal(manager.logSnapshot().length, 2);
   assert.equal(sessions[1].isolated, true);
   assert.equal(calls[0].args[calls[0].args.indexOf('--socket') + 1], extra.socketPath);
   await manager.stop(main.id);
   assert.equal(manager.snapshot().count, 1);
   assert.equal(manager.snapshot().sessions[0].id, sessions[1].id);
   await assert.rejects(manager.stop(main.id), /уже закрыто/);
+});
+
+test('launch logs start empty and keep one stream per named or numbered window', async t => {
+  const { manager, spawned } = fixture(t);
+  assert.deepEqual(manager.logSnapshot(), []);
+  await assert.rejects(manager.launchAnother('atlas', 'invalid\nname'), /Название окна/);
+  await manager.launch('atlas');
+  await manager.launchAnother('atlas', '   ');
+  await manager.launchAnother('atlas', '  Тест  ');
+  await manager.launchAnother('atlas');
+  const names = ['Atlas', 'Atlas - 1', 'Atlas - Тест', 'Atlas - 2'];
+  assert.deepEqual(manager.snapshot().sessions.map(session => session.name), names);
+  assert.deepEqual(spawned.map(spec => spec.options.env.ATLAS_WINDOW_TITLE), names);
+  const message = Buffer.from('Загрузка');
+  spawned[0].child.stdout.write(message.subarray(0, 1));
+  spawned[2].child.stderr.write('inner window only\r\n');
+  spawned[0].child.stdout.write(message.subarray(1));
+  spawned[0].child.stdout.write('\r\n');
+  const logs = manager.logSnapshot();
+  const [primary, , named] = logs;
+  assert.equal(primary.entries.at(-1).message, 'Загрузка');
+  assert.equal(named.entries.at(-1).message, 'inner window only');
+  assert.ok(!primary.entries.some(entry => entry.message === named.entries.at(-1).message));
+  await manager.stop(manager.snapshot().sessions[0].id);
+  assert.equal(manager.logSnapshot()[0].entries.at(-1).message, 'Atlas: игра завершена.');
+  await manager.launch('atlas');
+  assert.equal(manager.logSnapshot().length, names.length);
 });
 
 test('independent base instances can run together and implicit controls choose selected instance', async t => {

@@ -2823,6 +2823,9 @@ impl Game<'_> {
         for (id,name) in [("atlas-friendlist","friend"),("atlas-radarmod","radar"),("atlas-totempops","totempops"),("atlas-noshakehand","noshakehand"),("atlas-viewmodel","viewmodel"),("atlas-gammautils","gamma"),("atlas-gammautils","nightvision"),("atlas-gammautils","gammautils:gamma"),("atlas-gammautils","gammautils:nightvision")] {
             if self.atlas_port_on(id){commands.push(name);}
         }
+        if self.atlas_totem_tweaks_enabled() {
+            commands.extend(["totemTweaks", "simulatePop"]);
+        }
         mod_api::dispatch_commands(self, mod_api::mods(), commands);
     }
     /// Player FOV scale, after vanilla effects and before zoom and easing.
@@ -4179,13 +4182,16 @@ impl Game<'_> {
     /// False when no screen of the hooks' is open, and for a key with no
     /// vanilla name.
     pub(super) fn screen_key_pressed(&mut self, key: KeyCode, repeat: bool) -> bool {
-        if self.atlas_aspect_screen_key(key, repeat) {
+        if self.atlas_ias_key(key, repeat) || self.atlas_aspect_screen_key(key, repeat) {
             return true;
         }
         if self.has_control_down_with_quirk(){
             use atlas_client::clipboard::EditShortcut;
             let shortcut=match key{KeyCode::KeyA=>Some(EditShortcut::SelectAll),KeyCode::KeyC=>Some(EditShortcut::Copy),KeyCode::KeyV=>Some(EditShortcut::Paste),KeyCode::KeyX=>Some(EditShortcut::Cut),_=>None};
             if let Some(shortcut)=shortcut&&(self.atlas_config_shortcut(shortcut)||self.atlas_visual_screen_shortcut(shortcut)){return true;}
+        }
+        if self.atlas_mouse_tweaks_key(key) {
+            return true;
         }
         if self.atlas_config_key(key,self.modifiers.control_key(),self.modifiers.shift_key())||self.atlas_visual_screen_key(key,true,self.modifiers.control_key(),self.modifiers.shift_key())||self.atlas_actions_screen_key(key,self.modifiers.control_key(),self.modifiers.shift_key()){return true;}
         let Some(name) = keybinds::key_name(key) else {
@@ -11267,6 +11273,7 @@ impl Game<'_> {
     }
     /// A mod's own screen closes (Escape, or `native_mod_screen_close`).
     pub(super) fn close_mod_screen(&mut self) {
+        self.atlas_mouse_tweaks_closed();
         self.native_mod_screen = None;
         if self.screen == Screen::Mod {
             self.screen = self.atlas_ports.return_screen.take().unwrap_or(Screen::Playing);
@@ -12569,6 +12576,9 @@ impl Game<'_> {
             return false;
         }
         if self.atlas_utility_command(command)||self.atlas_visual_command(command)||self.atlas_actions_command(command) {return true;}
+        if self.atlas_totem_tweaks_command(command) {
+            return true;
+        }
         let mut ran = false;
         self.native_command(command, &mut ran);
         ran

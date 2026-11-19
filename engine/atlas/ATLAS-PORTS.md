@@ -1,7 +1,7 @@
 # Atlas native mod ports
 
-The launcher offers 27 optional native implementations: the existing six ports
-and twenty-one additional mods inspected from SFrostStar's supplied JARs.
+The launcher offers optional native implementations based on the references
+listed in [MOD-PORT-NOTICES.md](MOD-PORT-NOTICES.md).
 Java JARs are reference material; Atlas never executes them or includes them in builds.
 Exact reference versions, source hashes, authors and licenses are recorded in
 [MOD-PORT-NOTICES.md](MOD-PORT-NOTICES.md).
@@ -17,7 +17,7 @@ Exact reference versions, source hashes, authors and licenses are recorded in
 | Zoomify 2.15.2 | Geometric wheel tiers, smooth entry/exit, hold/toggle and secondary zoom, retained tiers, sensitivity, hand FOV and spyglass behavior |
 | MentionSound 1.0.0 | Case-insensitive substring mentions, extra names, configurable 500-ms default cooldown, own-message exclusion and WAV/AIFF notification files |
 
-## Twenty-one additional implementations
+## Additional implementations
 
 | Mod | Native behavior |
 | --- | --- |
@@ -42,6 +42,10 @@ Exact reference versions, source hashes, authors and licenses are recorded in
 | Gamma Utils | Gamma/night-vision controls, transitions, dynamic light, dimensions and optional client-only status indicators |
 | Aspect Ratio | H opens the original live slider and five presets; Reset restores the window ratio. The world and hand stretch while the HUD stays at the window size. |
 | ESC Music Controller | Pause menu playback controls, title, artist, cover and timeline from the current Windows media session. |
+| Saturation Plus 1.3.1-1.21.2 | Five hunger and exhaustion game rules, saturation commands, and the server-synchronized numerical HUD. |
+| Mouse Tweaks 2.27 | Inventory mouse-drag and wheel behavior using the official Java release as reference. Settings are stored in `config/MouseTweaks.cfg`. |
+| Totem Tweaks 1.0.1 | Held totem sizing, configurable pop animation, inventory totem count and optional color overlay. The port uses Atlas's configuration screen. |
+| In-Game Account Switcher 9.0.7 | Title and multiplayer account controls use the launcher's shared account store and switch the client session in place. |
 
 ## Configuration and validation
 

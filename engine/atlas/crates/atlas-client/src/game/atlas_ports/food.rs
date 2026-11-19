@@ -540,13 +540,18 @@ impl Game<'_> {
             if !value.is_finite() {
                 return;
             }
+            let saturation_cap = if self.atlas_saturation_plus_enabled() {
+                f32::MAX
+            } else {
+                20.0
+            };
             if let Some(player) = self.player.as_mut() {
                 match channel {
                     "appleskin:exhaustion" => {
                         player.health.food.exhaustion = value.clamp(0.0, 40.0)
                     }
                     "appleskin:saturation" => {
-                        player.health.food.saturation = value.clamp(0.0, 20.0)
+                        player.health.food.saturation = value.clamp(0.0, saturation_cap)
                     }
                     _ => {}
                 }

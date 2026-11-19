@@ -1703,7 +1703,6 @@ fn atlas_toggle(toggle: crate::atlas::settings::Toggle) -> crate::extras::Item {
     use crate::extras::Item;
     match toggle {
         Toggle::NoAi => Item::NoAi,
-        Toggle::DiscordPresence => Item::DiscordPresence,
         Toggle::Fullbright => Item::Fullbright,
         Toggle::DynamicLights => Item::DynamicLights,
     }
@@ -2581,7 +2580,6 @@ impl OptionsUi {
                         150.0,
                         tr(label),
                         Act::Push(match page {
-                            AtlasPage::Graphics => Page::Video,
                             AtlasPage::AdvancedGraphics => Page::GraphicsAdvanced,
                             AtlasPage::ShaderPacks => Page::ShaderPacks,
                             AtlasPage::Mods => Page::Mods,
@@ -7640,12 +7638,12 @@ mod tests {
         // Credits & Attribution (WinScreen's credits).
         let main = pushes(&mut ui);
         assert_eq!(&main[main.len() - 2..], [Page::Atlas, Page::Credits]);
-        // Both normal Options and Atlas Settings open the vanilla video screen.
+        // Only normal Options links to the vanilla video screen.
         assert!(main.contains(&Page::Video) && !main.contains(&Page::Graphics));
         ui.push(Page::Atlas);
         assert_eq!(
             pushes(&mut ui),
-            [Page::Video, Page::ShaderPacks, Page::Agent,]
+            [Page::ShaderPacks, Page::Agent]
         );
         // No AI hides the AI Agent page.
         let mut no_ai = Settings::default();

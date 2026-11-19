@@ -1716,6 +1716,9 @@ impl Game<'_> {
                     .unwrap_or("")
                     .strip_prefix(' ')
                     .unwrap_or("");
+                if self.atlas_ias_text(text) {
+                    return ok(json!({ "ok": true, "screen": self.screen_label() }));
+                }
                 let mut field = None;
                 let mut replace = false;
                 loop {

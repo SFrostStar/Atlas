@@ -250,6 +250,9 @@ impl WorldRequest {
                 .rules
                 .copy_with_features(&level.enabled_features)
                 .by_name();
+            if o.rules.saturation_plus().is_some() {
+                super::atlas_ports::saturation_plus::save_rules(&save_root, &o.rules)?;
+            }
         }
         // Worlds made without the Create New World screen (--world, the
         // control socket) take its default: commands on for Creative only.

@@ -2139,7 +2139,6 @@ struct Game<'a> {
     debug_density: RefCell<debug_keys::DensityCache>,
     pending_pack_reload: bool,
     applied_resource_packs: Vec<String>,
-    loading_overlay: atlas_client::atlas_loading::Overlay,
     /// HDR, Smooth Gradients, picked path and outcome at the last frame attempt, including a failed
     /// replacement (`follow_frame`).
     frame_attempted: render_settings::FrameAttempt,
@@ -4661,8 +4660,7 @@ impl Game<'_> {
                         self.award_custom_stat("eat_cake_slice", 1);
                         if let Some(p) = self.player.as_mut() {
                             let food = &mut p.health.food;
-                            food.food = (food.food + 2).min(20);
-                            food.saturation = (food.saturation + 0.4).min(food.food as f32);
+                            food.eat_with_rules(2, 0.4, self.world.health_rules.saturation_plus);
                         }
                     }
                     PlayerEffect::RespawnAnchor => {
@@ -5850,8 +5848,6 @@ impl Game<'_> {
         self.frame_graph
             .draw(self.settings.atlas.overlay, &mut batch, &self.gui.atlas);
         self.draw_pad_over_hud(&mut batch);
-        self.loading_overlay
-            .draw(&mut batch, &self.gui.atlas, Instant::now());
         self.resolve_inline_profiles(&batch.inline_profiles);
         batch
     }
@@ -6181,6 +6177,8 @@ impl Game<'_> {
                     g.draw_selected_name(batch, !g.creative);
                 });
             }
+            self.saturation_plus_draw(&mut batch);
+            self.atlas_totem_tweaks_draw(&mut batch, self.clock.fraction() as f32);
         }
         // Hud.extractSleepOverlay: over all health/food bars, under titles and chat.
         let draws = hud_overlays::sleep_overlay(wi, hi, self.sleep_timer as i32);
@@ -8960,31 +8958,106 @@ impl Game<'_> {
         self.follow_frame();
         self.observe_screen();
         self.drop_left_screen_focus();
-        let operation = if self.integrated_starting.is_some() {
-            Some(("Opening world", None))
-        } else if self.pending_entry.is_some() {
-            Some((
-                "Preparing world",
-                self.rest_loader.as_ref().map(|l| l.progress.fraction()),
-            ))
-        } else if let Some(reload) = &self.pack_reload {
-            Some(("Loading resources", Some(reload.progress.fraction())))
-        } else if self
-            .remote
-            .as_ref()
-            .is_some_and(|r| r.level_load.is_active())
-            || (self.remote.is_some() && self.player.is_none())
-        {
-            Some(("Loading world", Some(self.loading_progress)))
-        } else {
-            None
-        };
-        let now = Instant::now();
-        self.loading_overlay.update(operation, now);
-        if operation.is_some() {
+        // Minecraft.doWorldLoad: the LevelLoadingScreen while single player's
+        // server starts, with the server's chunk map and progress.
+        if let Some(starting) = &self.integrated_starting {
+            // WorldOpenFlows.upgradeAndOpenWorld: the server's file fixers run on
+            // FileFixerProgressScreen, before the LevelLoadingScreen has progress.
+            let upgrade = starting.handle.upgrade();
+            if upgrade.is_file_fixing() {
+                atlas_client::widgets::begin_screen(|| {
+                    atlas_client::widgets::ScreenInfo::new(
+                        "file_fixer",
+                        screen_info::tr("upgradeWorld.title", &[]),
+                    )
+                });
+                if let Some(renderer) = &mut self.renderer {
+                    let mut hud = HudBatch::new([renderer.config.width, renderer.config.height]);
+                    atlas_client::level_loading::draw_file_fixer(
+                        &mut hud,
+                        &self.gui.atlas,
+                        upgrade,
+                        self.cursor,
+                    );
+                    pr.lap("pr_loading");
+                    drop(prepare);
+                    return renderer.render(&loading_frame(&hud));
+                }
+                return Ok(false);
+            }
+            // The server's progress once it has some (`hasProgress`).
+            let progress = Some(starting.handle.load_view())
+                .filter(|v| v.has_progress())
+                .map(|v| v.server_progress());
+            atlas_client::widgets::begin_screen(|| {
+                screen_info::level_loading(progress, &screen_info::tr)
+            });
             if let Some(renderer) = &mut self.renderer {
                 let mut hud = HudBatch::new([renderer.config.width, renderer.config.height]);
-                self.loading_overlay.draw(&mut hud, &self.gui.atlas, now);
+                let (w, h) = (hud.width, hud.height);
+                atlas_client::ui::menu_background(
+                    &mut hud,
+                    &self.gui.atlas,
+                    0.0,
+                    0.0,
+                    w,
+                    h,
+                    false,
+                );
+                // The chunk map and progress are the server thread's.
+                let view = self
+                    .integrated_starting
+                    .as_ref()
+                    .map(|s| s.handle.load_view().clone());
+                let status = |x: i32, z: i32| view.as_ref().and_then(|v| v.status(x, z));
+                let progress = view
+                    .as_ref()
+                    .is_some_and(|v| v.has_progress())
+                    .then_some(self.loading_progress);
+                atlas_client::level_loading::draw(
+                    &mut hud,
+                    &self.gui.atlas,
+                    Some(&status),
+                    progress,
+                );
+                pr.lap("pr_loading");
+                drop(prepare);
+                return renderer.render(&loading_frame(&hud));
+            }
+            return Ok(false);
+        }
+        if self.pending_entry.is_some() {
+            if let (Some(renderer), Some(loader)) = (&mut self.renderer, &self.rest_loader) {
+                atlas_client::widgets::begin_screen(|| {
+                    screen_info::level_loading(Some(loader.progress.fraction()), &screen_info::tr)
+                });
+                let mut hud = HudBatch::new([renderer.config.width, renderer.config.height]);
+                atlas_client::level_loading::draw_progress(
+                    &mut hud,
+                    &self.gui.atlas,
+                    loader.progress.line(),
+                    loader.progress.fraction(),
+                );
+                pr.lap("pr_loading");
+                drop(prepare);
+                return renderer.render(&loading_frame(&hud));
+            }
+            return Ok(false);
+        }
+        // A pack reload covers the frame with its progress
+        // (`LoadingOverlay`) until `drive_pack_reload` applies it.
+        if let Some(reload) = &self.pack_reload {
+            if let Some(renderer) = &mut self.renderer {
+                let mut hud = HudBatch::new([renderer.config.width, renderer.config.height]);
+                atlas_client::level_loading::draw_loading_overlay(
+                    &mut hud,
+                    &self.gui.atlas,
+                    reload.progress.line(),
+                    reload.progress.fraction(),
+                    self.settings.file.bool("darkMojangStudiosBackground"),
+                );
+                pr.lap("pr_loading");
+                drop(prepare);
                 return renderer.render(&loading_frame(&hud));
             }
             return Ok(false);
@@ -10112,8 +10185,10 @@ impl Game<'_> {
             if let WindowEvent::MouseInput {state,button,..}=&event {
                 let button = glfw_button(*button);
                 let pressed = *state == ElementState::Pressed;
-                if self.atlas_esc_music_mouse(button, pressed)
+                if self.atlas_ias_mouse(button, pressed)
+                    || self.atlas_esc_music_mouse(button, pressed)
                     || self.atlas_aspect_mouse(button, pressed)
+                    || self.atlas_mouse_tweaks_mouse(button, pressed)
                     || self.atlas_config_mouse(button, pressed)
                     || self.atlas_visual_screen_mouse(button, pressed)
                     || self.atlas_actions_mouse(button, pressed)
@@ -10298,7 +10373,7 @@ impl Game<'_> {
                         }) * wheel_sensitivity
                     };
                     let d = scaled(raw_y) as f32;
-                    if self.atlas_config_scroll(d)||self.atlas_visual_screen_scroll(d)||self.atlas_actions_scroll(d){return Ok(());}
+                    if self.atlas_ias_scroll(d) || self.atlas_config_scroll(d)||self.atlas_visual_screen_scroll(d)||self.atlas_actions_scroll(d){return Ok(());}
                     // ScreenEvent.MouseScrolled.Pre: the open screen hears of
                     // the wheel before anything scrolls, and a cancelled turn
                     // scrolls nothing — no bundle, no list, slider or
@@ -10407,10 +10482,15 @@ impl Game<'_> {
                     if self.screen == Screen::Creative && d != 0.0 && !bundle {
                         self.creative_screen.wheel(f64::from(d), &self.pack.names);
                     }
+                    let port_wheel = matches!(self.screen, Screen::Inventory | Screen::Creative)
+                        && !bundle
+                        && self.atlas_mouse_tweaks_scroll(scaled(raw_y), self.inventory_target().0);
                     if self.screen == Screen::Inventory
                         && d != 0.0
                         && !bundle
-                        && !self.tweak_scroll(d, self.inventory_target().0)
+                        && !port_wheel
+                        && (self.atlas_mouse_tweaks_on()
+                            || !self.tweak_scroll(d, self.inventory_target().0))
                     {
                         self.station_scroll(d);
                     }
@@ -11351,7 +11431,6 @@ impl<'a> Game<'a> {
             debug_density: RefCell::default(),
             pending_pack_reload: false,
             applied_resource_packs: settings.resource_packs.clone(),
-            loading_overlay: Default::default(),
             frame_attempted: render_settings::FrameAttempt::default(),
             pack_folder: None,
             pack_reload: None,

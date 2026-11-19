@@ -9,6 +9,10 @@ mod config_ui;
 mod esc_music;
 mod esc_music_ui;
 mod food;
+mod ias;
+mod mouse_tweaks;
+pub(super) mod saturation_plus;
+mod totem_tweaks;
 mod utility;
 mod visual;
 
@@ -30,10 +34,14 @@ pub(super) struct State {
     installed: BTreeSet<String>,
     utility: utility::UtilityState,
     food: food::State,
+    ias: ias::State,
     armor: armor::State,
     aspect_ratio: aspect_ratio::State,
     esc_music: esc_music::State,
     esc_music_ui: esc_music_ui::State,
+    saturation_plus: saturation_plus::State,
+    mouse_tweaks: mouse_tweaks::State,
+    totem_tweaks: totem_tweaks::State,
     actions: actions::State,
     visual: visual::State,
     config_ui: config_ui::State,
@@ -60,12 +68,28 @@ impl State {
                             || visual::IDS.contains(id)
                             || *id == aspect_ratio::ID
                             || *id == esc_music::ID
+                            || *id == ias::ID
+                            || *id == saturation_plus::ID
+                            || *id == mouse_tweaks::ID
+                            || *id == totem_tweaks::ID
                     })
                     .map(str::to_owned),
             );
         }
         if state.installed.contains(IDS[0]) {
             state.food = food::State::load(home);
+        }
+        if state.installed.contains(ias::ID) {
+            state.ias.load_config(home);
+        }
+        if state.installed.contains(saturation_plus::ID) {
+            state.saturation_plus = saturation_plus::State::load(home);
+        }
+        if state.installed.contains(mouse_tweaks::ID) {
+            state.mouse_tweaks = mouse_tweaks::State::load(home);
+        }
+        if state.installed.contains(totem_tweaks::ID) {
+            state.totem_tweaks = totem_tweaks::State::load(home);
         }
         state.utility = utility::UtilityState::load(home);
         state.armor = armor::State::load(home);
@@ -76,18 +100,26 @@ impl State {
 }
 
 impl Game<'_> {
+    pub(super) fn atlas_saturation_plus_enabled(&self) -> bool {
+        self.atlas_port_on(saturation_plus::ID)
+    }
+
     pub(in crate::game) fn atlas_config_value(&self, id: &str) -> Option<serde_json::Value> {
         match id {
+            ias::ID => Some(self.atlas_ports.ias.config_value()),
             "atlas-appleskin" => Some(self.atlas_ports.food.config_value()),
             "atlas-zoomify" => self.atlas_utility_config(id),
+            totem_tweaks::ID => Some(self.atlas_ports.totem_tweaks.config_value()),
             "atlas-chunkanimator" | "atlas-gammautils" => self.atlas_actions_config(id),
             _ => None,
         }
     }
     pub(in crate::game) fn atlas_config_default(&self, id: &str) -> Option<serde_json::Value> {
         match id {
+            ias::ID => Some(ias::State::config_default()),
             "atlas-appleskin" => Some(food::State::default_config()),
             "atlas-zoomify" => serde_json::to_value(utility::config::Zoom::default()).ok(),
+            totem_tweaks::ID => Some(totem_tweaks::State::default_config()),
             _ => self.atlas_actions_default_config(id),
         }
     }
@@ -97,14 +129,18 @@ impl Game<'_> {
         value: serde_json::Value,
     ) -> Result<(), String> {
         match id {
+            ias::ID => self.atlas_ports.ias.apply_config(&Self::game_dir(), value),
             "atlas-appleskin" => self.atlas_ports.food.set_config(&Self::game_dir(), value),
             "atlas-zoomify" => self.atlas_utility_set_config(id, value),
+            totem_tweaks::ID => self.atlas_ports.totem_tweaks.set_config(&Self::game_dir(), value),
             _ => self.atlas_actions_set_config(id, value),
         }
     }
     pub(in crate::game) fn atlas_open_original_mod_config(&mut self, id: &str) -> bool {
         match id {
-            "atlas-appleskin" | "atlas-chunkanimator" | "atlas-zoomify" | "atlas-gammautils" => {
+            mouse_tweaks::ID => self.atlas_mouse_tweaks_open(),
+            ias::ID | "atlas-appleskin" | "atlas-chunkanimator" | "atlas-zoomify" | "atlas-gammautils"
+            | totem_tweaks::ID => {
                 self.atlas_config_open(id)
             }
             "atlas-armorindicator" | "atlas-radarmod" => self.atlas_original_open_screen(id),
@@ -182,6 +218,26 @@ impl Game<'_> {
                 "ESC Music Controller",
                 "Control the current Windows media session from the pause menu.",
             ),
+            (
+                ias::ID,
+                "In-Game Account Switcher",
+                "Choose and manage saved Atlas accounts from the title screen and server list.",
+            ),
+            (
+                saturation_plus::ID,
+                "Saturation Plus",
+                "Expanded saturation and exhaustion rules, commands, and HUD.",
+            ),
+            (
+                mouse_tweaks::ID,
+                "Mouse Tweaks",
+                "Drag and scroll to move items in inventory screens.",
+            ),
+            (
+                totem_tweaks::ID,
+                "Totem Tweaks",
+                "Customize held totems and their activation animation.",
+            ),
         ];
         for (id, name, description) in definitions
             .into_iter()
@@ -195,7 +251,10 @@ impl Game<'_> {
                 id: id.into(),
                 title: name.into(),
                 description: description.into(),
-                keys: if id == esc_music::ID {
+                keys: if matches!(
+                    id,
+                    esc_music::ID | ias::ID | saturation_plus::ID | mouse_tweaks::ID | totem_tweaks::ID
+                ) {
                     Vec::new()
                 } else if id == IDS[1] {
                     [

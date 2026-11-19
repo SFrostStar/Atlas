@@ -407,6 +407,8 @@ pub struct PlayerMotion {
     /// target makes the next landing throw up the block below.
     pub spawn_extra_particles_on_fall: bool,
     pub health: crate::health::PlayerHealth,
+    /// The mod's packet observes food state before the vanilla tick runs.
+    pub saturation_plus_snapshot: Option<atlas_world::saturation_plus::Snapshot>,
     /// Status effects and armor protection seen by movement and damage.
     pub status: crate::effects::StatusFlags,
     /// Water and lava around the player (`Entity.fluidInteraction`).
@@ -4288,6 +4290,52 @@ mod tests {
                 assert_eq!(player.health.health(), if food <= 1 { 19.0 } else { 20.0 });
             }
         }
+    }
+
+    #[test]
+    fn saturation_plus_snapshots_authoritative_food_before_exhaustion() {
+        let root = std::env::var_os("ATLAS_TEST_RESOURCES")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.local/atlas-client")
+                    .join(atlas_core::VANILLA_VERSION)
+            });
+        if !root.join("movement-properties.nbt").exists() {
+            eprintln!("skipped saturation regression: prepared resources unavailable");
+            return;
+        }
+        let assets = Assets::load(&root).unwrap();
+        let resources = MotionResources::load(&root, &assets).unwrap();
+        let rules = crate::health::HealthRules {
+            saturation_plus: Some(atlas_world::saturation_plus::Rules {
+                max_saturation: 12,
+                max_exhaustion: 2,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut player = PlayerMotion::new(&resources, Vec3::ZERO).unwrap();
+        player.health.food.saturation = 30.0;
+        player.health.food.exhaustion = 3.0;
+        let mut client = player.clone();
+        client.client_side = true;
+        client.food_tick(&resources.health, rules).unwrap();
+        assert_eq!(client.saturation_plus_snapshot, None);
+        assert_eq!(client.health.food.saturation, 30.0);
+        assert_eq!(client.health.food.exhaustion, 3.0);
+
+        player.food_tick(&resources.health, rules).unwrap();
+        assert_eq!(
+            player.saturation_plus_snapshot,
+            Some(atlas_world::saturation_plus::Snapshot {
+                saturation: 12.0,
+                exhaustion: 3.0,
+                threshold: 2.0,
+            })
+        );
+        assert_eq!(player.health.food.saturation, 11.0);
+        assert_eq!(player.health.food.exhaustion, 1.0);
     }
 
     #[test]

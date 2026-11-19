@@ -3,7 +3,7 @@
 //! reporting each result to the `store` callbacks of its source.
 use super::{Arg, Context, Dim, Game, R, Target, data::DataRef, err};
 use atlas_client::{
-    command::{CommandError, vanilla},
+    command::CommandError,
     nbt_path::NbtPath,
     text::Text,
 };
@@ -233,7 +233,7 @@ impl Game<'_> {
     /// Run one command line with `source` (no error reporting): the entry
     /// for functions and `execute run`.
     pub(in crate::game) fn execute_line(&mut self, line: &str, source: Source) -> R<i32> {
-        let d = vanilla::game_dispatcher_with_features(&self.level.enabled_features);
+        let d = self.command_dispatcher();
         let parse = d.parse(line, &self.ui.registries);
         let (ctx, _) = parse.executable()?;
         let ctx = ctx.clone();

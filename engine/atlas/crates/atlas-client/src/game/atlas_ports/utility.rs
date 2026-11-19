@@ -192,6 +192,7 @@ impl Game<'_> {
         keybinds::key_code(&key).is_some_and(|k| self.physical_keys.contains(&k))
     }
     pub(in crate::game) fn atlas_utility_tick(&mut self) {
+        self.atlas_mouse_tweaks_tick();
         let active = self.atlas_port_on(ZOOMIFY)
             && self.focused
             && self.native_playing()

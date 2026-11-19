@@ -234,8 +234,8 @@ impl Game<'_> {
                     .swap_animation_scale(&atlas_client::item_render::stack_view(stack))
             });
             let attack = attacks[i];
-            let inverse_height =
-                atlas_client::first_person::equip_displacement(heights[i], scale);
+            let inverse_height = atlas_client::first_person::equip_displacement(heights[i], scale);
+            let inverse_height = self.atlas_totem_tweaks_equip(hand, inverse_height);
             let mut canceled = false;
             self.native_render_hand(
                 hand,
@@ -441,6 +441,9 @@ impl Game<'_> {
             {
                 m = to_world * legacy;
             }
+            m *= glam::Mat4::from_scale(glam::Vec3::splat(
+                self.atlas_totem_tweaks_hand_scale(&stack),
+            ));
             runs.push((out.len() as u32, item_id));
             let light = self.world.light(
                 eye[0].floor() as i32,

@@ -5,7 +5,10 @@
 //! process's memory: it is never logged, printed or written anywhere.
 use std::{
     path::Path,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, SystemTime},
 };
 
@@ -20,6 +23,14 @@ pub struct AuthSession {
     pub uuid: u128,
     pub xuid: Option<String>,
     access_token: String,
+    status: AccountPoll,
+}
+
+#[derive(Default)]
+struct AccountPoll {
+    started: AtomicBool,
+    queued: AtomicBool,
+    result: OnceLock<crate::ban_notice::AccountStatus>,
 }
 impl std::fmt::Debug for AuthSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -47,6 +58,7 @@ impl AuthSession {
             uuid,
             xuid: None,
             access_token: access_token.to_owned(),
+            status: AccountPoll::default(),
         }
     }
 
@@ -76,6 +88,7 @@ impl AuthSession {
             uuid,
             xuid: field("xuid").map(str::to_owned),
             access_token: access_token.to_owned(),
+            status: AccountPoll::default(),
         })
     }
     /// Read the session file the launcher wrote and delete it at once. It
@@ -102,8 +115,72 @@ impl AuthSession {
             return refuse("it is too old (start the game from the launcher)");
         }
         let text = std::fs::read_to_string(path);
-        let _ = std::fs::remove_file(path);
+        std::fs::remove_file(path).map_err(|e| format!("{}: {e}", path.display()))?;
         Self::parse(&text.map_err(|e| format!("{}: {e}", path.display()))?)
+    }
+
+    /// Read just the temporary launch session the account broker issued.
+    pub fn load_switch(root: &Path, path: &Path, name: &str) -> Option<Self> {
+        use std::path::Component::Normal;
+        let mut parts = path.strip_prefix(root).ok()?.components();
+        let (Some(Normal(directory)), Some(Normal(file)), None) =
+            (parts.next(), parts.next(), parts.next())
+        else {
+            return None;
+        };
+        let suffix = directory.to_str()?.strip_prefix("session-")?;
+        if !root.is_absolute()
+            || file != "session.json"
+            || suffix.len() != 6
+            || !suffix.bytes().all(|b| b.is_ascii_alphanumeric())
+        {
+            return None;
+        }
+        let safe = |p: &Path| -> Option<std::fs::Metadata> {
+            let meta = std::fs::symlink_metadata(p).ok()?;
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::MetadataExt;
+                const REPARSE_POINT: u32 = 0x400;
+                if meta.file_attributes() & REPARSE_POINT != 0 {
+                    return None;
+                }
+            }
+            (!meta.is_symlink()).then_some(meta)
+        };
+        let meta = safe(path)?;
+        if !safe(root)?.is_dir()
+            || !safe(&root.join(directory))?.is_dir()
+            || !meta.is_file()
+            || meta.len() > 16 * 1024
+            || meta.modified().ok()?.elapsed().ok()? > MAX_SESSION_FILE_AGE
+            || path.canonicalize().ok()? != root.canonicalize().ok()?.join(directory).join(file)
+        {
+            return None;
+        }
+        Self::load(path)
+            .ok()
+            .filter(|session| session.name == name && !session.expired())
+    }
+
+    /// Starts the two account checks once. Their results belong to this session only.
+    pub fn poll_status(self: &Arc<Self>) -> Option<(&crate::ban_notice::AccountStatus, bool)> {
+        if !self.status.started.swap(true, Ordering::Relaxed) {
+            let session = Arc::clone(self);
+            if std::thread::Builder::new()
+                .name("Account status".into())
+                .spawn(move || {
+                    let _ = session.status.result.set(fetch_account_status(&session));
+                })
+                .is_err()
+            {
+                log::warn!("Atlas: could not start the account status fetch");
+                let _ = self.status.result.set(Default::default());
+            }
+        }
+        let status = self.status.result.get()?;
+        let queue_notices = !self.status.queued.swap(true, Ordering::Relaxed);
+        Some((status, queue_notices))
     }
     /// The access token's expiry (its JWT `exp`) has passed, or is a minute away: the session
     /// service would refuse it. A token that doesn't read as a JWT counts as good: the server
@@ -123,14 +200,21 @@ impl AuthSession {
     }
 }
 
-static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
+static CURRENT: Mutex<Option<Arc<AuthSession>>> = Mutex::new(None);
 
 /// The account this game was started with (set once at start).
 pub fn set_current(session: AuthSession) {
-    let _ = CURRENT.set(Arc::new(session));
+    CURRENT
+        .lock()
+        .unwrap()
+        .get_or_insert_with(|| Arc::new(session));
 }
 pub fn current() -> Option<Arc<AuthSession>> {
-    CURRENT.get().cloned()
+    CURRENT.lock().unwrap().clone()
+}
+
+pub(crate) fn replace_current(session: Option<AuthSession>) {
+    *CURRENT.lock().unwrap() = session.map(Arc::new);
 }
 
 /// Why joining a server through the session service failed, like the
@@ -768,6 +852,35 @@ mod tests {
         assert!(AuthSession::parse(r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t","user_type":"legacy"}"#).is_err());
         let s = AuthSession::parse(r#"{"name":"A","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"t","xuid":"25"}"#).unwrap();
         assert_eq!(s.xuid.as_deref(), Some("25"));
+    }
+
+    #[test]
+    fn account_switch_sessions_are_consumed_only_from_the_broker_root() {
+        let root = std::env::temp_dir().join(format!("atlas-switch-test-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let directory = root.join("session-Ab3cD4");
+        std::fs::create_dir(&directory).unwrap();
+        let text = r#"{"name":"Notch","uuid":"069a79f444e94726a5befca90e38aaf5","access_token":"mock-token","user_type":"msa"}"#;
+        let direct = write(&root, text, 0o600);
+        let path = write(&directory, text, 0o600);
+        assert!(AuthSession::load_switch(&root, &direct, "Notch").is_none());
+        assert!(
+            direct.exists(),
+            "a file outside a broker session child is untouched"
+        );
+        assert!(AuthSession::load_switch(&root, &path, "Other").is_none());
+        assert!(!path.exists(), "a mismatched handoff is discarded");
+        let path = write(&directory, text, 0o600);
+        assert_eq!(
+            AuthSession::load_switch(&root, &path, "Notch")
+                .unwrap()
+                .uuid,
+            UUID
+        );
+        assert!(AuthSession::load_switch(&root, &path, "Notch").is_none());
+        std::fs::remove_file(direct).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]

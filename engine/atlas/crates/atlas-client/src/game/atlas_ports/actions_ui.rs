@@ -2,11 +2,14 @@
 //! HotCommands (MIT, supplied 1.0.0); ViewModel (CC0-1.0, supplied 1.21.4).
 use super::{Game, HotCommand, IDS, Screen, now_ms, viewmodel};
 use atlas_client::{
+    atlas::mod_style,
     hud::{HudAtlas, HudBatch, rgba},
     items::ItemStack,
     lang,
     text::Text,
     ui::{self, EditBox},
+    ui_theme::{Face, Ui, color},
+    widgets,
 };
 use winit::keyboard::KeyCode;
 
@@ -19,6 +22,7 @@ pub(super) struct State {
     view_main: bool,
     view_scroll: f32,
     view_slider: Option<usize>,
+    view_pick: Option<usize>,
     hot_edit_origin: usize,
 }
 impl Default for State {
@@ -32,6 +36,7 @@ impl Default for State {
             view_main: true,
             view_scroll: 0.0,
             view_slider: None,
+            view_pick: None,
             hot_edit_origin: 0,
         }
     }
@@ -94,6 +99,47 @@ fn view_content(action: &Action) -> bool {
         action,
         Action::ViewHand(_) | Action::ViewSwing | Action::ViewToggle(_) | Action::ViewReset(_)
     )
+}
+const SWING_ROW_HEIGHT: f32 = 14.0;
+
+fn view_panel(width: f32, height: f32) -> [f32; 4] {
+    let panel_height = (height - 8.0).min(270.0);
+    [
+        (width - 380.0) / 2.0,
+        (height - panel_height) / 2.0,
+        380.0,
+        panel_height,
+    ]
+}
+
+fn hand_scroll_max(panel_height: f32) -> f32 {
+    // The last row ends at 54 + 250 + 20 px, with another 6 px below it.
+    330.0 - panel_height
+}
+
+fn swing_selector(w: f32, h: f32) -> [f32; 4] {
+    let [x, y, ..] = view_panel(w, h);
+    [x + 18.0, y + 54.0, 344.0, 24.0]
+}
+
+fn swing_picker(w: f32, h: f32) -> [f32; 4] {
+    let [x, y, width, height] = swing_selector(w, h);
+    let menu_height = SWING_ROW_HEIGHT * viewmodel::Swing::ALL.len() as f32 + 8.0;
+    [
+        x + width - 132.0,
+        (y + height + 3.0).min(h - menu_height - 2.0).max(2.0),
+        132.0,
+        menu_height,
+    ]
+}
+
+fn swing_picker_row([x, y, w, _]: [f32; 4], i: usize) -> [f32; 4] {
+    [
+        x + 4.0,
+        y + 4.0 + SWING_ROW_HEIGHT * i as f32,
+        w - 8.0,
+        SWING_ROW_HEIGHT,
+    ]
 }
 fn packed(argb: i32) -> u32 {
     let c = argb as u32;
@@ -185,26 +231,23 @@ impl Game<'_> {
                 &[&hand_name, &pitch, &yaw, &scale],
             )
             .plain();
-            let width = HudBatch::text_width(atlas, &tip);
-            let cx = (batch.width - width) / 2.0;
-            let cy = 12.0;
-            batch.fill(
-                atlas,
-                cx - 8.0,
-                cy - 4.0,
-                width + 16.0,
+            let cx = batch.width / 2.0;
+            let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+            let width = (view.measure(Face::Medium, 9.0, &tip) + 16.0).min(view.w - 8.0);
+            let x = cx - width / 2.0;
+            view.rounded(
+                x,
+                9.0,
+                width,
                 17.0,
-                packed(-300609754),
+                8.5,
+                color::with_alpha(color::bg(), 0.91),
             );
-            batch.fill(
-                atlas,
-                cx - 8.0,
-                cy - 4.0,
-                width + 16.0,
-                1.0,
-                packed(-7643914),
-            );
-            batch.text(atlas, &tip, cx, cy, u32::MAX, false);
+            let start = view.batch.vertices.len();
+            view.text_centered(Face::Medium, 9.0, cx, 11.0, color::text(), &tip);
+            view.batch
+                .clip_since(start, x + 5.0, 9.0, x + width - 5.0, 26.0);
+            view.finish();
             let (x1, y1, x2, y2) = if main {
                 (
                     (batch.width * 0.62).floor(),
@@ -258,10 +301,6 @@ impl Game<'_> {
         } else {
             1.0
         };
-        let alpha = (alpha * 255.0) as u32;
-        if alpha == 0 {
-            return;
-        }
         let rotation = editor.indicator_rotation;
         let main = if rotation {
             format!(
@@ -271,58 +310,45 @@ impl Game<'_> {
         } else {
             format!("×{:.1}", editor.indicator_scale)
         };
-        let full = format!("{}{main} ▼", if rotation { "🔄 " } else { "" });
-        let width = HudBatch::text_width(atlas, &full) + 36.0;
-        let x = ((batch.width - width) / 2.0).floor();
-        let y = batch.height - 85.0;
-        let bg = packed(((alpha.min(235) << 24) | 1708592) as i32);
-        let border_color = packed(((alpha << 24) | 9133302) as i32);
-        batch.fill(atlas, x + 1.0, y, width - 2.0, 22.0, bg);
-        batch.fill(atlas, x, y + 1.0, width, 20.0, bg);
-        for (dx, dy, w, h) in [
-            (2.0, 0.0, width - 4.0, 1.0),
-            (2.0, 21.0, width - 4.0, 1.0),
-            (0.0, 2.0, 1.0, 18.0),
-            (width - 1.0, 2.0, 1.0, 18.0),
-        ] {
-            batch.fill(atlas, x + dx, y + dy, w, h, border_color);
-        }
-        let icon_x = x + 8.0;
-        let icon_y = y + 5.0;
-        let icon = packed(((alpha << 24) | 12616956) as i32);
-        if rotation {
-            batch.text(atlas, "🔄", icon_x - 1.0, y + 7.0, icon, false);
-        } else {
-            let c = packed(((alpha.min(180) << 24) | 4988309) as i32);
-            batch.fill(atlas, icon_x, icon_y + 1.0, 7.0, 11.0, c);
-            batch.fill(atlas, icon_x + 1.0, icon_y, 5.0, 13.0, c);
-            batch.fill(atlas, icon_x + 3.0, icon_y + 3.0, 1.0, 3.0, icon);
-        }
-        let tx = icon_x + if rotation { 13.0 } else { 11.0 };
-        batch.text(
-            atlas,
+        let (cx, y) = (batch.width / 2.0, batch.height - 85.0);
+        let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+        let width = view.measure(Face::Mono, 10.0, &main) + 20.0;
+        let x = cx - width / 2.0;
+        view.rounded(
+            x,
+            y,
+            width,
+            20.0,
+            10.0,
+            color::with_alpha(color::bg(), alpha * 0.93),
+        );
+        view.border(
+            x,
+            y,
+            width,
+            20.0,
+            10.0,
+            color::with_alpha(color::text(), alpha * 0.23),
+        );
+        view.text_line(
+            Face::Mono,
+            10.0,
+            20.0,
+            x + 10.0,
+            y,
+            color::with_alpha(color::text(), alpha),
             &main,
-            tx,
-            y + 7.0,
-            packed(((alpha << 24) | 16777215) as i32),
-            false,
         );
-        batch.text(
-            atlas,
-            "▼",
-            tx + HudBatch::text_width(atlas, &main) + 3.0,
-            y + 7.0,
-            packed(((alpha << 24) | 16007006) as i32),
-            false,
-        );
+        view.finish();
     }
     fn actions_view_sliders(
         &self,
         batch: &HudBatch,
     ) -> Vec<([f32; 4], usize, &'static str, f32, f32, f32)> {
         let s = &self.atlas_ports.actions;
-        let x = (batch.width - 380.0) / 2.0 + 18.0;
-        let y = (batch.height - 270.0) / 2.0 + 54.0 - s.ui.view_scroll;
+        let [x, y, ..] = view_panel(batch.width, batch.height);
+        let x = x + 18.0;
+        let y = y + 54.0 - s.ui.view_scroll;
         if s.ui.view_tab == 0 {
             let h = s.viewmodel.hand(s.ui.view_main);
             [
@@ -369,11 +395,9 @@ impl Game<'_> {
         }
     }
     fn actions_view_slider(&mut self, batch: &HudBatch, x: f32, y: f32) -> bool {
+        let [_, top, _, height] = view_panel(batch.width, batch.height);
         for (r, id, _, _, _, _) in self.actions_view_sliders(batch) {
-            if hit(r, x, y)
-                && y >= (batch.height - 270.0) / 2.0 + 54.0
-                && y < (batch.height + 270.0) / 2.0 - 6.0
-            {
+            if hit(r, x, y) && y >= top + 54.0 && y < top + height - 6.0 {
                 self.atlas_ports.actions.ui.view_slider = Some(id);
                 self.actions_view_slide(batch);
                 return true;
@@ -387,7 +411,7 @@ impl Game<'_> {
         };
         for (r, i, _, _, min, max) in self.actions_view_sliders(batch) {
             if i == id {
-                let norm = ((self.cursor.0 - r[0]) / r[2]).clamp(0.0, 1.0);
+                let norm = ((self.cursor.0 - (r[0] + 5.0)) / (r[2] - 10.0)).clamp(0.0, 1.0);
                 let mut value = min + norm * (max - min);
                 if value.abs() < 0.03 && min < 0.0 && max > 0.0 {
                     value = 0.0;
@@ -412,95 +436,276 @@ impl Game<'_> {
     fn actions_draw_viewmodel(&mut self, batch: &mut HudBatch) {
         self.actions_view_slide(batch);
         let atlas = &self.gui.atlas;
-        let x = (batch.width - 380.0) / 2.0;
-        let y = (batch.height - 270.0) / 2.0;
-        batch.fill_gradient(
+        let state = &self.atlas_ports.actions;
+        let [x, y, width, height] = view_panel(batch.width, batch.height);
+        let clip_bottom = y + height - 6.0;
+        batch.fill(
             atlas,
-            (0.0, 0.0, batch.width, batch.height),
-            packed(-1878325225),
-            packed(-1341454313),
+            0.0,
+            0.0,
+            batch.width,
+            batch.height,
+            rgba(6, 8, 13, 165),
         );
-        border(
-            batch,
-            atlas,
-            [x - 1.0, y - 1.0, 382.0, 272.0],
-            packed(1717050503),
-        );
-        batch.fill(atlas, x, y, 380.0, 270.0, packed(-300675289));
-        batch.fill(atlas, x, y, 380.0, 2.0, packed(-8635667));
-        batch.text(
-            atlas,
+        mod_style::panel(batch, atlas, [x, y, width, height], 17.0);
+        let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+        view.text_line(
+            Face::SemiBold,
+            15.0,
+            25.0,
+            x + 15.0,
+            y + 2.0,
+            color::text(),
             &lang::get("atlas.viewmodel.title"),
-            x + 14.0,
-            y + 12.0,
-            u32::MAX,
-            false,
         );
-        for (r, _, key, value, min, max) in self.actions_view_sliders(batch) {
-            let [sx, sy, w, h] = r;
-            let clip_start = batch.vertices.len();
-            let width = (((value - min) / (max - min)).clamp(0.0, 1.0) * (w - 2.0)).floor();
-            batch.fill(atlas, sx, sy, w, h, packed(1428034616));
-            batch.fill(
-                atlas,
-                sx + 1.0,
-                sy + 1.0,
-                width,
-                h - 2.0,
-                packed(-2005124371),
+        view.rounded(x + 10.0, y + 26.0, 294.0, 24.0, 12.0, color::raised());
+        if state.ui.view_tab == 0 {
+            let track = height - 60.0;
+            let max_scroll = hand_scroll_max(height);
+            let thumb = track * track / (track + max_scroll);
+            let fraction = (state.ui.view_scroll / max_scroll).clamp(0.0, 1.0);
+            view.rounded(x + 373.0, y + 54.0, 2.0, track, 1.0, color::raised());
+            view.rounded(
+                x + 373.0,
+                y + 54.0 + (track - thumb) * fraction,
+                2.0,
+                thumb,
+                1.0,
+                color::hover(),
             );
-            batch.fill(atlas, sx, sy, w, 1.0, packed(1148992237));
-            batch.fill(atlas, sx, sy + h - 1.0, w, 1.0, packed(1148992237));
-            batch.fill(atlas, sx + width - 1.0, sy, 4.0, h, packed(-4160260));
-            batch.text(
-                atlas,
-                &lang::get(key),
-                sx + 6.0,
-                sy + 5.0,
-                packed(-2039584),
-                false,
-            );
-            let text = format!("{value:.2}");
-            batch.text(
-                atlas,
-                &format!("§f§l{text}"),
-                sx + w - HudBatch::text_width(atlas, &text) - 6.0,
-                sy + 5.0,
-                u32::MAX,
-                false,
-            );
-            batch.clip_since(clip_start, x + 4.0, y + 54.0, x + 376.0, y + 264.0);
         }
-        let max_scroll = if self.atlas_ports.actions.ui.view_tab == 0 {
-            85.0
-        } else {
-            0.0
-        };
-        if max_scroll > 0.0 {
-            let content_height = 210.0_f32;
-            let thumb_height = (content_height * content_height / (content_height + max_scroll))
-                .floor()
-                .max(20.0);
-            let thumb_y = y
-                + 54.0
-                + (self.atlas_ports.actions.ui.view_scroll / max_scroll
-                    * (content_height - thumb_height))
-                    .floor();
-            batch.fill(
-                atlas,
-                x + 372.0,
-                y + 54.0,
-                4.0,
-                content_height,
-                packed(855638016),
+        view.finish();
+
+        let picking = state.ui.view_pick.is_some();
+        for (rect, _, key, value, min, max) in self.actions_view_sliders(batch) {
+            let [sx, sy, w, h] = rect;
+            let track = [sx + 5.0, w - 10.0];
+            let norm = ((value - min) / (max - min)).clamp(0.0, 1.0);
+            let label = lang::get(key);
+            let number = format!("{value:.2}");
+            let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+            let start = view.batch.vertices.len();
+            let extent = track[1] * norm;
+            let thumb = track[0] + extent;
+            view.rounded(sx, sy, w, h, 7.0, color::raised());
+            view.rounded(track[0], sy + 14.0, track[1], 1.5, 1.0, color::hover());
+            view.rounded(track[0], sy + 14.0, extent, 1.5, 1.0, color::accent());
+            view.rounded(thumb - 2.0, sy + 13.0, 4.0, 4.0, 2.0, color::text());
+            view.text_line(Face::Medium, 9.0, 13.0, sx + 9.0, sy, color::text(), &label);
+            let number_w = view.measure(Face::Mono, 9.0, &number);
+            view.text_line(
+                Face::Mono,
+                9.0,
+                13.0,
+                sx + w - number_w - 9.0,
+                sy,
+                color::muted(),
+                &number,
             );
-            batch.fill(
+            view.batch
+                .clip_since(start, x + 4.0, y + 54.0, x + 376.0, clip_bottom);
+            view.finish();
+
+            let top = sy.max(y + 54.0);
+            let bottom = (sy + h).min(clip_bottom);
+            if !picking && bottom > top {
+                let hit_rect = [sx, top, w, bottom - top];
+                let kind = widgets::Kind::Slider { value: norm, track };
+                widgets::record_as(&format!("{label}: {number}"), hit_rect, true, kind);
+                widgets::target_as(hit_rect, kind);
+                widgets::narratable(|| {
+                    widgets::Narratable::slider(label, hit_rect, true).hovered(hit(
+                        hit_rect,
+                        self.cursor.0,
+                        self.cursor.1,
+                    ))
+                });
+            }
+        }
+
+        let mut show_reset_hint = false;
+        for control in self.actions_buttons(batch) {
+            let [bx, by, bw, bh] = control.rect;
+            let start = batch.vertices.len();
+            let [top, bottom] = if view_content(&control.action) {
+                [by.max(y + 54.0), (by + bh).min(clip_bottom)]
+            } else {
+                [by, by + bh]
+            };
+            if bottom <= top {
+                continue;
+            }
+            let hit_rect = [bx, top, bw, bottom - top];
+            let hover = !picking && hit(hit_rect, self.cursor.0, self.cursor.1);
+            let mut label = control.label.plain();
+            if matches!(control.action, Action::ViewSwing) {
+                label = format!("{} {}", lang::get("atlas.viewmodel.swing_type"), label);
+            }
+            if !picking {
+                widgets::record(&label, hit_rect, true);
+                widgets::target(hit_rect);
+                widgets::widget_cursor(hover, true);
+                widgets::narratable(|| {
+                    widgets::Narratable::button(label.clone(), hit_rect, true).hovered(hover)
+                });
+            }
+            let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+            let on = match control.action {
+                Action::ViewTab(i) => state.ui.view_tab == i,
+                Action::ViewHand(main) => state.ui.view_main == main,
+                Action::ViewToggle(i) => match i {
+                    0 => state.viewmodel.interactive,
+                    1 => state.viewmodel.outline,
+                    2 => state.viewmodel.only_target,
+                    _ => state.viewmodel.auto_swing,
+                },
+                _ => false,
+            };
+            let radius = (bh / 2.0).min(11.0);
+            view.rounded(
+                bx,
+                by,
+                bw,
+                bh,
+                radius,
+                if hover || (on && !matches!(control.action, Action::ViewToggle(_))) {
+                    color::hover()
+                } else {
+                    color::raised()
+                },
+            );
+            if hover || (on && !matches!(control.action, Action::ViewToggle(_))) {
+                view.border(
+                    bx,
+                    by,
+                    bw,
+                    bh,
+                    radius,
+                    if hover {
+                        color::accent()
+                    } else {
+                        color::border()
+                    },
+                );
+            }
+            match control.action {
+                Action::ViewToggle(_) => {
+                    view.text_line(Face::Medium, 9.0, bh, bx + 9.0, by, color::text(), &label);
+                    let sx = bx + bw - 29.0;
+                    let sy = by + (bh - 11.0) / 2.0;
+                    view.rounded(
+                        sx,
+                        sy,
+                        22.0,
+                        11.0,
+                        5.5,
+                        if on { color::accent() } else { color::hover() },
+                    );
+                    view.rounded(
+                        sx + if on { 12.0 } else { 2.0 },
+                        sy + 1.5,
+                        8.0,
+                        8.0,
+                        4.0,
+                        if on {
+                            color::on_accent()
+                        } else {
+                            color::text()
+                        },
+                    );
+                }
+                Action::ViewSwing => {
+                    let heading = lang::get("atlas.viewmodel.swing_type");
+                    view.text_line(
+                        Face::Medium,
+                        10.0,
+                        bh,
+                        bx + 10.0,
+                        by,
+                        color::text(),
+                        &heading,
+                    );
+                    let name = state.viewmodel.swing.display_name();
+                    let name_w = view.measure(Face::SemiBold, 10.0, name);
+                    let chip_x = bx + bw - name_w - 33.0;
+                    view.rounded(
+                        chip_x,
+                        by + 4.0,
+                        name_w + 26.0,
+                        bh - 8.0,
+                        8.0,
+                        color::raised(),
+                    );
+                    view.text_line(
+                        Face::SemiBold,
+                        10.0,
+                        bh,
+                        chip_x + 7.0,
+                        by,
+                        color::text(),
+                        name,
+                    );
+                    let cx = bx + bw - 15.0;
+                    let cy = by + bh / 2.0;
+                    view.batch.fill_triangle(
+                        atlas,
+                        [[cx - 2.5, cy - 1.0], [cx + 2.5, cy - 1.0], [cx, cy + 2.0]],
+                        color::muted(),
+                    );
+                    show_reset_hint = hover;
+                }
+                _ => {
+                    let size = if matches!(control.action, Action::Close) {
+                        12.0
+                    } else {
+                        9.5
+                    };
+                    let width = view.measure(Face::Medium, size, &label);
+                    view.text_line(
+                        Face::Medium,
+                        size,
+                        bh,
+                        bx + (bw - width) / 2.0,
+                        by,
+                        color::text(),
+                        &label,
+                    );
+                }
+            }
+            view.batch.clip_since(start, bx, top, bx + bw, bottom);
+            view.finish();
+        }
+
+        if let Some(focused) = state.ui.view_pick {
+            let rect = swing_picker(batch.width, batch.height);
+            let [mx, my, mw, mh] = rect;
+            let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+            view.rounded(mx, my, mw, mh, 12.0, rgba(15, 19, 25, 255));
+            view.border(mx, my, mw, mh, 12.0, color::hover());
+            for (i, swing) in viewmodel::Swing::ALL.into_iter().enumerate() {
+                let r @ [rx, ry, rw, rh] = swing_picker_row(rect, i);
+                let hover = hit(r, self.cursor.0, self.cursor.1);
+                let selected = swing == state.viewmodel.swing;
+                let name = swing.display_name();
+                widgets::record(name, r, true);
+                widgets::target(r);
+                widgets::widget_cursor(hover, true);
+                widgets::narratable(|| widgets::Narratable::button(name, r, true).hovered(hover));
+                if hover || selected || i == focused {
+                    view.rounded(rx, ry, rw, rh, 6.0, color::hover());
+                }
+                view.text_line(Face::Medium, 9.5, rh, rx + 8.0, ry, color::text(), name);
+                if selected {
+                    view.rounded(rx + rw - 12.0, ry + 5.0, 4.0, 4.0, 2.0, color::accent());
+                }
+            }
+            view.finish();
+        } else if show_reset_hint {
+            ui::tooltip(
+                batch,
                 atlas,
-                x + 372.0,
-                thumb_y,
-                4.0,
-                thumb_height,
-                packed(-2004132618),
+                &[tr("atlas.viewmodel.swing_reset_hint")],
+                self.cursor,
             );
         }
     }
@@ -693,8 +898,7 @@ impl Game<'_> {
             }
             Some(id) if id == IDS[7] => {
                 let s = &self.atlas_ports.actions;
-                let x = (w - 380.0) / 2.0;
-                let y = (h - 270.0) / 2.0;
+                let [x, y, ..] = view_panel(w, h);
                 out.push(button(
                     [x + 14.0, y + 28.0, 140.0, 20.0],
                     tr("atlas.viewmodel.tab.hand"),
@@ -707,7 +911,7 @@ impl Game<'_> {
                 ));
                 out.push(button(
                     [x + 356.0, y + 10.0, 14.0, 14.0],
-                    Text::literal("✕"),
+                    Text::literal("×"),
                     Action::Close,
                 ));
                 let y = y + 54.0 - s.ui.view_scroll;
@@ -744,8 +948,8 @@ impl Game<'_> {
                     ));
                 } else {
                     out.push(button(
-                        [x + 18.0, y, 344.0, 24.0],
-                        Text::literal(s.viewmodel.swing.name()),
+                        swing_selector(w, h),
+                        Text::literal(s.viewmodel.swing.display_name()),
                         Action::ViewSwing,
                     ));
                     out.push(button(
@@ -805,10 +1009,13 @@ impl Game<'_> {
         );
     }
     pub(in crate::game) fn atlas_actions_draw(&mut self, batch: &mut HudBatch) {
-        let _font = atlas_client::font::java_mod_font_scope();
-        self.atlas_inventory_draw(batch);
         self.actions_draw_viewmodel_chat(batch);
         let screen = self.native_mod_screen().map(str::to_owned);
+        if screen.as_deref() == Some(IDS[7]) {
+            self.actions_draw_viewmodel(batch);
+            return;
+        }
+        self.atlas_inventory_draw(batch);
         let atlas = &self.gui.atlas;
         if screen.as_deref() == Some(IDS[2]) {
             let s = &self.atlas_ports.actions;
@@ -856,8 +1063,7 @@ impl Game<'_> {
                     .take(6)
                 {
                     let y = 44.0 + (i - s.ui.hot_page * 6) as f32 * 30.0;
-                    batch.fill(atlas, x, y, lw, 26.0, packed(-2011684824));
-                    border(batch, atlas, [x, y, lw, 26.0], packed(1430541670));
+                    mod_style::panel(batch, atlas, [x, y, lw, 26.0], 8.0);
                     self.actions_icon(batch, item, x + 4.0, y + 5.0);
                     let name = if item.name.is_empty() {
                         lang::get("atlas.hotcommands.editor.unnamed")
@@ -916,13 +1122,8 @@ impl Game<'_> {
                 );
             }
         }
-        if screen.as_deref() == Some(IDS[7]) {
-            self.actions_draw_viewmodel(batch);
-        }
         let mut tooltip: Option<Vec<Text>> = None;
         for b in self.actions_buttons(batch) {
-            let clip_content = screen.as_deref() == Some(IDS[7]) && view_content(&b.action);
-            let clip_start = batch.vertices.len();
             let hover = hit(b.rect, self.cursor.0, self.cursor.1);
             if hover {
                 match b.action {
@@ -969,20 +1170,32 @@ impl Game<'_> {
             let [x, y, w, h] = b.rect;
             if let Some(item) = b.custom {
                 let atlas = &self.gui.atlas;
-                batch.fill(
-                    atlas,
+                let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+                view.rounded(
                     x,
                     y,
                     w,
                     h,
-                    packed(if hover { -584963014 } else { -1156507614 }),
+                    8.0,
+                    if hover {
+                        color::hover()
+                    } else {
+                        color::raised()
+                    },
                 );
-                border(
-                    batch,
-                    atlas,
-                    b.rect,
-                    packed(if hover { -13058568 } else { -1440008891 }),
+                view.border(
+                    x,
+                    y,
+                    w,
+                    h,
+                    8.0,
+                    if hover {
+                        color::accent()
+                    } else {
+                        color::border()
+                    },
                 );
+                view.finish();
                 self.actions_icon(batch, &item, x + 4.0, y + (h - 16.0) / 2.0);
                 let atlas = &self.gui.atlas;
                 let max = w - 36.0 - if item.children.is_empty() { 0.0 } else { 12.0 };
@@ -1015,129 +1228,8 @@ impl Game<'_> {
                         true,
                     );
                 }
-            } else if screen.as_deref() == Some(IDS[7]) {
-                let atlas = &self.gui.atlas;
-                let s = &self.atlas_ports.actions;
-                match b.action {
-                    Action::ViewToggle(i) => {
-                        let on = match i {
-                            0 => s.viewmodel.interactive,
-                            1 => s.viewmodel.outline,
-                            2 => s.viewmodel.only_target,
-                            _ => s.viewmodel.auto_swing,
-                        };
-                        batch.text_styled(atlas, &b.label, x, y + 3.0, packed(-2236963), false);
-                        let px = x + w - 32.0;
-                        batch.fill(
-                            atlas,
-                            px,
-                            y,
-                            32.0,
-                            14.0,
-                            packed(if on { -8635667 } else { 1714626900 }),
-                        );
-                        batch.fill(
-                            atlas,
-                            if on { px + 20.0 } else { px + 2.0 },
-                            y + 2.0,
-                            10.0,
-                            10.0,
-                            u32::MAX,
-                        );
-                    }
-                    Action::Close => {
-                        batch.text(
-                            atlas,
-                            "✕",
-                            x,
-                            y,
-                            if hover {
-                                packed(-43691)
-                            } else {
-                                packed(-7829368)
-                            },
-                            false,
-                        );
-                    }
-                    Action::ViewSwing => {
-                        batch.fill(
-                            atlas,
-                            x,
-                            y,
-                            w,
-                            h,
-                            packed(if hover { -2006112039 } else { 1145838997 }),
-                        );
-                        batch.fill(atlas, x, y, 3.0, h, packed(-5745161));
-                        batch.text(
-                            atlas,
-                            &lang::get("atlas.viewmodel.swing_type"),
-                            x + 12.0,
-                            y + 8.0,
-                            packed(-3355444),
-                            false,
-                        );
-                        let name = format!(
-                            "§d§l{} {}",
-                            s.viewmodel.swing.display_name(),
-                            lang::get("atlas.viewmodel.swing_cycle_hint")
-                        );
-                        batch.text(
-                            atlas,
-                            &name,
-                            x + w - HudBatch::text_width(atlas, &name) - 12.0,
-                            y + 8.0,
-                            u32::MAX,
-                            false,
-                        );
-                    }
-                    _ => {
-                        let selected = match b.action {
-                            Action::ViewTab(i) => s.ui.view_tab == i,
-                            Action::ViewHand(main) => s.ui.view_main == main,
-                            _ => false,
-                        };
-                        let reset = matches!(b.action, Action::ViewReset(_));
-                        let color = if reset {
-                            if hover { -1713625562 } else { 1436097307 }
-                        } else if selected {
-                            if matches!(b.action, Action::ViewTab(_)) {
-                                -9623335
-                            } else {
-                                -8635667
-                            }
-                        } else if hover {
-                            1716264341
-                        } else {
-                            858656869
-                        };
-                        batch.fill(atlas, x, y, w, h, packed(color));
-                        center(
-                            batch,
-                            atlas,
-                            &format!(
-                                "{}{}",
-                                if reset {
-                                    ""
-                                } else if selected {
-                                    "§f§l"
-                                } else {
-                                    "§7"
-                                },
-                                b.label.plain()
-                            ),
-                            x + w / 2.0,
-                            y + 6.0,
-                            if selected || reset {
-                                u32::MAX
-                            } else {
-                                packed(-7829368)
-                            },
-                        );
-                    }
-                }
             } else {
-                ui::button(
+                mod_style::button(
                     batch,
                     &self.gui.atlas,
                     x,
@@ -1148,11 +1240,6 @@ impl Game<'_> {
                     b.active,
                     hover,
                 );
-            }
-            if clip_content {
-                let x = (batch.width - 380.0) / 2.0;
-                let y = (batch.height - 270.0) / 2.0;
-                batch.clip_since(clip_start, x + 4.0, y + 54.0, x + 376.0, y + 264.0);
             }
         }
         if screen.as_deref() == Some(IDS[2])
@@ -1273,6 +1360,7 @@ impl Game<'_> {
     fn actions_press(&mut self, action: Action) {
         match action {
             Action::Close => {
+                self.atlas_ports.actions.ui.view_pick = None;
                 if let Some(id) = self.native_mod_screen().map(str::to_owned) {
                     self.native_mod_screen_close(&id);
                 }
@@ -1384,6 +1472,7 @@ impl Game<'_> {
                 s.ui.view_tab = i;
                 s.ui.view_scroll = 0.0;
                 s.ui.view_slider = None;
+                s.ui.view_pick = None;
             }
             Action::ViewHand(main) => self.atlas_ports.actions.ui.view_main = main,
             Action::ViewSwing => {
@@ -1392,8 +1481,7 @@ impl Game<'_> {
                     .iter()
                     .position(|v| *v == s.viewmodel.swing)
                     .unwrap_or(0);
-                s.viewmodel.swing = viewmodel::Swing::ALL[(i + 1) % 13];
-                s.save_viewmodel();
+                s.ui.view_pick = Some(i);
             }
             Action::ViewToggle(i) => {
                 let s = &mut self.atlas_ports.actions;
@@ -1426,8 +1514,13 @@ impl Game<'_> {
             }
         }
     }
+    fn actions_select_swing(&mut self, swing: viewmodel::Swing) {
+        let state = &mut self.atlas_ports.actions;
+        state.ui.view_pick = None;
+        state.viewmodel.swing = swing;
+        state.save_viewmodel();
+    }
     pub(in crate::game) fn atlas_actions_mouse(&mut self, button: i32, pressed: bool) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if !pressed {
             self.atlas_ports.actions.ui.view_slider = None;
             return false;
@@ -1454,17 +1547,34 @@ impl Game<'_> {
                 }
             }
         }
-        if self.native_mod_screen() == Some(IDS[7])
-            && button == 0
-            && self.actions_view_slider(&batch, x, y)
-        {
-            return true;
+        if self.native_mod_screen() == Some(IDS[7]) {
+            let swing_tab = self.atlas_ports.actions.ui.view_tab == 1;
+            if swing_tab && button == 1 && hit(swing_selector(batch.width, batch.height), x, y) {
+                self.actions_select_swing(viewmodel::Swing::Standard);
+                return true;
+            }
+            if self.atlas_ports.actions.ui.view_pick.is_some() {
+                if button == 0 {
+                    let menu = swing_picker(batch.width, batch.height);
+                    self.atlas_ports.actions.ui.view_pick = None;
+                    for (i, swing) in viewmodel::Swing::ALL.into_iter().enumerate() {
+                        if hit(swing_picker_row(menu, i), x, y) {
+                            self.actions_select_swing(swing);
+                            break;
+                        }
+                    }
+                }
+                return true;
+            }
+            if button == 0 && self.actions_view_slider(&batch, x, y) {
+                return true;
+            }
         }
+        let [_, panel_y, _, panel_h] = view_panel(batch.width, batch.height);
         for b in self.actions_buttons(&batch) {
             if self.native_mod_screen() == Some(IDS[7])
                 && view_content(&b.action)
-                && (y < (batch.height - 270.0) / 2.0 + 54.0
-                    || y > (batch.height + 270.0) / 2.0 - 6.0)
+                && (y < panel_y + 54.0 || y >= panel_y + panel_h - 6.0)
             {
                 continue;
             }
@@ -1507,7 +1617,6 @@ impl Game<'_> {
         ctrl: bool,
         shift: bool,
     ) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_key(key, ctrl, shift) {
             return true;
         }
@@ -1551,10 +1660,34 @@ impl Game<'_> {
             }
             return true;
         }
-        self.native_mod_screen() == Some(IDS[7]) && key != KeyCode::Escape
+        if self.native_mod_screen() != Some(IDS[7]) {
+            return false;
+        }
+        let state = &mut self.atlas_ports.actions;
+        if let Some(i) = state.ui.view_pick {
+            let count = viewmodel::Swing::ALL.len();
+            match key {
+                KeyCode::Escape => state.ui.view_pick = None,
+                KeyCode::Enter | KeyCode::Space | KeyCode::NumpadEnter => {
+                    self.actions_select_swing(viewmodel::Swing::ALL[i]);
+                }
+                KeyCode::ArrowUp => state.ui.view_pick = Some((i + count - 1) % count),
+                KeyCode::ArrowDown => state.ui.view_pick = Some((i + 1) % count),
+                KeyCode::Home => state.ui.view_pick = Some(0),
+                KeyCode::End => state.ui.view_pick = Some(count - 1),
+                _ => {}
+            }
+            return true;
+        }
+        if state.ui.view_tab == 1
+            && matches!(key, KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space)
+        {
+            self.actions_press(Action::ViewSwing);
+            return true;
+        }
+        key != KeyCode::Escape
     }
     pub(in crate::game) fn atlas_actions_screen_char(&mut self, text: &str) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_char(text) {
             return true;
         }
@@ -1571,7 +1704,6 @@ impl Game<'_> {
         false
     }
     pub(in crate::game) fn atlas_actions_scroll(&mut self, delta: f32) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_scroll(delta) {
             return true;
         }
@@ -1597,8 +1729,17 @@ impl Game<'_> {
             return true;
         }
         if self.native_mod_screen() == Some(IDS[7]) {
+            let Some(renderer) = &self.renderer else {
+                return true;
+            };
+            let batch = HudBatch::new([renderer.config.width, renderer.config.height]);
+            let [_, _, _, panel_height] = view_panel(batch.width, batch.height);
             let s = &mut self.atlas_ports.actions;
-            let max = if s.ui.view_tab == 0 { 85.0 } else { 0.0 };
+            let max = if s.ui.view_tab == 0 {
+                hand_scroll_max(panel_height)
+            } else {
+                0.0
+            };
             s.ui.view_scroll = (s.ui.view_scroll - (delta * 16.0).trunc()).clamp(0.0, max);
             return true;
         }
@@ -1616,7 +1757,6 @@ impl Game<'_> {
         false
     }
     pub(in crate::game) fn atlas_actions_drag(&mut self, button: i32, dx: f32, dy: f32) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if self.screen == Screen::Chat && self.atlas_port_on(IDS[7]) {
             let shift = self.has_shift_down();
             let s = &mut self.atlas_ports.actions;

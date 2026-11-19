@@ -376,6 +376,21 @@ impl<'a> Ui<'a> {
         let scale = batch.scale;
         let (pw, ph) = (batch.width * scale, batch.height * scale);
         let density = (pw / 1040.0).min(ph / 700.0).clamp(1.0, 4.0);
+        Self::with_density(atlas, batch, cursor, density)
+    }
+    /// Draw in GUI coordinates so a styled overlay matches its input layout.
+    pub fn at_gui_scale(atlas: &'a HudAtlas, batch: &'a mut HudBatch, cursor: (f32, f32)) -> Self {
+        let scale = batch.scale;
+        Self::with_density(atlas, batch, cursor, scale)
+    }
+    fn with_density(
+        atlas: &'a HudAtlas,
+        batch: &'a mut HudBatch,
+        cursor: (f32, f32),
+        density: f32,
+    ) -> Self {
+        let scale = batch.scale;
+        let (pw, ph) = (batch.width * scale, batch.height * scale);
         Self {
             atlas,
             w: pw / density,

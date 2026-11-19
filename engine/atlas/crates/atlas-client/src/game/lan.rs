@@ -1450,6 +1450,7 @@ impl Game<'_> {
         let lan = Lan::start_with(sync.clone(), net)?;
         let mut hub = Hub::new(lan, sync, encoder, config);
         hub.sync_attachments = !crate::mod_api::mods().is_empty();
+        hub.saturation_plus = self.ui.rules.saturation_plus().is_some();
         hub.flat_world = self.world_flat;
         hub.debug_world = self.world_debug;
         let port = hub.lan.port;
@@ -2658,6 +2659,7 @@ impl Game<'_> {
         // drops remain absent from the snapshot until the following tick.
         if !paused {
             atlas_client::spans::time("lan_guests", || self.tick_guests(&mut host));
+            self.saturation_plus_sync_guests(&mut host);
             self.appleskin_sync_guests(&host);
             // The vehicles the guests just moved enter their portals now.
             let ridden: Vec<u32> = host.hub.guests.iter().filter_map(|g| g.vehicle).collect();

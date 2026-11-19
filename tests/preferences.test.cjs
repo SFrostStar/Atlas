@@ -12,14 +12,22 @@ function fixture(t){
 test('appearance defaults migrate without rewriting older instance data; changes persist',t=>{
   const store=fixture(t);
   assert.equal(store.getState().settings.language,'ru');
-  store.saveSettings({language:'en',theme:'light',accentColor:'blue',heroStyle:'sunset',showHeroText:false,reducedMotion:true});
+  store.saveSettings({language:'en',accentColor:'blue',heroStyle:'minimal',showHeroText:false,reducedMotion:true});
   const reloaded=new LauncherStore(store.projectRoot).getState();
   assert.equal(reloaded.settings.language,'en');
-  assert.equal(reloaded.settings.theme,'light');
+  assert.equal(reloaded.settings.theme,'dark');
+  assert.equal(reloaded.settings.heroStyle,'minimal');
   assert.equal(reloaded.settings.showHeroText,false);
   assert.equal(reloaded.settings.reducedMotion,true);
-  for(const patch of [{language:'de'},{theme:'auto'},{accentColor:'url(x)'},{heroStyle:'custom'},{showHeroText:'false'},{reducedMotion:1}])assert.throws(()=>store.saveSettings(patch));
+  for(const patch of [{language:'de'},{theme:'light'},{accentColor:'url(x)'},{heroStyle:'sunset'},{showHeroText:'false'},{reducedMotion:1}])assert.throws(()=>store.saveSettings(patch));
   assert.equal(store.getState().settings.language,'en');
+  Object.assign(store.config.settings,{theme:'light',heroStyle:'sunset'});
+  store.save();
+  const migrated=new LauncherStore(store.projectRoot).getState();
+  assert.equal(migrated.settings.theme,'dark');
+  assert.equal(migrated.settings.heroStyle,'landscape');
+  assert.equal(migrated.settings.accentColor,'blue');
+  assert.deepEqual(migrated.instances,reloaded.instances);
 });
 test('memory budgets are validated, per instance, persisted and passed only to child',t=>{
   const store=fixture(t);

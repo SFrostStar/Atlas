@@ -10,12 +10,17 @@ impl Game<'_> {
     /// open screen (`hud_layers` draws `Playing` then). Client only,
     /// read-only: what a mod draws is its own.
     pub(super) fn fire_screen_render_post(&mut self, batch: &mut HudBatch) {
+        if self.atlas_ias_active() {
+            self.atlas_ias_draw(batch);
+            return;
+        }
         let _font = atlas_client::font::java_mod_font_scope();
         self.atlas_actions_draw(batch);
         self.atlas_visual_screen_render(batch);
         self.atlas_config_render(batch);
         self.atlas_aspect_render(batch);
         self.atlas_esc_music_render(batch);
+        self.atlas_mouse_tweaks_render(batch);
         let screen = self.screen;
         if screen == Screen::Playing || self.server_packs.prompt.is_some() || self.book.is_some() {
             return;
@@ -32,6 +37,7 @@ impl Game<'_> {
     /// its own), nor while a dialog, a prompt or a connect or load hides it.
     /// Client only, read-only: what a mod draws is its own.
     pub(super) fn fire_title_screen_render_post(&mut self, batch: &mut HudBatch) {
+        self.atlas_ias_draw_badge(batch);
         let _font = atlas_client::font::java_mod_font_scope();
         self.atlas_actions_draw(batch);
         self.atlas_visual_screen_render(batch);

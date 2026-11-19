@@ -17,7 +17,8 @@ let modsSource = 'atlas';
 let modsSearch = '';
 let modsBusy = false;
 let settingsAnchor = 'appearance';
-let instancesTab = 'files';
+let selectedLogId = null;
+let anotherGameInstanceId = null;
 let renderedView = null;
 let viewAnimation;
 let accountPickerPage = "list";
@@ -121,7 +122,6 @@ document.addEventListener('submit',async event=>{
 function syncSceneFocus() {
   document.body.dataset.focusSurface = String(currentPage !== 'home' || currentTab !== 'overview' || Boolean(contextMenuState));
 }
-const titles = { home: 'Главная', instances: 'Мои сборки', workshop: 'Мастерская', settings: 'Настройки', logs: 'Журнал запуска' };
 const accents = AtlasInstanceOptions.colors;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
@@ -130,7 +130,6 @@ const gameSessions = () => state.game?.sessions || [];
 const activeGameSession = () => gameSessions().find(session => session.id === selectedGameSessionId)
   || gameSessions().find(session => session.instanceId === state.selectedId)
   || gameSessions()[0];
-const sessionDisplayName = session => session.isolated ? session.name.replace(/ · ещё окно$/, ` · ${tr('ещё окно')}`) : session.name;
 const selectedInstanceRunning = () => gameSessions().length
   ? gameSessions().some(session => session.instanceId === state.selectedId)
   : Boolean(state.game?.running && state.game.instanceId === state.selectedId);
@@ -236,7 +235,8 @@ function homePage() {
   const instance = selected();
   const selectedRunning = selectedInstanceRunning();
   const top = intro('Главная', '');
-  const status=selectedRunning?'Игра запущена':installActive()?'Подготовка игры':state.install && !state.install.ready?'Нужна подготовка игры':state.runtimeAvailable?'Готово к запуску':'Выбери клиент в настройках';
+  const nativeStatus = nativeBuildLabel();
+  const status=nativeStatus || (selectedRunning?'Игра запущена':installActive()?'Подготовка игры':state.install && !state.install.ready?'Нужна подготовка игры':state.runtimeAvailable?'Готово к запуску':'Выбери клиент в настройках');
   return top + `<div class="home-overview"><section class="hero" aria-label="Пейзаж Atlas"><div class="hero-copy"><p class="hero-status"><span class="status-dot"></span><strong>${status}</strong><span data-user-text> · ${escapeHtml(instance.name)} · ${(instance.memoryMb||4096)/1024} ${tr('ГБ')}</span>${selectedRunning?` · <span class="playtime" data-session-id="${activeGameSession()?.id}"></span>`:''}</p><h2>Твой мир.<br>Твои правила.</h2></div></section>
   <div class="home-launch-actions"><div class="launch-bar">${selectedRunning ? button('game-menu','Игра запущена','chevron-down','running launch-button',`aria-haspopup="menu" aria-expanded="${contextMenuState?.type==='game'}" ${pendingGameAction?'disabled':''}`) : button('launch',busy?'Запускаем…':installActive()?'Подготовка игры':'Играть','play','primary launch-button',busy||pendingGameAction||installActive()?'disabled':'')}</div><div id="home-dock-slot"></div></div></div>`;
 }
@@ -245,15 +245,15 @@ function modsPage() {
   const items=(modsSource==='atlas'?data.ports:data.horizon).filter(m=>`${m.name} ${m.description||m.summary||''}`.toLowerCase().includes(modsSearch.toLowerCase()));
   const blocked=modsBusy||selectedInstanceRunning();
   const action=(m,kind,label,glyph='download')=>button('change-mod',tr(label),glyph,kind==='install'?'primary':'secondary',`data-mod="${escapeHtml(m.id)}" data-source="${modsSource}" data-mod-action="${kind}" ${blocked?'disabled':''}`);
-  return `<section class="mods-section"><div class="mods-toolbar"><div class="mods-sources" role="group" aria-label="${tr('Каталог модов')}">${[['atlas','Atlas Rust'],['horizon','Horizon']].map(([id,label])=>`<button type="button" class="tab ${modsSource===id?'active':''}" data-mods-source="${id}">${label}</button>`).join('')}</div><input type="search" name="mod-search" value="${escapeHtml(modsSearch)}" placeholder="${tr('Поиск модов')}" aria-label="${tr('Поиск модов')}">${modsSource==='horizon'?button('refresh-mods',tr(modsBusy?'Загрузка…':'Обновить'),'refresh-cw','secondary',modsBusy?'disabled':''):''}</div>
-  <div class="mods-caption"><strong>${escapeHtml(selected().name)}</strong><span>${tr(selectedInstanceRunning()?'Закрой игру для изменения модов.':'Моды применяются при следующем запуске игры.')}</span></div>
+  return intro('<span data-user-text>Mods</span>', '') + `<section class="mods-section"><div class="mods-toolbar"><div class="mods-sources" role="group" aria-label="${tr('Каталог модов')}">${[['atlas','Atlas'],['horizon','Horizon']].map(([id,label])=>`<button type="button" class="tab ${modsSource===id?'active':''}" data-mods-source="${id}">${label}</button>`).join('')}</div><input type="search" name="mod-search" value="${escapeHtml(modsSearch)}" placeholder="${tr('Поиск модов')}" aria-label="${tr('Поиск модов')}">${modsSource==='horizon'?button('refresh-mods',tr(modsBusy?'Загрузка…':'Обновить'),'refresh-cw','secondary',modsBusy?'disabled':''):''}</div>
+  ${selectedInstanceRunning()?'<div class="mods-caption"><span>Закрой игру для изменения модов.</span></div>':''}
   ${modsSource==='horizon'?`<p class="subtitle">${tr('Каталог Horizon. Доступные аналоги Atlas отмечены отдельно; остальным нужна адаптация и нативная сборка.')}</p>`:''}
   ${data.error?`<p class="mods-error">${escapeHtml(tr(data.error))}</p>`:''}
   <div class="mods-grid">${items.map(m=>{
     const adapted=modsSource==='horizon'&&Boolean(m.port),installable=modsSource==='atlas'||adapted;
     const description=modsSource==='atlas'?(en?m.descriptionEn:m.description):adapted?tr('Доступна встроенная версия приближения Atlas по клавише C.'):m.summary;
     const scope=modsSource==='atlas'?(en?m.scopeEn:m.scope):adapted?tr('Аналог Atlas: приближение 4× по C. Исходный мод Horizon не устанавливается.'):tr(m.kind==='native-mod'?'Нужна адаптация нативной сборки.':'WebAssembly-моду нужна новая реализация.');
-    return `<article class="mod-card"><div class="mod-card-title"><span class="mod-icon">${icon(m.icon||'package')}</span><div><h3>${escapeHtml(m.name)}</h3><span class="tag">${tr(adapted?'Аналог Atlas':modsSource==='atlas'?'Rust · Atlas':'Horizon')} ${m.version&&!adapted?escapeHtml(m.version):''}</span></div></div><p>${escapeHtml(description)}</p><small>${escapeHtml(scope)}</small><div class="mod-actions">${installable?(m.installed?`${action(m,m.enabled?'disable':'enable',m.enabled?'Выключить':'Включить',m.enabled?'toggle-right':'toggle-left')}${action(m,'remove','Удалить','trash-2')}`:action(m,'install',adapted?'Установить аналог':'Установить')):`<span class="mod-unavailable">${tr('Нужна адаптация')}</span>`}${modsSource==='horizon'?button('mod-page',tr('Страница'),'arrow-up-right','quiet',`data-mod="${escapeHtml(m.id)}"`):''}</div></article>`;
+    return `<article class="mod-card"><div class="mod-card-title"><span class="mod-icon">${icon(m.icon||'package')}</span><div><h3>${escapeHtml(m.name)}</h3><span class="tag">${tr(adapted?'Аналог Atlas':modsSource==='atlas'?'Atlas':'Horizon')} ${m.version&&!adapted?escapeHtml(m.version):''}</span></div></div><p>${escapeHtml(description)}</p><small>${escapeHtml(scope)}</small><div class="mod-actions">${installable?(m.installed?`${action(m,m.enabled?'disable':'enable',m.enabled?'Выключить':'Включить',m.enabled?'toggle-right':'toggle-left')}${action(m,'remove','Удалить','trash-2')}`:action(m,'install',adapted?'Установить аналог':'Установить')):`<span class="mod-unavailable">${tr('Нужна адаптация')}</span>`}${modsSource==='horizon'?button('mod-page',tr('Страница'),'arrow-up-right','quiet',`data-mod="${escapeHtml(m.id)}"`):''}</div></article>`;
   }).join('')}</div>${!items.length?`<div class="empty-state">${tr(modsSource==='horizon'&&!data.horizon.length?'Нажми «Обновить», чтобы загрузить каталог Horizon.':'Моды не найдены.')}</div>`:''}</section>`;
 }
 document.addEventListener('input',event=>{
@@ -262,15 +262,11 @@ document.addEventListener('input',event=>{
 function instancesPage() {
   const instance=selected();
   const tiles=state.instances.map(item=>`<button type="button" class="instance-tile ${item.id===state.selectedId?'selected':''}" data-instance="${item.id}" data-action="select-instance" data-id="${item.id}" aria-pressed="${item.id===state.selectedId}" style="--accent:${accent(item)}">${cube(item)}<strong data-user-text>${escapeHtml(item.name)}</strong><span>${item.id===state.selectedId?'Выбрана':`Atlas ${escapeHtml(state.version)}`}</span></button>`).join('');
-  const tabs=`<div class="instance-detail-tabs" role="tablist" aria-label="Разделы сборки">${[['files','Файлы сборки'],['mods','Моды']].map(([id,label])=>`<button type="button" class="tab ${instancesTab===id?'active':''}" role="tab" aria-selected="${instancesTab===id}" aria-controls="instance-detail-content" data-instance-tab="${id}">${label}</button>`).join('')}</div>`;
-  return `<div class="instances-workspace">${intro('Мои сборки','')}<div class="instance-tiles">${tiles}<button type="button" class="instance-tile instance-tile-new" data-action="new-instance">${icon('plus')}<span>Добавить сборку</span></button></div><section class="instance-details"><h2 data-user-text>${escapeHtml(instance.name)}</h2>${tabs}<div id="instance-detail-content" role="tabpanel" aria-label="${tr(instancesTab==='files'?'Файлы сборки':'Моды')}">${instancesTab==='files'?filePage():modsPage()}</div></section></div>`;
+  return `<div class="instances-workspace">${intro('Мои сборки','')}<div class="instance-tiles">${tiles}<button type="button" class="instance-tile instance-tile-new" data-action="new-instance">${icon('plus')}<span>Добавить сборку</span></button></div><section class="instance-details"><h2><span data-user-text>${escapeHtml(instance.name)}</span> — <span>файлы сборки</span></h2>${filePage()}</section></div>`;
 }
 function filePage() {
   const entries=[['saves','mountain','Сохранённые миры','saves'],['mods','package','Моды','atlas-mods'],['resourcepacks','package-open','Ресурспаки','resourcepacks'],['shaderpacks','sparkles','Шейдерпаки','shaderpacks'],['config','settings-2','Настройки модов','config'],['logs','file-text','Логи игры','logs']];
   return `<div class="instance-folder-list">${entries.map(([kind,glyph,label,folder])=>`<button type="button" class="file-row" data-open="${kind}" aria-label="${tr('Открыть')}: ${escapeHtml(folder)}">${icon(glyph)}<div><strong>${label}</strong><p data-user-text>${folder}</p></div><span class="file-open">Открыть</span></button>`).join('')}</div>`;
-}
-function workshopPage() {
-  return intro('Мастерская', '', button('open-source','Открыть исходники','folder-code','primary')) + `<section class="panel"><div class="panel-heading">${icon('braces')}<h3>Atlas ${escapeHtml(state.version)}</h3></div><div class="settings-row"><div><strong>Исходники</strong><p class="path">${escapeHtml(state.sourceRoot)}</p></div><span class="tag">${state.sourceAvailable?'Готово':'Не найдены'}</span></div><div class="settings-row"><div><strong>Клиент</strong><p class="path">${escapeHtml(state.runtimePath)}</p></div>${button('choose-runtime','Выбрать .exe','folder')}</div></section><div class="workshop-actions">${button('open-guide','Инструкция по изменению игры','book-open','secondary')}</div>`;
 }
 function settingsPage() {
   const categories = [['appearance','palette','Оформление'],['memory','memory-stick','Память сборки'],['discord','radio','Discord'],['updates','download','Обновления'],['files','folder-code','Клиент и исходники']];
@@ -306,7 +302,43 @@ function discordSettingsPanel() {
   return `<section class="panel"><div class="panel-heading">${icon('radio')}<h3>Discord Rich Presence</h3></div><div class="settings-row"><div><strong>Показывать Atlas в Discord</strong><p>${escapeHtml(status)}</p></div><label class="switch"><input type="checkbox" id="discord-presence" ${discord.enabled?'checked':''} aria-label="Показывать Atlas в Discord"><span class="switch-track"></span></label></div><div class="discord-preview"><img src="assets/icon.png" alt=""><div><strong>Atlas</strong><span>The Fastest Minecraft Launcher</span><small>v${escapeHtml(state.version)}</small></div></div>${discord.enabled&&discord.status!=='connected'?`<p class="subtitle">${escapeHtml(discord.error||'')}${button('refresh-discord','Переподключить','refresh-cw','quiet')}</p>`:''}</section>`;
 }
 function logsPage() {
-  return intro('Журнал запуска', '', button('open-logs','Папка логов','folder-open')) + `<div class="log-toolbar"><span class="tag"><span class="status-dot"></span>${state.game?.running?'Игра запущена':'Игра не запущена'}</span></div><div class="log-console" id="log-console">${state.logs?.length?state.logs.map(entry=>escapeHtml(`[${new Date(entry.time).toLocaleTimeString(state.settings.language==='en'?'en-US':'ru-RU')}] ${entry.level==='error'?'ERROR  ':'INFO   '}${entry.message}`)).join('\n'):'Журнал пуст.'}</div>`;
+  return intro('Журнал запуска', '', button('open-logs','Папка логов','folder-open')) + '<div class="log-toolbar" id="log-sessions" role="group" aria-label="Окна игры" hidden></div><div class="log-console" id="log-console" tabindex="0" aria-label="Журнал запуска"></div>';
+}
+let logTimeFormat;
+let logTimeLanguage;
+function renderLaunchLogs() {
+  const consolePanel = document.getElementById('log-console');
+  if (!consolePanel) return;
+  const sessions = state.logSessions || [];
+  const session = sessions.find(item => item.id === selectedLogId) || sessions[0];
+  selectedLogId = session?.id ?? null;
+  const tabs = document.getElementById('log-sessions');
+  tabs.hidden = sessions.length < 2;
+  const buttons = tabs.hidden ? '' : sessions.map(item =>
+    `<button type="button" class="tab${item.id === selectedLogId ? ' active' : ''}" data-log-session="${escapeHtml(item.id)}" aria-pressed="${item.id === selectedLogId}" aria-controls="log-console" data-user-text>${escapeHtml(item.name)}</button>`
+  ).join('');
+  if (buttons !== tabs.innerHTML) {
+    const focusId = tabs.contains(document.activeElement) ? document.activeElement.dataset.logSession : null;
+    tabs.innerHTML = buttons;
+    if (focusId) tabs.querySelector(`[data-log-session="${CSS.escape(focusId)}"]`)?.focus();
+  }
+  if (logTimeLanguage !== state.settings.language) {
+    logTimeLanguage = state.settings.language;
+    logTimeFormat = new Intl.DateTimeFormat(logTimeLanguage === 'en' ? 'en-US' : 'ru-RU', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  }
+  const text = (session?.entries || []).map(({time, level, message}) =>
+    `[${logTimeFormat.format(new Date(time))}] ${level === 'error' ? 'ERROR' : 'INFO '}  ${message}`
+  ).join('\n');
+  const follow = consolePanel.dataset.logId !== selectedLogId
+    || consolePanel.scrollHeight - consolePanel.scrollTop - consolePanel.clientHeight < 12;
+  consolePanel.dataset.logId = selectedLogId ?? '';
+  const previous = consolePanel.textContent;
+  if (text !== previous) {
+    const scroll = consolePanel.scrollTop;
+    if (previous && text.startsWith(previous)) consolePanel.firstChild.appendData(text.slice(previous.length));
+    else consolePanel.textContent = text;
+    consolePanel.scrollTop = follow ? consolePanel.scrollHeight : scroll;
+  }
 }
 function render() {
   if (!state) return;
@@ -334,19 +366,27 @@ function render() {
     : `<span>${escapeHtml(updateLabel())}</span>`;
   document.getElementById('instance-count').textContent = state.instances.length;
   document.getElementById('sidebar-instances').innerHTML = state.instances.map(instance=>`<button class="sidebar-instance ${instance.id===state.selectedId?'selected':''}" data-action="select-instance" data-id="${instance.id}">${cube(instance)}<span>${escapeHtml(instance.name)}</span></button>`).join('');
-  const renderer = {home:homePage,instances:instancesPage,workshop:workshopPage,settings:settingsPage,logs:logsPage};
+  const renderer = {home:homePage,instances:instancesPage,mods:modsPage,settings:settingsPage,logs:logsPage};
   const dock=document.querySelector('.instance-dock');
+  const previousConsole = document.getElementById('log-console');
+  const previousLogTabs = document.getElementById('log-sessions');
   document.querySelector('main').append(dock);
   document.getElementById('content').innerHTML = renderer[currentPage]();
+  if (currentPage === 'logs' && previousConsole) {
+    document.getElementById('log-console').replaceWith(previousConsole);
+    document.getElementById('log-sessions').replaceWith(previousLogTabs);
+  }
   document.getElementById('home-dock-slot')?.append(dock);
   renderAccountPicker();
   hydrateIcons();
   if (contextMenuState) renderContextMenu();
   renderInstall();
+  updateNativeBuild();
   updatePlaytime();
+  renderLaunchLogs();
   AtlasI18n.translateTree(document.body,state.settings.language);
   syncSceneFocus();
-  const view = `${currentPage}:${currentPage==='instances'?instancesTab+':'+state.selectedId:''}`;
+  const view = `${currentPage}:${currentPage==='instances'?state.selectedId:''}`;
   if(renderedView!==null && view!==renderedView) {
     viewAnimation?.cancel();
     if(!motionReduced())viewAnimation=document.getElementById('content').animate([
@@ -401,9 +441,9 @@ function renderContextMenu() {
     if(!session){closeContextMenu();return;}
     const disabled=busy||pendingGameAction||session.status==='stopping'||session.status==='restarting'?'disabled':'';
     const sessions=gameSessions();
-    const choices=sessions.length>1?`${sessions.map((choice,index)=>`<button type="button" role="menuitemradio" aria-checked="${choice.id===session.id}" class="context-item context-session" data-action="choose-game-session" data-session-id="${choice.id}">${icon(choice.id===session.id?'check':'monitor')}<span>${escapeHtml(sessionDisplayName(choice))} · ${index+1}</span></button>`).join('')}<hr>`:'';
+    const choices=sessions.length>1?`${sessions.map(choice=>`<button type="button" role="menuitemradio" aria-checked="${choice.id===session.id}" class="context-item context-session" data-action="choose-game-session" data-session-id="${choice.id}">${icon(choice.id===session.id?'check':'monitor')}<span>${escapeHtml(choice.name)}</span></button>`).join('')}<hr>`:'';
     const attrs=`data-session-id="${session.id}" ${disabled}`;
-    html=`<div class="context-heading">${escapeHtml(sessionDisplayName(session))}</div>${choices}${item('stop-game','Остановить','square',attrs)}${item('restart-game','Перезапуск','rotate-cw',attrs)}${item('another-game','Ещё одно окно','copy-plus',attrs)}`;
+    html=`<div class="context-heading">${escapeHtml(session.name)}</div>${choices}${item('stop-game','Остановить','square',attrs)}${item('restart-game','Перезапуск','rotate-cw',attrs)}${item('another-game','Ещё одно окно','copy-plus',attrs)}`;
     menu.setAttribute('aria-label','Управление игрой');
   }
   if(html!==contextMenuSignature){menu.innerHTML=html;contextMenuSignature=html;hydrateIcons();}
@@ -468,7 +508,7 @@ document.addEventListener('click', async event => {
     render(); return;
   }
   if (control.dataset.tab) { currentTab = control.dataset.tab; render(); return; }
-  if (control.dataset.instanceTab) { instancesTab=control.dataset.instanceTab; render(); return; }
+  if (control.dataset.logSession) { selectedLogId=control.dataset.logSession; renderLaunchLogs(); return; }
   if(control.dataset.modsSource){modsSource=control.dataset.modsSource;render();if(modsSource==='horizon'&&!state.mods?.horizon?.length&&!modsBusy){modsBusy=true;render();try{await invoke(()=>window.atlas.refreshMods());}finally{modsBusy=false;render();}}return;}
   if (control.dataset.open) { await invoke(()=>window.atlas.openFolder(control.dataset.open,control.dataset.id||state.selectedId)); return; }
   const action = control.dataset.action;
@@ -483,6 +523,7 @@ document.addEventListener('click', async event => {
   else if(action==='dismiss-support')await invoke(()=>window.atlas.dismissSupport());
   else if (action === 'close-dialog') document.getElementById('instance-dialog').close();
   else if (action === 'close-delete') document.getElementById('delete-dialog').close();
+  else if (action === 'close-game-window') document.getElementById('game-window-dialog').close();
   else if (action === 'instance-menu' || action === 'game-menu') {
     const rect=control.getBoundingClientRect();
     openContextMenu(action==='game-menu'?'game':'instance',control.dataset.id,rect.right-280,rect.bottom+6,true);
@@ -512,15 +553,20 @@ document.addEventListener('click', async event => {
   else if (['stop-game','restart-game','another-game'].includes(action) && !pendingGameAction) {
     const session = control.dataset.sessionId ? gameSessions().find(item=>item.id===control.dataset.sessionId) : activeGameSession();
     if(!session){notify('Это окно уже закрыто.',true);return;}
+    if (action === 'another-game') {
+      anotherGameInstanceId = session.instanceId;
+      document.getElementById('game-window-form').reset();
+      document.getElementById('game-window-error').textContent = '';
+      document.getElementById('game-window-dialog').showModal();
+      return;
+    }
     const previousIds = new Set(gameSessions().map(item=>item.id));
-    pendingGameAction = action==='stop-game'?'stop':action==='restart-game'?'restart':'another';
+    pendingGameAction = action==='stop-game'?'stop':'restart';
     render();
     try {
       const result = await invoke(() => action==='stop-game'
         ? window.atlas.stopGame(session?.id)
-        : action==='restart-game'
-          ? window.atlas.restartGame(session?.id)
-          : window.atlas.launchAnother(session?.instanceId || state.selectedId));
+        : window.atlas.restartGame(session?.id));
       if (result && action!=='stop-game') {
         const added = result.game?.sessions?.find(item=>!previousIds.has(item.id));
         if (added) selectedGameSessionId = added.id;
@@ -532,7 +578,6 @@ document.addEventListener('click', async event => {
   else if (action === 'open-source') await invoke(()=>window.atlas.openFolder('source'));
   else if (action === 'open-project') await invoke(()=>window.atlas.openFolder('project'));
   else if (action === 'open-logs') await invoke(()=>window.atlas.openFolder('logs'));
-  else if (action === 'open-guide') await invoke(()=>window.atlas.openFolder('guide'));
   else if (action === 'refresh-discord') await invoke(()=>window.atlas.refreshDiscord());
   else if (action === 'check-updates') await invoke(()=>window.atlas.checkUpdates());
   else if (action === 'apply-update') await invoke(()=>window.atlas.applyUpdate());
@@ -542,6 +587,36 @@ document.addEventListener('change', async event => {
   if (element.id === 'game-window') { selectedGameSessionId=element.value;render();return; }
   if (element.id === 'close-on-launch') await invoke(()=>window.atlas.saveSettings({closeOnLaunch:element.checked}));
   if (element.id === 'discord-presence') await invoke(()=>window.atlas.saveSettings({discordRichPresence:element.checked}));
+});
+document.getElementById('game-window-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (pendingGameAction) return;
+  const form = event.currentTarget;
+  const buttons = [...form.querySelectorAll('button')];
+  const windowName = form.elements.windowName.value;
+  const previousIds = new Set(gameSessions().map(session => session.id));
+  const errorMessage = document.getElementById('game-window-error');
+  errorMessage.textContent = '';
+  pendingGameAction = 'another';
+  for (const button of buttons) button.disabled = true;
+  try {
+    state = await window.atlas.launchAnother(anotherGameInstanceId, windowName);
+    const added = gameSessions().find(session => !previousIds.has(session.id));
+    if (added) selectedGameSessionId = added.id;
+    document.getElementById('game-window-dialog').close();
+  } catch (error) {
+    errorMessage.textContent = tr(error.message.replace(/^Error invoking remote method '[^']+': Error: /,''));
+  } finally {
+    pendingGameAction = null;
+    for (const button of buttons) button.disabled = false;
+    render();
+    if (!document.getElementById('game-window-dialog').open) {
+      document.querySelector('[data-action="game-menu"]')?.focus();
+    }
+  }
+});
+document.getElementById('game-window-dialog').addEventListener('cancel', event => {
+  if (pendingGameAction === 'another') event.preventDefault();
 });
 document.getElementById('instance-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -568,6 +643,12 @@ document.getElementById('delete-form').addEventListener('submit',async event=>{
   finally{submit.disabled=false;}
 });
 window.atlas.onGameEvent(next=>{state=next;if(next.game?.running)busy=false;render();});
+window.atlas.onLogEvent(logSessions => {
+  if (state) {
+    state.logSessions = logSessions;
+    renderLaunchLogs();
+  }
+});
 document.getElementById('install-dialog').addEventListener('cancel',event=>{event.preventDefault();cancelInstall();});
 const initialStateReady = (async () => {
   try {
@@ -620,12 +701,43 @@ function openInstanceEditor(id=null,onlyName=false){
  hydrateIcons();AtlasI18n.translateTree(document.body,state.settings.language);
  document.getElementById('instance-dialog').showModal();document.getElementById('instance-name').focus();
 }
+function nativeBuildLabel() {
+  return { tools: 'Подготовка компилятора…', apply: 'Подключение Rust-модов…', compile: 'Сборка игры с модами…' }[state?.nativeBuildStage];
+}
+
+function durationText(seconds) {
+  const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, s = seconds % 60;
+  return (h ? String(h) + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function updateNativeBuild() {
+  const label = nativeBuildLabel();
+  const notice = document.getElementById('native-build-notice');
+  notice.hidden = !label;
+  if (!label) return;
+  const build = state.nativeBuild;
+  const track = document.getElementById('native-build-track');
+  const hasCount = Number.isFinite(build?.total) && build.total > 0;
+  const completed = hasCount ? Math.min(build.completed, build.total) : 0;
+  const percent = hasCount ? Math.min(99, Math.floor(100 * completed / build.total)) : 0;
+  document.getElementById('native-build-label').textContent = tr(label);
+  document.getElementById('native-build-count').textContent = hasCount ? `${completed} / ${build.total}` : '';
+  if (hasCount) track.setAttribute('aria-valuenow', percent);
+  else track.removeAttribute('aria-valuenow');
+  track.style.setProperty('--build-fill', percent + '%');
+  const now = Date.now();
+  const eta = build?.etaAt == null ? null : Math.ceil((build.etaAt - now) / 1000);
+  const elapsed = build?.startedAt == null ? '' : `${tr('Прошло')} ${durationText(Math.max(0, Math.floor((now - build.startedAt) / 1000)))}`;
+  const remaining = !build ? '' : eta === null ? tr('Оцениваем время…')
+    : eta > 0 ? `${tr('Примерно осталось')} ${durationText(eta)}` : tr('Сборка дольше оценки');
+  document.getElementById('native-build-time').textContent = [elapsed, remaining].filter(Boolean).join(' · ');
+}
+
 function updatePlaytime(){
  for(const element of document.querySelectorAll('.playtime')){
   const session=gameSessions().find(item=>item.id===element.dataset.sessionId);
   const seconds=Math.max(0,Math.floor((Date.now()-(session?.startedAt||Date.now()))/1000));
-  const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;
-  element.textContent=(h?String(h)+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  element.textContent=durationText(seconds);
  }
 }
-setInterval(updatePlaytime,1000);
+setInterval(() => { updatePlaytime(); updateNativeBuild(); }, 1000);

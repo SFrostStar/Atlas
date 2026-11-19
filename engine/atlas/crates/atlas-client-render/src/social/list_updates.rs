@@ -113,7 +113,7 @@ pub(super) fn spawn_updater() {
 
 /// `RemoteFriendListUpdateHandler.runUpdateFriendDataInternal`.
 pub(super) fn update_friend_data() {
-    let etag = {
+    let (etag, generation, account) = {
         let mut inner = lock();
         if inner.service.pending {
             // Another read is in flight; its answer is the cache's.
@@ -128,16 +128,23 @@ pub(super) fn update_friend_data() {
         }
         inner.service.pending = true;
         inner.service.cooldown = Some(Instant::now() + Duration::from_secs(10));
-        inner.service.friends_etag.clone()
+        (
+            inner.service.friends_etag.clone(),
+            inner.generation,
+            session(),
+        )
     };
     log::debug!("Performing Friends List update");
-    let result = match session() {
+    let result = match account {
         Some(session) => fetch_friends(&session, etag.as_deref()),
         None => Err(Failure {
             code: ResultCode::Unauthorized,
         }),
     };
     let mut inner = lock();
+    if inner.generation != generation {
+        return;
+    }
     inner.service.pending = false;
     inner.handler.forced = false;
     inner.handler.last_update = Some(Instant::now());

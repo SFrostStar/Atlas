@@ -1001,6 +1001,11 @@ impl Title {
             self.mode = Self::new_world();
         }
     }
+    pub fn enable_saturation_plus_rules(&mut self) {
+        if let Mode::Create { options, .. } = &mut self.mode {
+            options.rules.enable_saturation_plus();
+        }
+    }
     /// `PackSelectionScreen.onFilesDrop`: a pack dropped on the window joins
     /// the Create New World screen's data packs (the screen's watcher lists
     /// it within a second).
@@ -4739,34 +4744,16 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         };
     }
     /// The account fetches vanilla starts in `Minecraft`'s constructor
-    /// (`userPropertiesFuture`, `profileFuture`), run once per launch on a thread, only
+    /// (`userPropertiesFuture`, `profileFuture`), run once per session on a thread, only
     /// for a real online session (offline and demo have none). Their result decides
     /// `allowsMultiplayer` and queues `Gui.addInitialScreens`' ban notices, which open
     /// as soon as the title is showing.
     fn poll_account(&mut self) {
-        use crate::ban_notice::{AccountStatus, initial_notices};
-        use std::sync::{
-            OnceLock,
-            atomic::{AtomicBool, Ordering},
-        };
-        static STATUS: OnceLock<AccountStatus> = OnceLock::new();
-        static STARTED: AtomicBool = AtomicBool::new(false);
-        static QUEUED: AtomicBool = AtomicBool::new(false);
+        use crate::ban_notice::initial_notices;
         let Some(session) = crate::auth::current() else {
             return;
         };
-        if !STARTED.swap(true, Ordering::Relaxed) {
-            let session = session.clone();
-            let spawned = std::thread::Builder::new()
-                .name("Account status".into())
-                .spawn(move || {
-                    let _ = STATUS.set(crate::auth::fetch_account_status(&session));
-                });
-            if spawned.is_err() {
-                log::warn!("Atlas: could not start the account status fetch");
-            }
-        }
-        let Some(status) = STATUS.get() else {
+        let Some((status, show_notices)) = session.poll_status() else {
             return;
         };
         self.allows_multiplayer = status.allows_multiplayer();
@@ -4776,12 +4763,25 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             status.properties.friends_enabled,
             status.properties.accept_friend_invites,
         );
-        if !QUEUED.swap(true, Ordering::Relaxed) {
+        if show_notices {
             self.ban_queue
                 .extend(initial_notices(status, &session.name));
         }
         if matches!(self.mode, Mode::Main) {
             self.next_ban_notice();
+        }
+    }
+
+    /// Reset title state before checking the newly selected account's permissions.
+    pub fn switch_account(&mut self, online: bool) {
+        self.microsoft_account = online;
+        self.allows_multiplayer = !online;
+        self.ban_queue.clear();
+        self.connect_request = None;
+        if online {
+            // A fresh account's permissions must be checked before opening multiplayer.
+            self.mode = Mode::Main;
+            self.focused_button = None;
         }
     }
     pub fn escape(&mut self) {

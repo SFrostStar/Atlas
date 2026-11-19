@@ -951,9 +951,11 @@ impl Game<'_> {
             }
             EffectAction::Eat(nutrition, saturation) => {
                 let food = &mut p.health.food;
-                food.food = (food.food + nutrition).clamp(0, 20);
-                food.saturation = (food.saturation + nutrition as f32 * saturation * 2.0)
-                    .clamp(0.0, food.food as f32);
+                if let Some(rules) = rules.saturation_plus.filter(|_| !p.client_side) {
+                    rules.apply_effect(food, nutrition);
+                } else {
+                    food.eat(nutrition, saturation);
+                }
             }
         }
     }

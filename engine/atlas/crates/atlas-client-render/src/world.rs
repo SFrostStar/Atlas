@@ -579,6 +579,7 @@ impl World {
 pub struct HealthRules {
     pub difficulty: atlas_world::food::Difficulty,
     pub natural_regeneration: bool,
+    pub saturation_plus: Option<atlas_world::saturation_plus::Rules>,
     /// The `drowning_damage`, `fall_damage`, `fire_damage` and
     /// `freeze_damage` rules `Player.isInvulnerableTo` reads.
     pub drowning_damage: bool,
@@ -591,6 +592,7 @@ impl Default for HealthRules {
         Self {
             difficulty: atlas_world::food::Difficulty::Normal,
             natural_regeneration: true,
+            saturation_plus: None,
             drowning_damage: true,
             fall_damage: true,
             fire_damage: true,

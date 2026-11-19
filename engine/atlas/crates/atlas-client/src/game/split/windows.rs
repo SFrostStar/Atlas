@@ -464,10 +464,11 @@ impl<'a> Split<'a> {
             1 if self.surfaces.len() == 1 => String::new(),
             n => format!(" - Window {n}"),
         };
+        let title = crate::game::window_handler::window_title();
         if self.players() > 1 && !who.is_empty() {
-            format!("Atlas{name} · {}", who.join(", "))
+            format!("{title}{name} · {}", who.join(", "))
         } else {
-            format!("Atlas{name}")
+            format!("{title}{name}")
         }
     }
 

@@ -272,9 +272,7 @@ impl Game<'_> {
                 entry.ids.clone_from(ids);
             }
         }
-        let dispatcher = atlas_client::command::vanilla::game_dispatcher_with_features(
-            &self.level.enabled_features,
-        );
+        let dispatcher = self.command_dispatcher();
         store.functions.retain(|id, function| {
             for line in &function.lines {
                 if let datapack::FunctionLine::Command(line) = line

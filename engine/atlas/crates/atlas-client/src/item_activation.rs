@@ -44,6 +44,21 @@ impl ItemActivation {
     pub fn active(&self) -> Option<&ItemStack> {
         self.item.as_ref().filter(|_| self.ticks > 0)
     }
+    /// A presentation mod can retain the activation item even when it hides its animation.
+    pub fn current_item(&self) -> Option<&ItemStack> {
+        self.item.as_ref()
+    }
+    pub fn parameters(&self) -> (i32, [f32; 2]) {
+        (self.ticks, [self.off_x, self.off_y])
+    }
+    /// Configure an activation after the two vanilla random offsets have been drawn.
+    pub fn configure(&mut self, ticks: i32, lock_offsets: bool) {
+        self.ticks = ticks;
+        if lock_offsets {
+            self.off_x = 0.0;
+            self.off_y = 0.0;
+        }
+    }
     /// The item's view-space pose this frame, before its `FIXED` display
     /// transform; `aspect` is the window's width over its height.
     pub fn pose(&self, partial: f32, aspect: f32) -> Option<Mat4> {
@@ -96,6 +111,25 @@ mod tests {
         a.tick();
         assert!(a.active().is_none());
         assert!(a.pose(0.0, 1.0).is_none());
+    }
+
+    #[test]
+    fn a_presentation_override_keeps_the_item_and_changes_the_timer_and_offsets() {
+        let mut a = ItemActivation::default();
+        a.activate(totem(), &mut LegacyRandom::new(0));
+        a.configure(80, true);
+        assert_eq!(a.parameters(), (80, [0.0, 0.0]));
+        for _ in 0..79 {
+            a.tick();
+        }
+        assert!(a.active().is_some());
+        a.tick();
+        assert!(a.current_item().is_none());
+        a.activate(totem(), &mut LegacyRandom::new(0));
+        a.configure(0, false);
+        a.tick();
+        assert!(a.current_item().is_some());
+        assert!(a.active().is_none());
     }
 
     #[test]

@@ -4290,6 +4290,7 @@ mod tests {
             bottom: 8.0,
             advance: 5.0,
             offset: 0.5,
+            smooth: false,
         };
         let mut call = TextCall {
             matrix: Mat4::IDENTITY,

@@ -19,24 +19,38 @@ pub(super) fn strip_formatting(input: &str, upper: bool) -> String {
     out
 }
 
-pub(super) fn direction(dx: f64, dz: f64, yaw: f32) -> &'static str {
+pub(super) fn direction(dx: f64, dz: f64, yaw: f32) -> f32 {
     let angle = ((-dx).atan2(dz).to_degrees() - yaw as f64 + 180.0).rem_euclid(360.0) - 180.0;
-    if (-22.5..22.5).contains(&angle) {
-        "↑"
-    } else if (22.5..67.5).contains(&angle) {
-        "↗"
-    } else if (67.5..112.5).contains(&angle) {
-        "→"
-    } else if (112.5..157.5).contains(&angle) {
-        "↘"
-    } else if (-67.5..-22.5).contains(&angle) {
-        "↖"
-    } else if (-112.5..-67.5).contains(&angle) {
-        "←"
-    } else if (-157.5..-112.5).contains(&angle) {
-        "↙"
-    } else {
-        "↓"
+    let octant = ((angle + 22.5) / 45.0).floor() as i32;
+    octant.rem_euclid(8) as f32 * std::f32::consts::FRAC_PI_4
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct RadarTurn {
+    from: f32,
+    target: f32,
+    start: std::time::Instant,
+}
+impl RadarTurn {
+    pub(super) fn new(target: f32, clock: atlas_client::hud_kit::motion::Clock) -> Self {
+        Self { from: target, target, start: clock.now }
+    }
+
+    pub(super) fn angle(self, clock: atlas_client::hud_kit::motion::Clock) -> f32 {
+        use atlas_client::hud_kit::motion::{self, Tween};
+        const TURN: Tween = Tween::new(std::time::Duration::from_millis(150), [0.2, 0.0, 0.2, 1.0]);
+        if self.from == self.target || TURN.done(clock, self.start) {
+            self.target
+        } else {
+            motion::turn(TURN, clock, self.start, self.from, self.target)
+        }
+    }
+
+    pub(super) fn toward(self, target: f32, clock: atlas_client::hud_kit::motion::Clock) -> Self {
+        if target == self.target {
+            return self;
+        }
+        Self { from: self.angle(clock), target, start: clock.now }
     }
 }
 pub(super) fn health_color(hp: i32) -> u32 {
@@ -400,11 +414,25 @@ mod tests {
     }
     #[test]
     fn radar_octants_match_java_half_open_boundaries() {
-        assert_eq!(direction(0., 10., 0.), "↑");
-        assert_eq!(direction(-10., 0., 0.), "→");
-        assert_eq!(direction(10., 0., 0.), "←");
-        assert_eq!(direction(0., 10., -22.5), "↗");
-        assert_eq!(direction(0., 10., 22.5), "↑");
+        use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+        assert_eq!(direction(0., 10., 0.), 0.0);
+        assert_eq!(direction(-10., 0., 0.), FRAC_PI_2);
+        assert_eq!(direction(10., 0., 0.), FRAC_PI_2 * 3.0);
+        assert_eq!(direction(0., 10., -22.5), FRAC_PI_4);
+        assert_eq!(direction(0., 10., 22.5), 0.0);
+    }
+    #[test]
+    fn radar_arrow_takes_the_short_way_across_zero_without_restarting() {
+        use atlas_client::hud_kit::motion::Clock;
+        use std::{f32::consts::{FRAC_PI_4, TAU}, time::{Duration, Instant}};
+        let now = Instant::now();
+        let at = |ms| Clock::new(now + Duration::from_millis(ms), false);
+        let left = TAU - FRAC_PI_4;
+        let turn = RadarTurn::new(left, at(0)).toward(0.0, at(0));
+        assert!(turn.angle(at(75)) > left);
+        assert!(turn.angle(at(75)) < TAU);
+        let kept = turn.toward(0.0, at(80));
+        assert_eq!(kept.angle(at(150)), 0.0);
     }
     #[test]
     fn pop_timeout_is_strict_and_hurt_refreshes_it() {

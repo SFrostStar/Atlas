@@ -96,7 +96,6 @@ impl Game<'_> {
         if self.native_mod_screen() != Some(ID) {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         let atlas = &self.gui.atlas;
         let state = &self.atlas_ports.aspect_ratio;
         let layout = Layout::new(batch);
@@ -105,7 +104,7 @@ impl Game<'_> {
         let label = ratio_label(ratio);
         let label_x = ((batch.width - HudBatch::text_width(atlas, &label)) / 2.0).floor();
         batch.text(atlas, &label, label_x, y - 14.0, u32::MAX, true);
-        ui::slider_ext(
+        atlas_client::atlas::mod_style::slider(
             batch,
             atlas,
             x,
@@ -113,14 +112,12 @@ impl Game<'_> {
             w,
             &Text::empty(),
             (ratio - MIN_RATIO) / (MAX_RATIO - MIN_RATIO),
-            ui::hovered(self.cursor, x, y, w, h),
-            state.slider_focused,
-            false,
+            ui::hovered(self.cursor, x, y, w, h) || state.slider_focused,
             true,
             state.dragging,
         );
         for ((_, caption), [x, y, w, h]) in PRESETS.into_iter().zip(layout.presets) {
-            ui::button(
+            atlas_client::atlas::mod_style::button(
                 batch,
                 atlas,
                 x,
@@ -133,7 +130,7 @@ impl Game<'_> {
             );
         }
         let [x, y, w, h] = layout.reset;
-        ui::button(
+        atlas_client::atlas::mod_style::button(
             batch,
             atlas,
             x,

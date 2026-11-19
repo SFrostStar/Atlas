@@ -18,6 +18,7 @@ impl PlayerMotion {
         .map_err(attribute_error)?;
         Ok(Self {
             health: crate::health::PlayerHealth::new(&resources.health, &mut attributes)?,
+            saturation_plus_snapshot: None,
             random: crate::mobs::entity_random(0, position),
             status: crate::effects::StatusFlags::default(),
             impulse: ImpulseContext::default(),

@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('atlas', {
   selectInstance: (id) => ipcRenderer.invoke('atlas:select-instance', id),
   deleteInstance: (id) => ipcRenderer.invoke('atlas:delete-instance', id),
   launch: (id) => ipcRenderer.invoke('atlas:launch', id),
-  launchAnother: (id) => ipcRenderer.invoke('atlas:launch-another', id),
+  launchAnother: (id, windowName) => ipcRenderer.invoke('atlas:launch-another', id, windowName),
   stopGame: (sessionId) => ipcRenderer.invoke('atlas:stop-game', sessionId),
   restartGame: (sessionId) => ipcRenderer.invoke('atlas:restart-game', sessionId),
   openFolder: (kind, id) => ipcRenderer.invoke('atlas:open-folder', kind, id),
@@ -39,5 +39,10 @@ contextBridge.exposeInMainWorld('atlas', {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on('atlas:game-event', listener);
     return () => ipcRenderer.removeListener('atlas:game-event', listener);
+  },
+  onLogEvent: (callback) => {
+    const listener = (_event, logSessions) => callback(logSessions);
+    ipcRenderer.on('atlas:log-event', listener);
+    return () => ipcRenderer.removeListener('atlas:log-event', listener);
   },
 });

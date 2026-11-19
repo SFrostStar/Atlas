@@ -270,16 +270,13 @@ impl Game<'_> {
             return Ok(());
         };
         let mut hud = HudBatch::new([renderer.config.width, renderer.config.height]);
-        let progress = match self.pending_save.as_ref().map(|save| &save.stage) {
-            Some(Stage::Chunks(_)) => 0.25,
-            Some(Stage::Entities(_)) => 0.5,
-            Some(Stage::Writes) => 0.9,
-            _ => 0.0,
-        };
-        let now = Instant::now();
-        self.loading_overlay
-            .update(Some(("Saving world", Some(progress))), now);
-        self.loading_overlay.draw(&mut hud, &self.gui.atlas, now);
+        let (w, h) = (hud.width, hud.height);
+        let atlas = &self.gui.atlas;
+        atlas_client::ui::menu_background(&mut hud, atlas, 0.0, 0.0, w, h, false);
+        atlas_client::ui::centered_text(
+            &mut hud, atlas, &atlas_client::text::Text::tr("menu.savingLevel", &[]),
+            0.0, h / 2.0 - 50.0, w, u32::MAX,
+        );
         renderer.render(&loading_frame(&hud))?;
         Ok(())
     }

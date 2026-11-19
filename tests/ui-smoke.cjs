@@ -34,7 +34,7 @@ const fs = require('node:fs');
     await page.waitForSelector('.hero');
     state = await page.evaluate(() => window.atlas.getState());
     assert.equal(state.selectedId, sandbox.id);
-    for (const route of ['workshop','settings','logs','instances','home']) {
+    for (const route of ['mods','settings','logs','instances','home']) {
       await page.locator(`.nav-item[data-page="${route}"]`).click();
       assert.ok((await page.locator('h1').textContent()).length);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth || document.querySelector('main').getBoundingClientRect().bottom > innerHeight + 1);
@@ -42,7 +42,7 @@ const fs = require('node:fs');
     }
     await page.locator('.sidebar-instance[data-id="atlas"]').click();
     await page.locator('.nav-item[data-page="instances"]').click();
-    await page.locator('[data-instance-tab="files"]').click();
+    assert.equal(await page.locator('[data-instance-tab]').count(), 0);
     assert.equal(await page.locator('.file-row').count(), 6);
     await page.locator('.nav-item[data-page="home"]').click();
     assert.deepEqual(errors, []);

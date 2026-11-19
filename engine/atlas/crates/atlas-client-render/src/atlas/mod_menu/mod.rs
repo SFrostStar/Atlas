@@ -68,6 +68,10 @@ pub fn images() -> Vec<(&'static str, &'static [u8])> {
             include_bytes!("assets/atlas-esc-music.png"),
         ),
         (
+            "atlas/modmenu/icons/atlas-saturation-plus",
+            include_bytes!("assets/atlas-saturation-plus.png"),
+        ),
+        (
             "atlas/modmenu/mod_configuration",
             include_bytes!("assets/modmenu/gui/mod_configuration.png"),
         ),
@@ -126,22 +130,32 @@ pub fn publish_count(list: &crate::mod_list::ModList) {
     );
     list.menu.publish();
 }
-pub fn count_text() -> String {
+pub fn count_text(title: bool) -> String {
     let n = DISPLAYED_COUNT.load(std::sync::atomic::Ordering::Relaxed);
     let config = config::current();
     let key = if config.easter_eggs && matches!(n, 69 | 420) {
         format!("modmenu.mods.{n}.secret")
-    } else if n == 1 {
-        "modmenu.mods.1".into()
     } else {
-        "modmenu.mods.n".into()
+        let language = title.then(crate::lang::code);
+        match (language.as_deref(), n) {
+            (Some("ru_ru"), _) if n % 10 == 1 && n % 100 != 11 => "atlas.title.mods.one",
+            (Some("ru_ru"), _) if matches!(n % 10, 2..=4) && !matches!(n % 100, 12..=14) => {
+                "atlas.title.mods.few"
+            }
+            (Some("ru_ru"), _) => "atlas.title.mods.many",
+            (Some("en_us"), 1) => "atlas.title.mods.one",
+            (Some("en_us"), _) => "atlas.title.mods.many",
+            (_, 1) => "modmenu.mods.1",
+            _ => "modmenu.mods.n",
+        }
+        .into()
     };
     crate::text::Text::translate(&key, &[crate::text::Text::literal(n.to_string())]).plain()
 }
 pub fn button_text() -> String {
     let mut label = crate::lang::get("modmenu.title");
     if config::current().mod_count_location.button() {
-        label.push_str(&count_text());
+        label.push_str(&count_text(false));
     }
     label
 }

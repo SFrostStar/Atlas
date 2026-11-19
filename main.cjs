@@ -12,6 +12,7 @@ const { t } = require('./i18n.js');
 const { GameInstallManager } = require('./lib/game-install.cjs');
 const { resolveLauncherLayout } = require('./lib/portable-root.cjs');
 const { ModManager } = require('./lib/mod-manager.cjs');
+const { NativeMods } = require('./lib/native-mods.cjs');
 const { ReleaseUpdater } = require('./lib/release-updater.cjs');
 
 app.setName('Atlas Launcher');
@@ -22,6 +23,8 @@ let games;
 let accounts;
 let installer;
 let mods;
+let nativeBuildStage = null;
+let nativeBuild = null;
 let updater;
 let updatePoll;
 let updateClosing = false;
@@ -34,6 +37,7 @@ let discordObserved;
 const launcherVersion = manifest.version;
 const logs = [];
 let publishTimer;
+let publishLogTimer;
 const layout = app.isPackaged ? resolveLauncherLayout(process.execPath) : { projectRoot: __dirname };
 const { projectRoot, bundleDirectory, bootstrapManaged = false } = layout;
 const startupDeadline = performance.timeOrigin + 1000;
@@ -77,7 +81,7 @@ function appendLog(message, level = 'info') {
 }
 
 function state() {
-  return { ...store.getState(), mods: mods?.snapshot(store.config.selectedId), version: launcherVersion, bootstrapManaged, update: updater ? { ...updater.snapshot(), applying: updateApplying } : undefined, game: { ...games.snapshot(), busy: gameBusy() }, supportVisible, install: installer ? { ...installer.snapshot(), ...installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}), needsSetup } : null, accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs] };
+  return { ...store.getState(), mods: mods?.snapshot(store.config.selectedId), version: launcherVersion, bootstrapManaged, nativeBuildStage, nativeBuild, update: updater ? { ...updater.snapshot(), applying: updateApplying } : undefined, game: { ...games.snapshot(), busy: gameBusy() }, supportVisible, install: installer ? { ...installer.snapshot(), ...installer.inspect({runtimePath:store.config.settings.runtimePath,sourceRoot:store.config.settings.sourceRoot}), needsSetup } : null, accounts: accounts?.snapshot(), discord: { enabled: discordEnabled(), ...(discordPresence?.snapshot() || { status: discordEnabled() ? 'connecting' : 'disabled', connected: false, error: null }) }, logs: [...logs], logSessions: games.logSnapshot() };
 }
 
 function gameBusy() {
@@ -156,15 +160,24 @@ function startDiscord() {
 function publish() {
   clearTimeout(publishTimer);
   publishTimer = undefined;
+  clearTimeout(publishLogTimer);
+  publishLogTimer = undefined;
   if (window && !window.isDestroyed()) window.webContents.send('atlas:game-event', state());
 }
 
 function publishSoon() {
-  // A noisy client must not flood the renderer and delay the launch IPC reply.
   if (!publishTimer) publishTimer = setTimeout(publish, 150);
 }
 
-async function launch(id, additional = false) {
+function publishLogsSoon() {
+  // Game output has its own event so a running client does not redraw the launcher.
+  if (!publishLogTimer) publishLogTimer = setTimeout(() => {
+    publishLogTimer = undefined;
+    if (window && !window.isDestroyed()) window.webContents.send('atlas:log-event', games.logSnapshot());
+  }, 150);
+}
+
+async function launch(id, additional = false, windowName) {
   assertUpdateIdle();
   const options = { runtimePath: store.config.settings.runtimePath, sourceRoot: store.config.settings.sourceRoot };
   const availability = installer.inspect(options);
@@ -174,9 +187,9 @@ async function launch(id, additional = false) {
   }
   if (!installer.inspect(options).ready) { needsSetup = true; publish(); return state(); }
   needsSetup=false;
-  if (additional) await games.launchAnother(id);
+  if (additional) await games.launchAnother(id, windowName);
   else await games.launch(id);
-  if (store.config.settings.closeOnLaunch && window && !window.isDestroyed()) window.hide();
+  if (games.snapshot().running && store.config.settings.closeOnLaunch && window && !window.isDestroyed()) window.hide();
   publish();
   return state();
 }
@@ -252,7 +265,7 @@ function registerHandlers(onStartupReady) {
     return state();
   });
   handle('launch', (id) => launch(id));
-  handle('launch-another', (id) => launch(id, true));
+  handle('launch-another', (id, windowName) => launch(id, true, windowName));
   handle('stop-game', async (sessionId) => { await games.stop(sessionId); return state(); });
   handle('restart-game', async (sessionId) => { assertUpdateIdle(); await games.restart(sessionId); return state(); });
   handle('open-folder', async (kind, id) => {
@@ -309,8 +322,33 @@ else {
       }
     }
     catch (error) { dialog.showErrorBox('Atlas Launcher', error.message); app.quit(); return; }
-    games = new GameSessions(store, { prepareAccount: home => accounts.prepareLaunch(home), extraGameArgs: guiTest ? ['--offscreen'] : [], onLog: appendLog, onChange: (noisy) => {
-      if (noisy) { publishSoon(); return; }
+    const nativeMods = new NativeMods({
+      project: projectRoot, dataRoot: store.dataRoot, version: launcherVersion,
+      source: guiTest && process.env.ATLAS_GUI_NATIVE_SOURCE
+        ? process.env.ATLAS_GUI_NATIVE_SOURCE : path.join(__dirname, 'native-source'),
+      progress(stage, details = null) { nativeBuildStage = stage; nativeBuild = details; publishSoon(); },
+      async confirm(bundles) {
+        const language = store.config.settings.language;
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'warning',
+          title: t('Rust-моды', language),
+          message: t('Доверяешь этим модам?', language),
+          detail: bundles.map(mod => `${mod.name} · ${mod.version}`).join('\n') + '\n\n'
+            + t('Atlas соберёт игру с этими модами. Их код получит доступ к файлам с правами твоего пользователя.', language),
+          buttons: [t('Отмена', language), t('Доверять и собрать', language)],
+          defaultId: 0, cancelId: 0, noLink: true,
+        });
+        return response === 1;
+      },
+    });
+    games = new GameSessions(store, {
+      prepareAccount: (home, accountId) => accounts.prepareLaunch(home, accountId),
+      prepareRuntime: (home, builtinAccountSwitch) => nativeMods.prepare(home, builtinAccountSwitch ? ['ias'] : []),
+      getAccounts: () => accounts.snapshot(),
+      accountActions: accounts,
+      builtinAccountSwitch: instanceId => mods.installed(instanceId).has('atlas-ias') && !mods.disabled(instanceId).has('atlas-ias'),
+      extraGameArgs: guiTest ? ['--offscreen'] : [], onChange: (noisy) => {
+      if (noisy) { publishLogsSoon(); return; }
       if (!games.snapshot().running && window && !window.isDestroyed()) {
         if (!window.isVisible()) window.show();
         if (window.isMinimized()) window.restore();
@@ -382,7 +420,6 @@ else {
         applyUpdate(false).catch(error => { appendLog(error.message, 'error'); publish(); });
       }
     });
-    appendLog('Atlas Launcher готов. Сборки хранятся в отдельных папках.');
     const query = handoff ? { bootstrapHandoff: '1' } : { startupDeadline: String(startupDeadline) };
     window.loadFile(path.join(__dirname, 'index.html'), { query });
   });

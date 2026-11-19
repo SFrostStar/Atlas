@@ -118,9 +118,15 @@ impl Game<'_> {
             return;
         }
         let outcome = self.creation_job.take().and_then(|job| job.join().ok());
+        let saturation_plus = self.atlas_saturation_plus_enabled();
         if let Some(title) = self.title.as_mut() {
             match outcome {
-                Some(Ok(())) => title.finish_preparing(),
+                Some(Ok(())) => {
+                    title.finish_preparing();
+                    if saturation_plus {
+                        title.enable_saturation_plus_rules();
+                    }
+                }
                 // `applyNewPackConfig`'s failure: back out of the read with
                 // the message, the Create screen's options intact.
                 outcome => {

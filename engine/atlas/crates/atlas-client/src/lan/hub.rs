@@ -321,6 +321,7 @@ pub struct Hub {
     pub attachment_snapshots: Vec<AttachmentSnapshot>,
     /// Whether native mods can produce synced attachments.
     pub sync_attachments: bool,
+    pub saturation_plus: bool,
     /// Criteria `CriteriaTriggers.TICK` granted to players, for the game to
     /// tell the mods.
     pub native_advancement_grants: Vec<TickGrants>,
@@ -774,6 +775,7 @@ impl Hub {
             native_tracking: Vec::new(),
             attachment_snapshots: Vec::new(),
             sync_attachments: false,
+            saturation_plus: false,
             native_advancement_grants: Vec::new(),
             mods_loaded: false,
             hidden: Default::default(),
@@ -2049,13 +2051,14 @@ impl Hub {
         match &self.sync.commands {
             Some(tree) => {
                 let dedicated = !self.config.integrated;
-                tree.packet_granting(
+                tree.packet_for_world(
                     permission,
                     dedicated,
                     &self.sync.builtin,
                     &self.mod_commands.0,
                     &self.sync.features,
                     granted,
+                    self.saturation_plus,
                 )
             }
             None => play::Commands {

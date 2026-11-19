@@ -158,6 +158,7 @@ impl Game<'_> {
             let totem = body.protector.unwrap_or_else(|| self.find_totem());
             self.item_activation
                 .activate(totem, self.particles.random());
+            self.atlas_totem_tweaks_activated();
         }
     }
     /// `ClientPacketListener.findTotem`: the first hand's item with
@@ -189,7 +190,7 @@ impl Game<'_> {
         aspect: f32,
         out: &mut Vec<Vertex>,
     ) {
-        if self.ui.hide_gui {
+        if self.ui.hide_gui || self.atlas_totem_tweaks_enabled() {
             return;
         }
         let (Some(stack), Some(pose)) = (

@@ -66,9 +66,14 @@ impl Game<'_> {
             self.audio.play(&consumable.sound, at, 1.0, pitch);
             if let Some(p) = self.player.as_mut() {
                 // FoodData.eat(nutrition, saturation)
-                let food = &mut p.health.food;
-                food.food = (food.food + nutrition as i32).clamp(0, 20);
-                food.saturation = (food.saturation + saturation).clamp(0.0, food.food as f32);
+                let rules = self
+                    .world
+                    .health_rules
+                    .saturation_plus
+                    .filter(|_| !p.client_side);
+                p.health
+                    .food
+                    .eat_with_rules(nutrition as i32, saturation, rules);
             }
             // Mth.randomBetween(random, 0.9, 1.0)
             let pitch = self.world.random.next_float() * (1.0f32 - 0.9f32) + 0.9;

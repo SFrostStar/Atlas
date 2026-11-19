@@ -48,6 +48,9 @@ pub fn original_config(id: &str) -> bool {
             | "atlas-gammautils"
             | "atlas-hotcommands"
             | "atlas-viewmodel"
+            | "atlas-totemtweaks"
+            | "atlas-mousetweaks"
+            | "atlas-ias"
     )
 }
 impl Entry {

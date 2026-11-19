@@ -14,6 +14,29 @@ pub struct Picture {
     pub(super) flags: TextureFlags,
 }
 
+impl Picture {
+    pub fn rgba(
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        flags: TextureFlags,
+    ) -> Option<Arc<Self>> {
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let len = (width as usize)
+            .checked_mul(height as usize)?
+            .checked_mul(4)?;
+        (len != 0 && pixels.len() == len).then(|| {
+            Arc::new(Self {
+                id: NEXT.fetch_add(1, Ordering::Relaxed),
+                width,
+                height,
+                pixels,
+                flags,
+            })
+        })
+    }
+}
+
 #[derive(Default)]
 pub(super) struct Cache {
     roots: [PathBuf; 2],
@@ -40,24 +63,16 @@ impl Cache {
             .find_map(|root| {
                 let path = root.join(format!("assets/minecraft/textures/{name}.png"));
                 let image = decode(&path).ok()?;
-                let flags = atlas_core::prepared_files::read_to_string(
-                    &path.with_extension("png.mcmeta"),
-                )
-                .ok()
-                .as_deref()
-                .and_then(TextureFlags::from_mcmeta)
-                .unwrap_or_default();
+                let flags =
+                    atlas_core::prepared_files::read_to_string(&path.with_extension("png.mcmeta"))
+                        .ok()
+                        .as_deref()
+                        .and_then(TextureFlags::from_mcmeta)
+                        .unwrap_or_default();
                 Some((image, flags))
             })
-            .map(|((width, height, pixels), flags)| {
-                static NEXT: AtomicU64 = AtomicU64::new(1);
-                Arc::new(Picture {
-                    id: NEXT.fetch_add(1, Ordering::Relaxed),
-                    width,
-                    height,
-                    pixels,
-                    flags,
-                })
+            .and_then(|((width, height, pixels), flags)| {
+                Picture::rgba(width, height, pixels, flags)
             });
         self.entries
             .insert(name.into(), image.as_ref().map(Arc::downgrade));
@@ -80,6 +95,10 @@ impl HudBatch {
         let Some(picture) = atlas.pictures.lock().unwrap().get(name) else {
             return;
         };
+        self.draw_picture(picture, [x, y, w, h], tint);
+    }
+
+    pub fn draw_picture(&mut self, picture: Arc<Picture>, [x, y, w, h]: [f32; 4], tint: u32) {
         let start = self.vertices.len();
         self.rect_uv(
             x,

@@ -107,6 +107,7 @@ struct Manager {
 }
 
 struct Inner {
+    generation: u64,
     service: Service,
     handler: Handler,
     presence: PresenceHandler,
@@ -118,6 +119,7 @@ struct Inner {
 impl Default for Inner {
     fn default() -> Self {
         Self {
+            generation: 0,
             service: Service::default(),
             handler: Handler::default(),
             presence: PresenceHandler::default(),
@@ -135,6 +137,18 @@ fn inner() -> &'static Arc<Mutex<Inner>> {
 
 fn lock() -> std::sync::MutexGuard<'static, Inner> {
     inner().lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Replace the account and its social caches in one transition. Outstanding requests
+/// hold the old account and may no longer write into the active account's caches.
+pub fn switch_account(session: Option<AuthSession>) {
+    let mut inner = lock();
+    auth::replace_current(session);
+    *inner = Inner {
+        generation: inner.generation.wrapping_add(1),
+        share: inner.share,
+        ..Inner::default()
+    };
 }
 
 /// `Minecraft`'s constructor: make the social manager, whose `friendListEnabled` comes
@@ -235,22 +249,29 @@ pub fn tick() {
 
 /// `PresenceHandler.updatePresence`.
 fn update_presence() {
-    let status = {
+    let (status, generation, account, etag) = {
         let mut inner = lock();
+        let Some(account) = session() else {
+            return;
+        };
         inner.presence.update = false;
         inner.presence.last_post = Instant::now();
-        match inner.share {
+        let status = match inner.share {
             SharePresence::None => PresenceStatus::Offline,
             SharePresence::Limited => PresenceStatus::Online,
             SharePresence::All => inner.presence.playing,
-        }
+        };
+        (
+            status,
+            inner.generation,
+            account,
+            inner.service.presence_etag.clone(),
+        )
     };
     let _ = thread::Builder::new()
         .name("Friends presence".into())
         .spawn(move || {
-            if let Some(presence) = post_presence(status) {
-                lock().presence.latest = presence;
-            }
+            post_presence(status, generation, &account, etag.as_deref());
         });
 }
 
@@ -262,20 +283,33 @@ pub fn try_update_presence() {
 /// `PresenceHandler.sendOfflinePresence`: the game is closing.
 pub fn send_offline_presence() {
     static SENT: AtomicBool = AtomicBool::new(false);
-    {
+    let (generation, account, etag) = {
         let inner = lock();
         if !inner.manager.friend_list_enabled || inner.handler.latest.friends.is_empty() {
             return;
         }
-    }
+        let Some(account) = session() else {
+            return;
+        };
+        (
+            inner.generation,
+            account,
+            inner.service.presence_etag.clone(),
+        )
+    };
     // `Minecraft.close` happens once; a second quit path must not post twice.
     if SENT.swap(true, Ordering::Relaxed) {
         return;
     }
     let _ = thread::Builder::new()
         .name("Friends offline".into())
-        .spawn(|| {
-            let _ = post_presence(PresenceStatus::Offline);
+        .spawn(move || {
+            post_presence(
+                PresenceStatus::Offline,
+                generation,
+                &account,
+                etag.as_deref(),
+            );
         });
 }
 
@@ -322,8 +356,12 @@ fn toggle(on: bool) -> &'static str {
 /// `MinecraftServicesFriendsService.putFriendAction`: the answer already is the new
 /// lists, as authlib caches it, and the handler reads again.
 fn friend_action(body: Value) -> ResultCode {
-    let Some(session) = session() else {
-        return ResultCode::Unauthorized;
+    let (generation, session) = {
+        let inner = lock();
+        let Some(session) = session() else {
+            return ResultCode::Unauthorized;
+        };
+        (inner.generation, session)
     };
     let Some(url) = url("updateFriends") else {
         return ResultCode::ServiceNotAvailable;
@@ -332,12 +370,15 @@ fn friend_action(body: Value) -> ResultCode {
         Ok(answer) => answer,
         Err(failure) => return failure.code,
     };
+    let mut inner = lock();
+    if inner.generation != generation {
+        return ResultCode::Unauthorized;
+    }
     let code = if answer.body.is_empty() {
         ResultCode::Success
     } else {
         match parse_friends(&answer.body) {
             Some(data) => {
-                let mut inner = lock();
                 inner.service.friends_cache = data;
                 inner.service.friends_etag = None;
                 inner.service.cooldown = Some(Instant::now() + Duration::from_secs(10));
@@ -348,21 +389,30 @@ fn friend_action(body: Value) -> ResultCode {
     };
     if code == ResultCode::Success {
         // `PlayerSocialManager.runAction` forces a read after a successful action.
-        lock().handler.forced = true;
+        inner.handler.forced = true;
     }
     code
 }
 
 /// `MinecraftServicesFriendsService.presence`: post one status, cache the answer.
-/// `None` means the answer said nothing new (304, an empty body or a failure); the
-/// handler keeps its last presence then.
-fn post_presence(status: PresenceStatus) -> Option<Vec<Presence>> {
-    let session = session()?;
-    let url = url("updatePresence")?;
+/// An unchanged or failed answer keeps the account's last presence.
+fn post_presence(
+    status: PresenceStatus,
+    generation: u64,
+    session: &AuthSession,
+    etag: Option<&str>,
+) {
+    let Some(url) = url("updatePresence") else {
+        return;
+    };
     let body = json!({"status": status.wire()}).to_string();
-    let etag = lock().service.presence_etag.clone();
-    let answer = send_json(&session, "POST", &url, &body, etag.as_deref()).ok()?;
+    let Ok(answer) = send_json(session, "POST", &url, &body, etag) else {
+        return;
+    };
     let mut inner = lock();
+    if inner.generation != generation {
+        return;
+    }
     if let Some(retry) = answer.retry_after {
         inner.service.presence_poll = Some(retry);
     }
@@ -370,16 +420,15 @@ fn post_presence(status: PresenceStatus) -> Option<Vec<Presence>> {
         inner.service.presence_etag = Some(etag);
     }
     if answer.status == 304 || answer.body.is_empty() {
-        return None;
+        return;
     }
     // `PresenceResponse`: a missing `presence` field is an empty list, replacing the
     // cached one; malformed JSON keeps the cache, as authlib's exception path does.
     if let Ok(value) = serde_json::from_str::<Value>(&answer.body) {
         let presence = presence_of(&value);
         inner.service.presence_cache = presence.clone();
-        return Some(presence);
+        inner.presence.latest = presence;
     }
-    None
 }
 
 /// `MinecraftServicesFriendsService.getFriendData`'s request.

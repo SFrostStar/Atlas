@@ -71,6 +71,10 @@ impl PlayerMotion {
             return Ok(());
         }
         let h = &mut self.health;
+        self.saturation_plus_snapshot = rules
+            .saturation_plus
+            .map(|rules| rules.before_tick(&mut h.food));
+        let exhaustion_threshold = self.saturation_plus_snapshot.map_or(4.0, |s| s.threshold);
         let mut world = TickWorld {
             entity: self.entity_id,
             resources,
@@ -87,7 +91,8 @@ impl PlayerMotion {
             game_time: h.game_time,
             events: &mut self.events,
         };
-        h.food.tick(&mut world)
+        h.food
+            .tick_with_exhaustion_threshold(&mut world, exhaustion_threshold)
     }
 }
 struct TickWorld<'a> {

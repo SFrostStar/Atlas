@@ -198,6 +198,11 @@ impl Game<'_> {
             may_build: self.may_build(),
             can_eat: self.creative
                 || self
+                    .world
+                    .health_rules
+                    .saturation_plus
+                    .is_some_and(|rules| rules.always_hungry)
+                || self
                     .player
                     .as_ref()
                     .is_some_and(|p| p.health.food.food < 20),

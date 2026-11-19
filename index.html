@@ -23,7 +23,7 @@
       <nav class="primary-navigation" aria-label="Основная навигация">
         <button class="nav-item active" data-page="home"><i data-lucide="house"></i>Главная</button>
         <button class="nav-item" data-page="instances"><i data-lucide="layers-2"></i>Мои сборки<span class="nav-count" id="instance-count">1</span></button>
-        <button class="nav-item" data-page="workshop"><i data-lucide="braces"></i>Мастерская</button>
+        <button class="nav-item" data-page="mods"><i data-lucide="puzzle"></i><span data-user-text>Mods</span></button>
         <button class="nav-item" data-page="logs"><i data-lucide="terminal"></i>Журнал запуска</button>
         <button class="nav-item" data-page="settings"><i data-lucide="settings-2"></i>Настройки</button>
       </nav>
@@ -33,6 +33,11 @@
     </header>
     <main>
       <header class="page-header"><div class="header-status"><div id="update-notice" class="update-notice" role="status" aria-live="polite" hidden></div></div></header>
+      <section id="native-build-notice" class="native-build-notice" aria-labelledby="native-build-label" hidden>
+        <div class="native-build-header"><strong id="native-build-label">Сборка игры с модами…</strong><span id="native-build-count" data-user-text></span></div>
+        <div id="native-build-track" class="native-build-track" role="progressbar" aria-labelledby="native-build-label" aria-valuemin="0" aria-valuemax="100"><span></span></div>
+        <div class="native-build-time" data-user-text id="native-build-time"></div>
+      </section>
       <div class="content" id="content"></div>
       <div class="instance-dock" role="group" aria-label="Мои сборки"><div id="sidebar-instances" class="sidebar-instances"></div><button class="add-sidebar" data-action="new-instance" aria-label="Добавить сборку"><i data-lucide="plus"></i><span>Добавить сборку</span></button></div>
     </main>
@@ -57,6 +62,14 @@
       <p class="subtitle">Миры и настройки сборки, включая дополнительные окна, будут перемещены в корзину.</p>
       <p class="form-error" id="delete-error" role="alert"></p>
       <div class="dialog-footer"><button class="button secondary" type="button" data-action="close-delete">Отмена</button><button class="button danger" type="submit"><i data-lucide="trash-2"></i>В корзину</button></div>
+    </form>
+  </dialog>
+  <dialog id="game-window-dialog" aria-labelledby="game-window-title">
+    <form id="game-window-form">
+      <div class="dialog-top"><h2 id="game-window-title">Ещё одно окно</h2></div>
+      <label class="field">Название окна <span class="optional">необязательно</span><input name="windowName" maxlength="48" placeholder="Автоматический номер" autocomplete="off" autofocus></label>
+      <p class="form-error" id="game-window-error" role="alert"></p>
+      <div class="dialog-footer"><button class="button secondary" type="button" data-action="close-game-window">Отмена</button><button class="button primary" type="submit">Продолжить</button></div>
     </form>
   </dialog>
   <dialog id="install-dialog" aria-labelledby="install-title" aria-describedby="install-description">

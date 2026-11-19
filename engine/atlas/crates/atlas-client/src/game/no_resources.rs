@@ -98,9 +98,10 @@ impl ApplicationHandler for Missing {
         if self.window.is_some() {
             return;
         }
-        let attributes =
-            atlas_client::window::with_icon(Window::default_attributes().with_title("Atlas"))
-                .with_inner_size(winit::dpi::LogicalSize::new(1040.0, 700.0));
+        let attributes = atlas_client::window::with_icon(
+            Window::default_attributes().with_title(window_handler::window_title()),
+        )
+        .with_inner_size(winit::dpi::LogicalSize::new(1040.0, 700.0));
         let made = event_loop
             .create_window(attributes)
             .map_err(Into::into)

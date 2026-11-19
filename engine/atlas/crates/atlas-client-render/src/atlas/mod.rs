@@ -9,17 +9,14 @@ pub mod loading;
 #[doc(hidden)]
 pub mod menu;
 pub mod mod_menu;
+pub mod mod_style;
 pub mod settings;
 
 pub const NAME: &str = "Atlas";
 pub const NOTICE: &str = "Not affiliated with Mojang or Microsoft";
 
-pub fn version_label() -> String {
-    format!("{NAME} 1.0.0")
-}
-
 /// Bundled artwork; individual mod assets retain the licenses in MOD-PORT-NOTICES.md.
-pub fn images() -> [(&'static str, &'static [u8]); 6] {
+pub fn images() -> [(&'static str, &'static [u8]); 14] {
     [
         ("atlas/loading-logo", include_bytes!("assets/logo.png")),
         ("atlas/menu-night", include_bytes!("assets/night.png")),
@@ -38,6 +35,38 @@ pub fn images() -> [(&'static str, &'static [u8]); 6] {
         (
             "gammautils:mob_effect/night_vision",
             include_bytes!("assets/gammautils/night_vision.png"),
+        ),
+        (
+            "atlas/ias/button_plain",
+            include_bytes!("assets/ias/button_plain.png"),
+        ),
+        (
+            "atlas/ias/button_focus",
+            include_bytes!("assets/ias/button_focus.png"),
+        ),
+        (
+            "atlas/ias/up_plain",
+            include_bytes!("assets/ias/up_plain.png"),
+        ),
+        (
+            "atlas/ias/up_disabled",
+            include_bytes!("assets/ias/up_disabled.png"),
+        ),
+        (
+            "atlas/ias/up_focus",
+            include_bytes!("assets/ias/up_focus.png"),
+        ),
+        (
+            "atlas/ias/down_plain",
+            include_bytes!("assets/ias/down_plain.png"),
+        ),
+        (
+            "atlas/ias/down_disabled",
+            include_bytes!("assets/ias/down_disabled.png"),
+        ),
+        (
+            "atlas/ias/down_focus",
+            include_bytes!("assets/ias/down_focus.png"),
         ),
     ]
 }

@@ -607,6 +607,13 @@ impl Game<'_> {
             Vec::new()
         };
         let mut rules = atlas_client::gamerules::GameRules::with_features(&features);
+        if entries.iter().any(|entry| {
+            atlas_client::gamerules::SATURATION_PLUS_RULES.iter().any(|rule| {
+                entry.name.strip_prefix("minecraft:").unwrap_or(&entry.name) == rule.name
+            })
+        }) {
+            rules.enable_saturation_plus();
+        }
         for entry in entries {
             rules.set_string(&entry.name, &entry.value);
         }
@@ -716,10 +723,11 @@ impl Game<'_> {
             return;
         }
         for (name, value) in changes {
-            self.ui.rules.set(name, value);
-            self.system_message(Text::tr("commands.gamerule.set", &[&name, &value]));
+            if let Some(rule) = self.ui.rules.rule(name) {
+                self.set_game_rule(rule, value);
+                self.system_message(Text::tr("commands.gamerule.set", &[&name, &value]));
+            }
         }
-        self.sync_rules();
     }
 
     pub(super) fn draw_world_options(&mut self, batch: &mut HudBatch) {

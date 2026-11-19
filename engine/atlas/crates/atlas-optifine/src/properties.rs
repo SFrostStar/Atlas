@@ -17,6 +17,11 @@ impl Properties {
         Self::read(text, split)
     }
 
+    /// Java's reader without OptiFine's additional value trimming.
+    pub fn parse_untrimmed(text: &str) -> Self {
+        Self::read_values(text, split, false)
+    }
+
     /// As CIT Resewn reads its files: a line with an unescaped `=` splits there, so a key may
     /// hold an unescaped `:` (`components.minecraft:custom_name=Bob`); other lines as `parse`.
     pub fn parse_equals_first(text: &str) -> Self {
@@ -30,6 +35,10 @@ impl Properties {
     }
 
     fn read(text: &str, split: impl Fn(&str) -> (&str, &str)) -> Self {
+        Self::read_values(text, split, true)
+    }
+
+    fn read_values(text: &str, split: impl Fn(&str) -> (&str, &str), trim: bool) -> Self {
         let mut out = Self::default();
         // Each key's place in `entries`, so a file of many keys reads in linear time.
         let mut index = std::collections::HashMap::<String, usize>::new();
@@ -48,7 +57,9 @@ impl Properties {
                 }
             }
             let (key, value) = split(&line);
-            let (key, value) = (unescape(key), unescape(value).trim().to_owned());
+            let key = unescape(key);
+            let value = unescape(value);
+            let value = if trim { value.trim().to_owned() } else { value };
             match index.get(&key) {
                 Some(&i) => out.entries[i].1 = value,
                 None => {
@@ -205,5 +216,15 @@ mod tests {
         let p = Properties::parse("texture.bow_pulling_0=a\ntexture.bow_pulling_1=b\nitems=bow\n");
         let got: Vec<_> = p.with_prefix("texture.").collect();
         assert_eq!(got, [("bow_pulling_0", "a"), ("bow_pulling_1", "b")]);
+    }
+
+    #[test]
+    fn java_values_keep_trailing_whitespace_for_integer_config_readers() {
+        let text = "RMBTweak=0 \nLMBTweakWithItem : 0\nWheelSearchOrder=\\\n  1\n";
+        let raw = Properties::parse_untrimmed(text);
+        assert_eq!(raw.get("RMBTweak"), Some("0 "));
+        assert_eq!(raw.get("LMBTweakWithItem"), Some("0"));
+        assert_eq!(raw.get("WheelSearchOrder"), Some("1"));
+        assert_eq!(Properties::parse(text).get("RMBTweak"), Some("0"));
     }
 }

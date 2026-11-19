@@ -1267,23 +1267,16 @@ impl Loading {
 
     pub(super) fn draw_menu(&mut self, batch: &mut HudBatch) {
         let Some(gui) = &self.gui else {
-            self.loading_overlay.update(
-                Some(("Loading resources", Some(self.progress.fraction()))),
-                Instant::now(),
+            atlas_client::level_loading::draw_loading_overlay(
+                batch,
+                &self.boot,
+                self.progress.line(),
+                self.progress.fraction(),
+                self.settings.file.bool("darkMojangStudiosBackground"),
             );
-            self.loading_overlay.draw(batch, &self.boot, Instant::now());
             return;
         };
-        self.loading_overlay.update(
-            self.menu
-                .pending
-                .as_ref()
-                .map(|_| ("Preparing world", Some(self.progress.fraction()))),
-            Instant::now(),
-        );
-        // `Gui.setScreen` clears the focus of the screen it leaves
-        // (`Screen.clearFocus`): the title behind the options, and the one
-        // that comes back, start with no button highlighted.
+        // The screen that was dismissed comes back with no button highlighted.
         let screen = self.menu.key_screen();
         if super::pad_menu::another_screen_is_front(&mut self.menu.focus_screen, screen) {
             self.menu.options.clear_click_focus();
@@ -1292,7 +1285,11 @@ impl Loading {
             }
         }
         if self.menu.pending.is_some() {
-            self.loading_overlay.draw(batch, &gui.atlas, Instant::now());
+            let (w, h) = (batch.width, batch.height);
+            atlas_client::ui::menu_background(batch, &gui.atlas, 0.0, 0.0, w, h, false);
+            atlas_client::level_loading::draw_progress(
+                batch, &gui.atlas, self.progress.line(), self.progress.fraction(),
+            );
         } else if let Some((win, frame)) = &mut self.menu.win {
             let now = Instant::now();
             // 20 ticks a second: the startup menu runs no tick rate.
@@ -1428,7 +1425,6 @@ mod tests {
             delivered: false,
             handle: None,
             shown: false,
-            loading_overlay: Default::default(),
             ui_at: None,
             title_drawn: false,
             menu: StartupMenu::default(),
@@ -1624,17 +1620,6 @@ mod tests {
         }) if name == "My world")
         );
         let mut batch = HudBatch::new([1280, 720]);
-        loading.draw_menu(&mut batch);
-        assert!(
-            batch.vertices.is_empty(),
-            "very short transitions do not flash an overlay"
-        );
-        // Advance the overlay's clock without sleeping or unblocking the worker.
-        loading.loading_overlay = Default::default();
-        loading.loading_overlay.update(
-            Some(("Preparing world", Some(0.0))),
-            Instant::now() - std::time::Duration::from_millis(400),
-        );
         loading.draw_menu(&mut batch);
         assert!(
             !batch.vertices.is_empty(),

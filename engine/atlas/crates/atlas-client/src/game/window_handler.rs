@@ -2,6 +2,16 @@
 //! and the idle step (`about_to_wait`).
 use super::*;
 
+pub(super) fn window_title() -> &'static str {
+    static TITLE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TITLE.get_or_init(|| {
+        std::env::var("ATLAS_WINDOW_TITLE")
+            .ok()
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or_else(|| "Atlas".to_owned())
+    })
+}
+
 impl Game<'_> {
     /// A run that a person's stray key, click or mouse move would spoil: a screenshot sequence, a
     /// `ATLAS_TICK_SCRIPT` scenario or a `record-replay`. While one runs, the keyboard, mouse
@@ -290,7 +300,7 @@ impl ApplicationHandler for Game<'_> {
         let size = self.options.window_size.map(f64::from);
         self.fullscreen = atlas_client::window::FullscreenState::new(fullscreen);
         let attributes =
-            atlas_client::window::with_icon(Window::default_attributes().with_title("Atlas"));
+            atlas_client::window::with_icon(Window::default_attributes().with_title(window_title()));
         // Wayland names the window by its app id, which the atlas.desktop entry matches.
         #[cfg(target_os = "linux")]
         let attributes = winit::platform::wayland::WindowAttributesExtWayland::with_name(

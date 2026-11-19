@@ -355,7 +355,7 @@ fn draw_discard(
         .zip(["text.cloth-config.quit_discard", "gui.cancel"])
         .enumerate()
     {
-        ui::button(
+        atlas_client::atlas::mod_style::button(
             batch,
             atlas,
             rect[0],
@@ -651,7 +651,6 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         self.native_apply_screen_blur();
         self.render_transparent_background("atlas_config", batch);
         let atlas = &self.gui.atlas;
@@ -664,21 +663,16 @@ impl Game<'_> {
         }
         let yacl = definition.frame == Frame::Yacl;
         if yacl {
-            batch.fill(
+            atlas_client::atlas::mod_style::panel(
+                batch,
                 atlas,
-                layout.pane,
-                23.0,
-                layout.width - layout.pane,
-                layout.height - 23.0,
-                rgba(0, 0, 0, 64),
-            );
-            batch.fill(
-                atlas,
-                0.0,
-                22.0,
-                layout.width,
-                1.0,
-                rgba(160, 160, 160, 255),
+                [
+                    layout.pane + 3.0,
+                    26.0,
+                    layout.width - layout.pane - 6.0,
+                    layout.height - 51.0,
+                ],
+                10.0,
             );
         } else {
             ui::separators(batch, atlas, 28.0, layout.bottom, false);
@@ -734,36 +728,12 @@ impl Game<'_> {
             let mut x = (layout.width - widths.iter().sum::<f32>()) / 2.0;
             let cloth_tabs = cloth_tab_rects(&widths);
             if !yacl {
-                batch.fill(
+                atlas_client::atlas::mod_style::panel(
+                    batch,
                     atlas,
-                    20.0,
-                    41.0,
-                    layout.width - 40.0,
-                    24.0,
-                    rgba(0, 0, 0, 150),
+                    [20.0, 41.0, layout.width - 40.0, 24.0],
+                    10.0,
                 );
-                for (arrow_x, right) in [(4.0, false), (layout.width - 16.0, true)] {
-                    batch.fill(
-                        atlas,
-                        arrow_x + if right { 0.0 } else { 10.0 },
-                        44.0,
-                        2.0,
-                        18.0,
-                        rgba(0, 0, 0, 255),
-                    );
-                    for row in 0..9 {
-                        let offset = (row - 4_i32).abs() as f32 * 2.0;
-                        let px = if right { 10.0 - offset } else { offset };
-                        batch.fill(
-                            atlas,
-                            arrow_x + px,
-                            44.0 + row as f32 * 2.0,
-                            2.0,
-                            2.0,
-                            rgba(0, 0, 0, 255),
-                        );
-                    }
-                }
             }
             for (i, (category, width)) in definition.categories.iter().zip(widths).enumerate() {
                 if yacl {
@@ -775,15 +745,11 @@ impl Game<'_> {
                         true,
                         atlas_client::widgets::Kind::Tab(i == state.category),
                     );
-                    batch.fill(atlas, x, y, width, 1.0, rgba(160, 160, 160, 255));
-                    batch.fill(atlas, x, y, 1.0, 24.0 - y, rgba(160, 160, 160, 255));
-                    batch.fill(
+                    atlas_client::atlas::mod_style::panel(
+                        batch,
                         atlas,
-                        x + width - 1.0,
-                        y,
-                        1.0,
-                        24.0 - y,
-                        rgba(160, 160, 160, 255),
+                        [rect[0] + 1.0, rect[1] + 1.0, rect[2] - 2.0, rect[3] - 2.0],
+                        8.0,
                     );
                     centered(
                         batch,
@@ -806,7 +772,7 @@ impl Game<'_> {
                     }
                 } else {
                     let [x, y, width, height] = cloth_tabs[i];
-                    ui::button(
+                    atlas_client::atlas::mod_style::button(
                         batch,
                         atlas,
                         x,
@@ -918,7 +884,7 @@ impl Game<'_> {
                 let changed = state.defaults.pointer(&field.path) != Some(value)
                     || state.invalid.contains(&field.path);
                 if !matches!(field.kind, Kind::Action { .. }) {
-                    ui::button(
+                    atlas_client::atlas::mod_style::button(
                         batch,
                         atlas,
                         reset_rect[0],
@@ -1031,7 +997,7 @@ impl Game<'_> {
                             ..
                         } => {
                             let value = value.as_i64().unwrap_or(min);
-                            ui::slider(
+                            atlas_client::atlas::mod_style::slider(
                                 batch,
                                 atlas,
                                 value_rect[0],
@@ -1051,7 +1017,7 @@ impl Game<'_> {
                             ..
                         } => {
                             let value = value.as_f64().unwrap_or(min);
-                            ui::slider(
+                            atlas_client::atlas::mod_style::slider(
                                 batch,
                                 atlas,
                                 value_rect[0],
@@ -1098,7 +1064,7 @@ impl Game<'_> {
                             editor.focused = focused;
                             editor.draw(batch, atlas, None);
                         }
-                        _ => ui::button(
+                        _ => atlas_client::atlas::mod_style::button(
                             batch,
                             atlas,
                             value_rect[0],
@@ -1162,7 +1128,7 @@ impl Game<'_> {
             state.scroll,
         );
         let [cancel, save] = layout.footer();
-        ui::button(
+        atlas_client::atlas::mod_style::button(
             batch,
             atlas,
             cancel[0],
@@ -1177,7 +1143,7 @@ impl Game<'_> {
             true,
             hit(cancel, self.cursor.0, self.cursor.1),
         );
-        ui::button(
+        atlas_client::atlas::mod_style::button(
             batch,
             atlas,
             save[0],
@@ -1202,7 +1168,7 @@ impl Game<'_> {
         );
         if yacl {
             let undo = [cancel[0] + cancel[2] + 4.0, cancel[1], cancel[2], cancel[3]];
-            ui::button(
+            atlas_client::atlas::mod_style::button(
                 batch,
                 atlas,
                 undo[0],
@@ -1321,7 +1287,6 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         if !pressed {
             self.atlas_ports.config_ui.dragging = None;
             return true;
@@ -1493,7 +1458,6 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         let focus = self.atlas_ports.config_ui.focus.clone();
         if key == KeyCode::Escape {
             if self.atlas_ports.config_ui.discard_dialog {
@@ -1672,7 +1636,6 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         let state = &mut self.atlas_ports.config_ui;
         if state.discard_dialog {
             return true;
@@ -1692,7 +1655,6 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         let state = &mut self.atlas_ports.config_ui;
         if state.discard_dialog {
             return true;
@@ -1712,7 +1674,6 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         let Some(layout) = self.atlas_config_layout() else {
             return true;
         };
@@ -1729,7 +1690,6 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         let Some(layout) = self.atlas_config_layout() else {
             return true;
         };

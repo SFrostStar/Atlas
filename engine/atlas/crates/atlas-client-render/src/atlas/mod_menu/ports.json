@@ -660,5 +660,96 @@
     },
     "icon": "atlas/modmenu/icons/atlas-esc-music",
     "client": true
+  },
+  {
+    "id": "atlas-saturation-plus",
+    "name": "Saturation Plus",
+    "version": "1.3.1-1.21.2",
+    "description": "Adds extra customization options for hunger and saturation, allowing players to stay full for longer durations or eat any food regardless of hunger level.",
+    "authors": [
+      "MrKirbychu"
+    ],
+    "licenses": [
+      "CC0-1.0"
+    ],
+    "dependencies": {
+      "atlas": ">=1.4.0"
+    },
+    "icon": "atlas/modmenu/icons/atlas-saturation-plus",
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas port)"
+      ]
+    }
+  },
+  {
+    "id": "atlas-mousetweaks",
+    "name": "Mouse Tweaks",
+    "version": "2.27",
+    "description": "A mod that enhances the inventory management by adding various additional functions to the usual mouse buttons.",
+    "authors": [
+      "Ivan Molodetskikh (YaLTeR)"
+    ],
+    "licenses": [
+      "BSD-3-Clause"
+    ],
+    "homepage": "https://modrinth.com/mod/mouse-tweaks/version/m8rwZENW",
+    "source": "https://github.com/YaLTeR/MouseTweaks",
+    "issues": "https://github.com/YaLTeR/MouseTweaks/issues",
+    "client": true,
+    "credits": {
+      "contributor": [
+        "mezz",
+        "juliand665",
+        "panoskj",
+        "FabiClawZ",
+        "ErrorMikey",
+        "SFrostStar (Atlas port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.4.0"
+    }
+  },
+  {
+    "id": "atlas-totemtweaks",
+    "name": "Totem Tweaks",
+    "version": "1.0.1",
+    "description": "Customize the size of held totems and the totem activation animation.",
+    "authors": [
+      "RacialGamer"
+    ],
+    "licenses": [
+      "ARR"
+    ],
+    "homepage": "https://modrinth.com/mod/cpvp",
+    "source": "https://github.com/RacialGamer/Small-pop",
+    "client": true,
+    "credits": {
+      "contributor": [
+        "SFrostStar (Atlas port)"
+      ]
+    },
+    "dependencies": {
+      "atlas": ">=1.4.0"
+    }
+  },
+  {
+    "id": "atlas-ias",
+    "name": "In-Game Account Switcher",
+    "version": "9.0.7",
+    "description": "Manage and switch saved accounts without restarting the game.",
+    "authors": ["VidTu"],
+    "licenses": ["LGPL-3.0-or-later"],
+    "homepage": "https://modrinth.com/mod/in-game-account-switcher",
+    "source": "https://github.com/The-Fireplace-Minecraft-Mods/In-Game-Account-Switcher",
+    "client": true,
+    "credits": {
+      "contributor": ["The_Fireplace", "The_BrainStone", "2xsaiko", "Elvm", "Fhilips613", "WyattMarks", "SFrostStar (Atlas port)"]
+    },
+    "dependencies": {
+      "atlas": ">=1.4.1"
+    },
+    "icon": "atlas/ias/button_plain"
   }
 ]

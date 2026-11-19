@@ -660,7 +660,7 @@ pub(super) struct Remote {
     /// Item entities waiting for their item data: where they are and their
     /// motion.
     pending_items: HashMap<i32, ([f64; 3], Vec3)>,
-    health: (f32, i32, f32),
+    pub(super) health: (f32, i32, f32),
     /// `LocalPlayer.flashOnSetHealth`: set by the first health the server
     /// sends; from then on a drop starts the hurt animation.
     flash_on_set_health: bool,
@@ -1556,6 +1556,7 @@ impl Game<'_> {
         if let Some(mut r) = self.remote.take() {
             r.session.disconnect();
         }
+        self.saturation_plus_reset();
         super::lan::forget_sync_data();
         self.gui.atlas.clear_object_skins();
         self.server_packs_disconnect();
@@ -3253,6 +3254,9 @@ impl Game<'_> {
             C::CustomPayload(p) if p.channel.starts_with("appleskin:") => {
                 self.appleskin_payload(&p.channel, &p.data);
             }
+            C::CustomPayload(p) if p.channel == super::atlas_ports::saturation_plus::CHANNEL => {
+                self.saturation_plus_receive(&p.data);
+            }
             C::CustomPayload(p) if p.channel == atlas_protocol::mod_net::CHANNEL => {
                 self.remote_native_net(&p.data);
             }
@@ -3286,6 +3290,7 @@ impl Game<'_> {
             }
             C::Login(p) => {
                 self.appleskin_reset();
+                self.saturation_plus_reset();
                 self.test_highlights.clear();
                 self.forget_synced_recipes();
                 self.level.hardcore = p.hardcore;
@@ -3345,6 +3350,7 @@ impl Game<'_> {
                 }
             }
             C::Respawn(p) => {
+                self.saturation_plus_reset();
                 if let Some(r) = self.remote.as_ref() {
                     self.audio.remove_sound_entity(r.entity_id as u32);
                 }
@@ -9237,14 +9243,22 @@ impl Game<'_> {
         if let Some(consumable) = self.consumable(&stack) {
             self.emit_consume(&consumable, &stack, 16);
         }
+        let saturation_rules = self
+            .atlas_saturation_plus_enabled()
+            .then_some(atlas_world::saturation_plus::Rules::default());
         if let Some((nutrition, saturation)) = info.food
             && let Some(r) = self.remote.as_mut()
         {
             // FoodData.eat(nutrition, saturation), as finish_consuming does;
             // the next ClientboundSetHealth replaces it.
             let (_, food, sat) = &mut r.health;
-            *food = (*food + nutrition as i32).clamp(0, 20);
-            *sat = (*sat + saturation).clamp(0.0, *food as f32);
+            let mut predicted = atlas_world::food::FoodData {
+                food: *food,
+                saturation: *sat,
+                ..Default::default()
+            };
+            predicted.eat_with_rules(nutrition as i32, saturation, saturation_rules);
+            (*food, *sat) = (predicted.food, predicted.saturation);
             self.apply_remote_health();
         }
         // ItemStack.finishUsingItem's applyAfterUseComponentSideEffects.

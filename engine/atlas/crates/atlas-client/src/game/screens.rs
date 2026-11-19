@@ -362,6 +362,22 @@ impl Game<'_> {
     pub(super) fn external_server(&self) -> bool {
         self.remote.is_some() && self.integrated.is_none()
     }
+    pub(super) fn pause_menu_bottom(&self, (w, h): (f32, f32)) -> f32 {
+        if !self.pause_menu {
+            return 0.0;
+        }
+        pause_buttons(
+            w,
+            h,
+            self.external_server(),
+            !self.server_links().is_empty(),
+            self.pause_screen_additions().is_some(),
+            &self.pause_rows(),
+        )
+        .into_iter()
+        .map(|(_, y, ..)| y + 20.0)
+        .fold(0.0, f32::max)
+    }
     pub(super) fn draw_pause_menu(&mut self, batch: &mut HudBatch) {
         let friends = self.friends_shown();
         let atlas = &self.gui.atlas;
@@ -612,6 +628,9 @@ impl Game<'_> {
         Ok(())
     }
     pub(super) fn pause_key(&mut self, key: KeyCode) -> Result<()> {
+        if self.atlas_esc_music_key(key) {
+            return Ok(());
+        }
         let (w, h) = {
             let size = self
                 .renderer
@@ -639,6 +658,8 @@ impl Game<'_> {
         {
             active_ids.push(19);
         }
+        let music_targets = self.atlas_esc_music_targets((w, h));
+        active_ids.extend(music_targets.iter().map(|(id, _)| *id));
         if active_ids.is_empty() {
             return Ok(());
         }
@@ -707,6 +728,7 @@ impl Game<'_> {
                         rects.push((id, x, y, 20.0));
                     }
                 }
+                rects.extend(music_targets.into_iter().map(|(id, [x, y, w, _])| (id, x, y, w)));
                 let cur_id = self.pause_focus.unwrap_or(0);
                 if let Some(cur) = rects.iter().find(|r| r.0 == cur_id) {
                     let (cx, cy) = (cur.1 + cur.3 / 2.0, cur.2 + 10.0);

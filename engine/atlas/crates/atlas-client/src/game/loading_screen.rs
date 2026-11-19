@@ -57,7 +57,6 @@ pub(super) struct Loading {
     pub(super) started: Instant,
     pub(super) panorama_rotation: atlas_client::gfx::panorama::Rotation,
     pub(super) progress: Progress,
-    pub(super) loading_overlay: atlas_client::atlas_loading::Overlay,
     pub(super) receiver: Receiver<LoaderMsg>,
     pub(super) loaded: Option<std::result::Result<Loaded, String>>,
     /// The loader's `Done` arrived: its channel closing afterwards is expected.
@@ -97,8 +96,9 @@ impl Loading {
             .map_or([1280, 720], |o| o.window_size)
             .map(f64::from);
         self.fullscreen = atlas_client::window::FullscreenState::new(fullscreen);
-        let attributes =
-            atlas_client::window::with_icon(Window::default_attributes().with_title("Atlas"));
+        let attributes = atlas_client::window::with_icon(
+            Window::default_attributes().with_title(window_handler::window_title()),
+        );
         // Wayland names the window by its app id, which the atlas.desktop entry matches.
         #[cfg(target_os = "linux")]
         let attributes = winit::platform::wayland::WindowAttributesExtWayland::with_name(
@@ -376,7 +376,6 @@ impl Loading {
         game.fullscreen = self.fullscreen;
         game.panorama_rotation = self.panorama_rotation;
         self.menu.handoff(&mut game);
-        game.loading_overlay = std::mem::take(&mut self.loading_overlay);
         game.apply_settings();
         game.previous = Instant::now();
         // Minecraft.onGameLoadFinished: a start that made it this far is clean.

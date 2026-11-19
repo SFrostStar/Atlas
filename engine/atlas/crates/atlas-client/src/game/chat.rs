@@ -1879,6 +1879,7 @@ impl Game<'_> {
     }
     /// Apply rules mirrored in other state (natural regeneration, difficulty).
     pub(super) fn sync_rules(&mut self) {
+        self.world.health_rules.saturation_plus = self.ui.rules.saturation_plus();
         self.world.health_rules.natural_regeneration =
             self.ui.rules.bool("natural_health_regeneration");
         // Player.isInvulnerableTo: the damage-type rules.
@@ -1900,6 +1901,9 @@ impl Game<'_> {
     pub(super) fn load_world_state(&mut self) {
         self.ui.rules =
             GameRules::load_with_features(&self.world_root, &self.level.enabled_features);
+        if self.atlas_saturation_plus_enabled() {
+            super::atlas_ports::saturation_plus::load_rules(&self.world_root, &mut self.ui.rules);
+        }
         self.ui.clock = WorldClock::default();
         self.ui.command_clocks.clear();
         // PrimaryLevelData: the difficulty comes back from level.dat's difficulty_settings.

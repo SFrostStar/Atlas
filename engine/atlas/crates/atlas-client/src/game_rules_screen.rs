@@ -55,7 +55,11 @@ pub struct RulesScreen {
 }
 
 fn name_key(r: &Rule) -> String {
-    format!("gamerule.minecraft.{}", r.name)
+    if crate::gamerules::SATURATION_PLUS_RULES.iter().any(|rule| rule.name == r.name) {
+        format!("gamerule.{}", r.name)
+    } else {
+        format!("gamerule.minecraft.{}", r.name)
+    }
 }
 fn category_key(category: &str) -> String {
     format!("gamerule.category.minecraft.{category}")

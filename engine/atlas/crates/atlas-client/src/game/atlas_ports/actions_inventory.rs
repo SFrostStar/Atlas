@@ -151,25 +151,17 @@ fn draw_button(
     selected: bool,
 ) {
     let [x, y, w, h] = r;
-    let base = if busy {
-        argb(-12434359)
-    } else if hover {
-        argb(-8946813)
+    let (fill, border) = if busy {
+        (rgba(31, 35, 42, 235), rgba(255, 255, 255, 24))
+    } else if hover || selected {
+        (rgba(47, 62, 83, 245), rgba(147, 181, 231, 210))
     } else {
-        argb(-10986654)
+        (rgba(25, 32, 43, 236), rgba(255, 255, 255, 32))
     };
-    batch.fill(atlas, x, y, w, h, argb(-16316407));
-    batch.fill(atlas, x + 1.0, y + 1.0, w - 2.0, h - 2.0, base);
-    batch.fill(atlas, x + 1.0, y + 1.0, w - 2.0, 1.0, argb(-6249817));
-    batch.fill(atlas, x + 1.0, y + 1.0, 1.0, h - 2.0, argb(-6249817));
-    batch.fill(atlas, x + 2.0, y + h - 2.0, w - 3.0, 1.0, argb(-13618633));
-    if selected {
-        let c = argb(-7022471);
-        batch.fill(atlas, x, y, w, 1.0, c);
-        batch.fill(atlas, x, y + h - 1.0, w, 1.0, c);
-        batch.fill(atlas, x, y, 1.0, h, c);
-        batch.fill(atlas, x + w - 1.0, y, 1.0, h, c);
-    }
+    let mut ui = atlas_client::ui_theme::Ui::at_gui_scale(atlas, batch, (0.0, 0.0));
+    ui.rounded(x, y, w, h, 6.0, fill);
+    ui.border(x, y, w, h, 6.0, border);
+    ui.finish();
 }
 impl Game<'_> {
     fn atlas_inventory_visible(&self) -> bool {
@@ -366,7 +358,6 @@ impl Game<'_> {
         s.messages = vec![Text::tr("inventorylayouts.progress", &[&s.index, &total]).plain()];
     }
     pub(in crate::game) fn atlas_inventory_draw(&mut self, batch: &mut HudBatch) {
-        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return;
         }
@@ -602,7 +593,6 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_inventory_mouse(&mut self, button: i32) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return false;
         }
@@ -740,7 +730,6 @@ impl Game<'_> {
         ctrl: bool,
         shift: bool,
     ) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return false;
         }
@@ -765,7 +754,6 @@ impl Game<'_> {
         true
     }
     pub(in crate::game) fn atlas_inventory_char(&mut self, text: &str) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if self.atlas_inventory_visible()
             && let Some((_, f)) = &mut self.atlas_ports.actions.inventory.editing
         {
@@ -776,7 +764,6 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_inventory_scroll(&mut self, delta: f32) -> bool {
-        let _font = atlas_client::font::java_mod_font_scope();
         if !self.atlas_inventory_visible() {
             return false;
         }

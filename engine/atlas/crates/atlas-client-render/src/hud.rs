@@ -141,9 +141,6 @@ pub fn map_slot_sprite(slot: usize) -> Option<&'static str> {
 }
 /// The atlas slot the minimap extra draws into.
 pub const MINIMAP_SPRITE: &str = "atlas/minimap";
-/// Album art uploaded by the pause menu's external media controls.
-pub const MEDIA_COVER_SPRITE: &str = "atlas/media-cover";
-pub const MEDIA_COVER_SIZE: u32 = 64;
 /// A mod's own image (`native_mod_image`), drawn with `native_sprite`; big
 /// enough for a world map's 1024 blocks at a block a pixel.
 pub const MOD_IMAGE_SPRITE: &str = "atlas/modimage";
@@ -921,12 +918,6 @@ impl HudAtlas {
             crate::minimap::SIZE as u32,
             crate::minimap::SIZE as u32,
             Vec::new(),
-        ));
-        images.push((
-            MEDIA_COVER_SPRITE.into(),
-            MEDIA_COVER_SIZE,
-            MEDIA_COVER_SIZE,
-            vec![0; (MEDIA_COVER_SIZE * MEDIA_COVER_SIZE * 4) as usize],
         ));
         // A mod's own image (native `mod_image`), only when a mod is loaded.
         if mod_image {

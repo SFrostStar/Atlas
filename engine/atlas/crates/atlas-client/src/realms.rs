@@ -208,6 +208,14 @@ pub struct RealmsPack {
 
 static PENDING_PACK: Mutex<Option<RealmsPack>> = Mutex::new(None);
 
+/// Forget the selected account's availability and permission to load a Realm's pack.
+pub fn clear_previous_account() {
+    availability::clear_account();
+    if let Ok(mut pending) = PENDING_PACK.lock() {
+        *pending = None;
+    }
+}
+
 /// The pack for the connection to `address`, if the Realms screen asked for one.
 pub fn take_pending_pack(address: &str) -> Option<RealmsPack> {
     let pack = PENDING_PACK.lock().ok()?.take()?;

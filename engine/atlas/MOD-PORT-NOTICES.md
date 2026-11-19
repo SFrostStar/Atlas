@@ -134,9 +134,31 @@ These hashes identify the exact local reference archives, without uploading the 
 | `ViewModel-1.21.4.jar` | `ca1b8969ba3bd447f498b4c58abfa0a2680572ad21e1b5baf20dd659db0b460d` |
 | `chunkanimator-1.21.4.jar` | `73b77c235115309c6f57ebe42275a93637ae922d2d56095be86203f9c4301520` |
 | `Gamma-Utils-2.2.6+mc1.21.5 (1).jar` | `1fa56090c812a851cd603f9392372b8c945c585d0c027c5e759c774ece4cdabe` |
+| `saturation_plus-1.3.1-1.21.2.jar` | `bd00f8475f935a987c040d6e2e3fadf9eb90d44316158c55b078db73b52746dc` |
+| Official `MouseTweaks-fabric-mc1.21.3-2.27.jar` | `82aaa759bb702c5b958e1d8f9ae0935213e50a9588dce8be0cbfb5074121bc48` |
+| `totemtweaks-1.21.4-1.0.1.jar` | `bc5b7a0e72c19b3078ac3ad21c4437f3fbf16f7420c1593f59f3b98e0e5b4324` |
+
+Saturation Plus 1.3.1-1.21.2 is by MrKirbychu and licensed CC0-1.0. Its
+original notice is in `mod-port-licenses/saturation_plus-LICENSE_saturation_plus.txt`.
+
+Mouse Tweaks 2.27 is by Ivan Molodetskikh (YaLTeR), with a BSD-3-Clause notice
+in `mod-port-licenses/MouseTweaks-BSD-3-Clause.txt`. The reference is the
+[official release](https://modrinth.com/mod/mouse-tweaks/version/m8rwZENW).
+
+Totem Tweaks 1.0.1 by RacialGamer is the behavioral reference for Atlas's
+implementation and configuration screen. The reference license notice is
+preserved in `mod-port-licenses/TotemTweaks-original-license.txt`.
 
 The reference for the unusual CullParticles method mapping is the
 [Fabric Yarn 1.21.4+build.8 ClientPlayerEntity mapping](https://maven.fabricmc.net/docs/yarn-1.21.4+build.8/net/minecraft/client/network/ClientPlayerEntity.html#pushOutOfBlocks(double,double)).
+
+## In-Game Account Switcher
+
+The reference is `IAS-9.0.7+1.21.4-fabric.jar`, SHA-256
+`6ef831ab457413ace30168d3304fbc609aa52cb68ce21b4417d611847e6ae2a5`.
+VidTu and the original contributors retain their credits. IAS artwork is
+provided under LGPL-3.0-or-later with `mod-port-licenses/IAS-LGPL-3.0.txt`.
+The original source is [In-Game Account Switcher](https://github.com/The-Fireplace-Minecraft-Mods/In-Game-Account-Switcher).
 
 
 ## Gamma Utils artwork

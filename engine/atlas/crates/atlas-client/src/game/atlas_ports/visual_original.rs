@@ -1,12 +1,19 @@
 //! Faithful screens from ArmorIndicator 1.0.0 (ArmorIndicator Dev, CC0/MIT)
 //! and Radar 1.0.0 (slmnk, MIT). Original authorship: MOD-PORT-NOTICES.md.
-//! Coordinates, presets, transitions, labels and persistence follow the supplied JARs.
+//! Controls and persistence are adapted from the supplied JARs.
+use super::super::{
+    RadarRow,
+    logic::{self, RadarTurn},
+};
 use super::{Game, hit};
 use atlas_client::{
+    atlas::mod_style,
     hud::{HudAtlas, HudBatch, rgba},
+    hud_kit::motion::Clock,
     lang,
     text::Text,
     ui,
+    ui_theme::{Face, Ui, color},
 };
 use serde_json::json;
 use std::{collections::BTreeMap, sync::OnceLock};
@@ -14,10 +21,11 @@ use winit::keyboard::KeyCode;
 
 const ARMOR: &str = "atlas-armorindicator";
 const RADAR: &str = "atlas-radarmod";
+const RADAR_CONTROLS: usize = 9;
 #[derive(Default)]
 pub(super) struct State {
     id: String,
-    preview: Vec<Preview>,
+    preview: Vec<RadarRow>,
     dragging: Option<Drag>,
     focus: Option<usize>,
     sliders: [f64; 4],
@@ -26,13 +34,6 @@ pub(super) struct State {
 enum Drag {
     Hud(f32, f32),
     Slider(usize),
-}
-struct Preview {
-    name: String,
-    health: i32,
-    distance: i32,
-    arrow: String,
-    skin: String,
 }
 pub(super) fn supports(id: &str) -> bool {
     matches!(id, ARMOR | RADAR)
@@ -84,9 +85,9 @@ fn armor_rect(index: usize, w: f32, h: f32) -> [f32; 4] {
 fn radar_panel(w: f32, h: f32) -> [f32; 4] {
     [
         ((w as i32 - 240) / 2) as f32,
-        ((h as i32 - 228) / 2) as f32,
+        ((h as i32 - 204) / 2) as f32,
         240.0,
-        228.0,
+        204.0,
     ]
 }
 fn radar_rect(index: usize, w: f32, h: f32) -> [f32; 4] {
@@ -97,7 +98,7 @@ fn radar_rect(index: usize, w: f32, h: f32) -> [f32; 4] {
         let row = (index - 5) / 2;
         [
             x + 10.0 + ((index - 5) % 2) as f32 * 112.0,
-            y + 148.0 + row as f32 * 24.0 + if row == 2 { 2.0 } else { 0.0 },
+            y + 148.0 + row as f32 * 26.0,
             108.0,
             20.0,
         ]
@@ -143,38 +144,40 @@ fn arrow_focus(rects: &[[f32; 4]], current: usize, key: KeyCode) -> usize {
     }
     best.map_or(current, |(_, _, _, index)| index)
 }
-fn samples(count: usize) -> Vec<Preview> {
+fn samples(count: usize) -> Vec<RadarRow> {
+    let clock = Clock::new(std::time::Instant::now(), true);
     let presets = [
-        ("Japanese_jenning", 20, 1, "↑"),
-        ("AZAMAT785665", 20, 1, "←"),
-        ("Fo4zir", 20, 1, "↓"),
-        ("POPKACHETIMBA", 15, 1, "←"),
-        ("Itz_Dims2", 20, 4, "↓"),
-        ("B1G_TagMagYT", 20, 4, "↖"),
-        ("P0zornik", 20, 6, "←"),
-        ("angelsdeko", 20, 6, "↖"),
-        ("Steve_Pro", 18, 8, "↗"),
-        ("Alex_Warrior", 12, 10, "→"),
-        ("Shadow_Hunter", 20, 14, "↘"),
-        ("CraftMaster", 6, 17, "↙"),
+        ("Japanese_jenning", 20, 1, 0),
+        ("AZAMAT785665", 20, 1, 6),
+        ("Fo4zir", 20, 1, 4),
+        ("POPKACHETIMBA", 15, 1, 6),
+        ("Itz_Dims2", 20, 4, 4),
+        ("B1G_TagMagYT", 20, 4, 7),
+        ("P0zornik", 20, 6, 6),
+        ("angelsdeko", 20, 6, 7),
+        ("Steve_Pro", 18, 8, 1),
+        ("Alex_Warrior", 12, 10, 2),
+        ("Shadow_Hunter", 20, 14, 3),
+        ("CraftMaster", 6, 17, 5),
     ];
     (0..count)
         .map(|i| {
-            let (name, health, distance, arrow) =
+            let (name, hp, distance, octant) =
                 presets
                     .get(i)
                     .copied()
-                    .unwrap_or(("", 20, (20 + i * 3) as i32, "↑"));
-            Preview {
+                    .unwrap_or(("", 20, (20 + i * 3) as i32, 0));
+            RadarRow {
                 name: if name.is_empty() {
                     format!("Player_{}", i + 1)
                 } else {
                     name.into()
                 },
-                health,
+                hp,
                 distance,
-                arrow: arrow.into(),
+                arrow: RadarTurn::new(octant as f32 * std::f32::consts::FRAC_PI_4, clock),
                 skin: "entity/player/wide/steve".into(),
+                uuid: 0,
             }
         })
         .collect()
@@ -190,15 +193,7 @@ impl Game<'_> {
             if rows.is_empty() {
                 samples(self.atlas_ports.visual.radar.max_players)
             } else {
-                rows.iter()
-                    .map(|row| Preview {
-                        name: row.name.clone(),
-                        health: row.hp,
-                        distance: row.distance,
-                        arrow: row.arrow.into(),
-                        skin: row.skin.clone(),
-                    })
-                    .collect()
+                rows.clone()
             }
         } else {
             Vec::new()
@@ -304,7 +299,6 @@ impl Game<'_> {
         if !self.atlas_original_screen_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         self.original_update_drag(batch.width, batch.height);
         let atlas = &self.gui.atlas;
         batch.fill_gradient(
@@ -371,7 +365,7 @@ impl Game<'_> {
         for (i, text) in labels.iter().enumerate() {
             let [x, y, w, h] = armor_rect(i, batch.width, batch.height);
             let focused = self.atlas_ports.visual.ui.original.focus == Some(i);
-            ui::button(
+            atlas_client::atlas::mod_style::button(
                 batch,
                 atlas,
                 x,
@@ -414,54 +408,49 @@ impl Game<'_> {
         let [x, y, w, h] = self.original_radar_bounds();
         let hovered = hit([x, y, w, h], self.cursor.0, self.cursor.1);
         let dragging = matches!(state.dragging, Some(Drag::Hud(_, _)));
-        let color = packed(if dragging {
-            -16711800
-        } else if hovered {
-            -22016
-        } else {
-            2013265919
-        });
-        for [dx, dy, dw, dh] in [
-            [-2.0, -2.0, w + 4.0, 1.0],
-            [-2.0, h + 1.0, w + 4.0, 1.0],
-            [-2.0, -2.0, 1.0, h + 4.0],
-            [w + 1.0, -2.0, 1.0, h + 4.0],
-        ] {
-            batch.fill(atlas, x + dx, y + dy, dw, dh, color);
-        }
-        batch.text(
-            atlas,
-            &label(if dragging {
-                "atlas.original.radar.dragging"
-            } else if hovered {
-                "atlas.original.radar.hover"
-            } else {
-                "atlas.original.radar.drag_hint"
-            }),
-            x,
-            (y - 12.0).max(2.0),
-            color,
-            true,
-        );
         let [px, py, pw, ph] = radar_panel(batch.width, batch.height);
-        batch.fill(
-            atlas,
-            px - 1.0,
-            py - 1.0,
-            pw + 2.0,
-            ph + 2.0,
-            packed(-300542430),
-        );
-        batch.fill(atlas, px, py, pw, ph, packed(-182575572));
-        batch.fill(atlas, px, py, pw, 22.0, packed(1426063360));
-        center(
-            batch,
-            atlas,
+        let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+        if hovered || dragging {
+            view.border(x, y, w, h, 10.0 * c.scale, color::accent());
+        }
+        let hint = label(if dragging {
+            "atlas.original.radar.dragging"
+        } else {
+            "atlas.original.radar.hover"
+        });
+        if hovered || dragging {
+            let width = view.measure(Face::Medium, 9.0, &hint) + 12.0;
+            let top = (y - 20.0).max(1.0);
+            view.rounded(x, top, width, 16.0, 8.0, color::bg());
+            view.text_line(Face::Medium, 9.0, 16.0, x + 6.0, top, color::text(), &hint);
+        }
+        view.finish();
+        mod_style::panel(batch, atlas, [px, py, pw, ph], 15.0);
+        let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+        view.text_line(
+            Face::SemiBold,
+            13.0,
+            28.0,
+            px + 13.0,
+            py,
+            color::text(),
             &label("atlas.original.radar.title"),
-            px + pw / 2.0,
-            py + 6.0,
-            u32::MAX,
         );
+        let coordinates = format_label(
+            "atlas.original.radar.coordinates",
+            &[("x", c.x.to_string()), ("y", c.y.to_string())],
+        );
+        let width = view.measure(Face::Mono, 9.0, &coordinates);
+        view.text_line(
+            Face::Mono,
+            9.0,
+            27.0,
+            px + pw - width - 12.0,
+            py,
+            color::muted(),
+            &coordinates,
+        );
+        view.finish();
         let boolean = |value| {
             label(if value {
                 "atlas.original.radar.yes"
@@ -494,27 +483,14 @@ impl Game<'_> {
             ),
             value_label("atlas.original.radar.health", boolean(c.show_health)),
             value_label("atlas.original.radar.arrows", boolean(c.show_arrows)),
-            label("atlas.original.radar.left"),
-            label("atlas.original.radar.right"),
             label("atlas.original.radar.reset"),
             label("atlas.original.radar.done"),
         ];
-        batch.text(
-            atlas,
-            &format_label(
-                "atlas.original.radar.coordinates",
-                &[("x", c.x.to_string()), ("y", c.y.to_string())],
-            ),
-            px + 10.0,
-            py + ph - 14.0,
-            packed(-5592406),
-            true,
-        );
         for (i, text) in labels.into_iter().enumerate() {
             let [x, y, w, h] = radar_rect(i, batch.width, batch.height);
             let hover = hit([x, y, w, h], self.cursor.0, self.cursor.1);
             if (1..=4).contains(&i) {
-                ui::slider_ext(
+                mod_style::slider(
                     batch,
                     atlas,
                     x,
@@ -522,14 +498,12 @@ impl Game<'_> {
                     w,
                     &Text::legacy(&text),
                     self.original_radar_slider(i) as f32,
-                    hover,
-                    state.focus == Some(i),
-                    false,
+                    hover || state.focus == Some(i),
                     true,
-                    matches!(state.dragging,Some(Drag::Slider(index)) if index==i),
+                    matches!(state.dragging, Some(Drag::Slider(index)) if index == i),
                 );
             } else {
-                ui::button(
+                mod_style::button(
                     batch,
                     atlas,
                     x,
@@ -544,139 +518,187 @@ impl Game<'_> {
         }
     }
     fn original_radar_preview(&self, batch: &mut HudBatch) {
+        let v = &self.atlas_ports.visual;
+        let rows = &v.ui.original.preview;
+        let count = if rows.iter().all(|r| r.uuid == 0) {
+            rows.len()
+        } else {
+            v.radar_count
+        };
+        self.draw_radar(batch, rows, count);
+    }
+
+    pub(in crate::game) fn atlas_visual_radar_draw(&self, batch: &mut HudBatch) {
+        let v = &self.atlas_ports.visual;
+        self.draw_radar(batch, &v.radar_rows, v.radar_count);
+    }
+
+    fn draw_radar(&self, batch: &mut HudBatch, rows: &[RadarRow], count: usize) {
         let atlas = &self.gui.atlas;
         let c = &self.atlas_ports.visual.radar;
-        let rows = &self.atlas_ports.visual.ui.original.preview;
+        let (x, y, w) = (c.x as f32, c.y as f32, c.hud_width as f32);
+        let h = if rows.is_empty() {
+            40.0
+        } else {
+            26.0 + 24.0 * rows.len() as f32
+        };
         let start = batch.vertices.len();
-        let (x, y, w, h) = (
-            c.x as f32,
-            c.y as f32,
-            c.hud_width as f32,
-            if rows.is_empty() {
-                40.0
-            } else {
-                26.0 + 24.0 * rows.len() as f32
-            },
+        let clock = self.hud_clock();
+        let mut view = Ui::at_gui_scale(atlas, batch, self.cursor);
+        view.rounded(
+            x,
+            y,
+            w,
+            h,
+            10.0,
+            color::with_alpha(color::bg(), c.background_opacity),
         );
-        let alpha = (c.background_opacity * 255.0) as u32;
-        let bg = packed(((alpha.min(255) << 24) | 0x111118) as i32);
-        let border = packed((((alpha + 40).min(255) << 24) | 0x2b2b3a) as i32);
-        batch.fill(atlas, x + 1.0, y, w - 2.0, h, bg);
-        batch.fill(atlas, x, y + 1.0, w, h - 2.0, bg);
-        for [dx, dy, dw, dh] in [
-            [1.0, 0.0, w - 2.0, 1.0],
-            [1.0, h - 1.0, w - 2.0, 1.0],
-            [0.0, 1.0, 1.0, h - 2.0],
-            [w - 1.0, 1.0, 1.0, h - 2.0],
-        ] {
-            batch.fill(atlas, x + dx, y + dy, dw, dh, border);
-        }
-        batch.text(
-            atlas,
+        view.border(
+            x,
+            y,
+            w,
+            h,
+            10.0,
+            color::with_alpha(color::text(), c.background_opacity * 0.23),
+        );
+        let accent = rgba(146, 186, 247, 255);
+        let count = count.to_string();
+        let count_width = (view.measure(Face::Mono, 9.0, &count) + 10.0).max(16.0);
+        let count_x = x + w - count_width - 9.0;
+        let title_start = view.batch.vertices.len();
+        view.text_line(
+            Face::SemiBold,
+            10.5,
+            22.0,
+            x + 10.0,
+            y,
+            color::text(),
             &label("atlas.original.radar.nearby"),
-            x + 8.0,
-            y + 7.0,
-            packed(-1118482),
-            true,
         );
-        for [dx, dy, dw, dh] in [
-            [3.0, 0.0, 4.0, 1.0],
-            [3.0, 9.0, 4.0, 1.0],
-            [0.0, 3.0, 1.0, 4.0],
-            [9.0, 3.0, 1.0, 4.0],
-            [1.0, 1.0, 2.0, 2.0],
-            [7.0, 1.0, 2.0, 2.0],
-            [1.0, 7.0, 2.0, 2.0],
-            [7.0, 7.0, 2.0, 2.0],
-            [4.0, 2.0, 2.0, 2.0],
-            [3.0, 6.0, 4.0, 2.0],
-        ] {
-            batch.fill(
-                atlas,
-                x + w - 18.0 + dx,
-                y + 6.0 + dy,
-                dw,
-                dh,
-                packed(-3355444),
+        view.batch
+            .clip_since(title_start, x + 9.0, y, count_x - 4.0, y + 22.0);
+        view.rounded(count_x, y + 4.0, count_width, 14.0, 7.0, color::raised());
+        view.text_centered(
+            Face::Mono,
+            9.0,
+            count_x + count_width / 2.0,
+            y + 4.0,
+            color::text(),
+            &count,
+        );
+        view.rounded(
+            x + 8.0,
+            y + 22.0,
+            w - 16.0,
+            1.0,
+            0.0,
+            color::with_alpha(color::text(), c.background_opacity * 0.18),
+        );
+
+        if rows.is_empty() {
+            view.text_line(
+                Face::Regular,
+                9.5,
+                16.0,
+                x + 10.0,
+                y + 23.0,
+                color::muted(),
+                &label("atlas.original.radar.empty"),
             );
         }
-        batch.fill(atlas, x + 4.0, y + 21.0, w - 8.0, 1.0, packed(587202559));
         for (i, row) in rows.iter().enumerate() {
-            let ry = y + 24.0 + i as f32 * 24.0;
-            if let Some(r) = atlas.sprites.get(&row.skin).copied() {
+            let ry = y + 24.0 + 24.0 * i as f32;
+            view.rounded(x + 7.0, ry + 3.0, 18.0, 18.0, 5.0, color::raised());
+            if let Some(skin) = atlas.sprites.get(&row.skin).copied() {
                 for (u, v) in [(8.0, 8.0), (40.0, 8.0)] {
-                    let mut face = r;
-                    let du = r.u1 - r.u0;
-                    let dv = r.v1 - r.v0;
-                    face.u0 = r.u0 + du * u / 64.0;
-                    face.v0 = r.v0 + dv * v / 64.0;
-                    face.u1 = face.u0 + du * 8.0 / 64.0;
-                    face.v1 = face.v0 + dv * 8.0 / 64.0;
-                    batch.rect_uv(x + 6.0, ry + 3.0, 18.0, 18.0, face, u32::MAX);
+                    let mut face = skin;
+                    let du = (skin.u1 - skin.u0) / 64.0;
+                    let dv = (skin.v1 - skin.v0) / 64.0;
+                    face.u0 = skin.u0 + du * u;
+                    face.v0 = skin.v0 + dv * v;
+                    face.u1 = face.u0 + du * 8.0;
+                    face.v1 = face.v0 + dv * 8.0;
+                    view.batch
+                        .rect_uv(x + 8.0, ry + 4.0, 16.0, 16.0, face, u32::MAX);
+                }
+            } else {
+                let initial = row
+                    .name
+                    .chars()
+                    .next()
+                    .unwrap_or(' ')
+                    .to_uppercase()
+                    .to_string();
+                view.text_centered(Face::SemiBold, 9.0, x + 16.0, ry + 5.0, accent, &initial);
+            }
+
+            let mut trailing = x + w - 9.0;
+            if c.show_arrows {
+                let centre = [trailing - 5.0, ry + 12.0];
+                let width = HudBatch::text_width(atlas, "↑");
+                let arrow_start = view.batch.vertices.len();
+                self.native_text(
+                    view.batch,
+                    "↑",
+                    [centre[0] - width / 2.0, ry + 7.0],
+                    0xa855f7,
+                    true,
+                );
+                let (sin, cos) = row.arrow.angle(clock).sin_cos();
+                for v in &mut view.batch.vertices[arrow_start..] {
+                    let dx = v.pos[0] - centre[0];
+                    let dy = v.pos[1] - centre[1];
+                    v.pos = [
+                        centre[0] + dx * cos - dy * sin,
+                        centre[1] + dx * sin + dy * cos,
+                    ];
+                }
+                trailing -= 22.0;
+            }
+            if c.show_distance {
+                let distance = value_label("atlas.original.radar.distance_value", row.distance);
+                trailing -= view.measure(Face::Mono, 9.0, &distance);
+                view.text_line(
+                    Face::Mono,
+                    9.0,
+                    24.0,
+                    trailing,
+                    ry,
+                    color::muted(),
+                    &distance,
+                );
+                trailing -= 7.0;
+            }
+
+            let name_x = x + 32.0;
+            let mut name = row.name.clone();
+            let available = trailing - name_x;
+            if view.measure(Face::Medium, 10.0, &name) > available {
+                let target = available - view.measure(Face::Medium, 10.0, "…");
+                while !name.is_empty() && view.measure(Face::Medium, 10.0, &name) > target {
+                    name.pop();
+                }
+                if target >= 0.0 {
+                    name.push('…');
                 }
             }
-            let width = |s: &str| atlas.font.width(s);
-            let ax = if c.show_arrows {
-                x + w - width(&row.arrow) - 8.0
-            } else {
-                x + w - 4.0
-            };
-            if c.show_arrows {
-                batch.text(atlas, &row.arrow, ax, ry + 7.0, packed(-5745161), true);
-            }
-            let distance = value_label("atlas.original.radar.distance_value", row.distance);
-            let dx = if c.show_distance {
-                ax - width(&distance) - 8.0
-            } else {
-                ax
-            };
-            if c.show_distance {
-                batch.text(atlas, &distance, dx, ry + 7.0, u32::MAX, true);
-            }
-            let available = dx - x - 32.0;
-            let mut name = row.name.clone();
-            if width(&name) > available && available > 15.0 {
-                let chars = atlas.font.fit(&name, available - 6.0);
-                name = name.chars().take(chars).collect();
-                name.push('…');
-            }
-            batch.text(atlas, &name, x + 28.0, ry + 2.0, u32::MAX, true);
             if c.show_health {
-                let health_label = label("atlas.original.radar.health_label");
-                batch.text(
-                    atlas,
-                    &health_label,
-                    x + 28.0,
+                view.text_line(Face::Medium, 10.0, 13.0, name_x, ry, color::text(), &name);
+                let hp = format!("{}{}", label("atlas.original.radar.health_label"), row.hp);
+                view.text_line(
+                    Face::Regular,
+                    8.5,
+                    10.0,
+                    name_x,
                     ry + 12.0,
-                    packed(if row.health < 20 { -39322 } else { -6710887 }),
-                    true,
+                    color::hex(logic::health_color(row.hp), 255),
+                    &hp,
                 );
-                batch.text(
-                    atlas,
-                    &row.health.to_string(),
-                    x + 28.0 + width(&health_label),
-                    ry + 12.0,
-                    packed(if row.health >= 15 {
-                        -11141291
-                    } else if row.health >= 8 {
-                        -22016
-                    } else {
-                        -48060
-                    }),
-                    true,
-                );
+            } else {
+                view.text_line(Face::Medium, 10.0, 24.0, name_x, ry, color::text(), &name);
             }
         }
-        if rows.is_empty() {
-            batch.text(
-                atlas,
-                &label("atlas.original.radar.empty"),
-                x + 8.0,
-                y + 26.0,
-                packed(-7829368),
-                false,
-            );
-        }
+        view.finish();
         batch.scale_since(start, x, y, c.scale, c.scale);
     }
     fn original_activate(&mut self, index: usize, w: f32, h: f32) {
@@ -741,21 +763,13 @@ impl Game<'_> {
                 5 => c.show_health = !c.show_health,
                 6 => c.show_arrows = !c.show_arrows,
                 7 => {
-                    c.x = 10;
-                    c.y = 10;
-                }
-                8 => {
-                    c.x = (w as i32 - (c.hud_width as f32 * c.scale) as i32 - 10).max(10);
-                    c.y = 10;
-                }
-                9 => {
                     *c = super::super::config::Radar::default();
                     self.atlas_ports.visual.ui.original.preview = samples(c.max_players);
                     self.atlas_ports.visual.ui.original.dragging = None;
                     self.original_radar_reset_sliders();
                     self.original_radar_clamp(w, h);
                 }
-                10 => self.original_close_screen(),
+                8 => self.original_close_screen(),
                 _ => {}
             }
         }
@@ -768,7 +782,6 @@ impl Game<'_> {
         if !self.atlas_original_screen_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         if button != 0 {
             return true;
         }
@@ -784,7 +797,7 @@ impl Game<'_> {
         }
         let (x, y) = self.cursor;
         let armor = self.atlas_ports.visual.ui.original.id == ARMOR;
-        let chosen = (0..if armor { 7 } else { 11 }).find(|i| {
+        let chosen = (0..if armor { 7 } else { RADAR_CONTROLS }).find(|i| {
             hit(
                 if armor {
                     armor_rect(*i, w, h)
@@ -819,7 +832,6 @@ impl Game<'_> {
         if !self.atlas_original_screen_active() {
             return false;
         }
-        let _font = atlas_client::font::java_mod_font_scope();
         if !pressed {
             return true;
         }
@@ -828,7 +840,7 @@ impl Game<'_> {
             return true;
         }
         let armor = self.atlas_ports.visual.ui.original.id == ARMOR;
-        let count = if armor { 7 } else { 11 };
+        let count = if armor { 7 } else { RADAR_CONTROLS };
         if key == KeyCode::Tab {
             let backwards = shift;
             let s = &mut self.atlas_ports.visual.ui.original;
@@ -903,29 +915,29 @@ mod tests {
         assert_eq!(armor_rect(0, 854.0, 480.0), [327.0, 40.0, 200.0, 20.0]);
         assert_eq!(armor_rect(5, 854.0, 480.0), [327.0, 160.0, 200.0, 20.0]);
         assert_eq!(armor_rect(6, 854.0, 480.0), [327.0, 448.0, 200.0, 20.0]);
-        assert_eq!(radar_panel(854.0, 480.0), [307.0, 126.0, 240.0, 228.0]);
-        assert_eq!(radar_rect(9, 854.0, 480.0), [317.0, 324.0, 108.0, 20.0]);
-        assert_eq!(radar_rect(10, 854.0, 480.0), [429.0, 324.0, 108.0, 20.0]);
+        assert_eq!(radar_panel(854.0, 480.0), [307.0, 138.0, 240.0, 204.0]);
+        assert_eq!(radar_rect(7, 854.0, 480.0), [317.0, 312.0, 108.0, 20.0]);
+        assert_eq!(radar_rect(8, 854.0, 480.0), [429.0, 312.0, 108.0, 20.0]);
         let rows = samples(14);
         assert_eq!(rows.len(), 14);
         assert_eq!(rows[0].name, "Japanese_jenning");
-        assert_eq!(rows[3].health, 15);
+        assert_eq!(rows[3].hp, 15);
         assert_eq!(rows[12].name, "Player_13");
         assert_eq!(rows[12].distance, 56);
     }
     #[test]
     fn original_spatial_arrow_navigation() {
-        let radar = (0..11)
+        let radar = (0..RADAR_CONTROLS)
             .map(|i| radar_rect(i, 480.0, 300.0))
             .collect::<Vec<_>>();
         for (from, key, expected) in [
             (5, KeyCode::ArrowDown, 7),
-            (7, KeyCode::ArrowDown, 9),
-            (10, KeyCode::ArrowUp, 8),
+            (7, KeyCode::ArrowDown, 7),
+            (8, KeyCode::ArrowUp, 6),
             (5, KeyCode::ArrowRight, 6),
             (6, KeyCode::ArrowLeft, 5),
             (0, KeyCode::ArrowUp, 0),
-            (10, KeyCode::ArrowDown, 10),
+            (8, KeyCode::ArrowDown, 8),
         ] {
             assert_eq!(arrow_focus(&radar, from, key), expected);
         }

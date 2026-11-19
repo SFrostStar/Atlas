@@ -5,7 +5,9 @@ use super::{
     Dispatcher,
     args::{ArgType, Resource, integer},
 };
-use atlas_client_core::gamerules::{MINECART_IMPROVEMENTS, Value, available_rules};
+use atlas_client_core::gamerules::{
+    MINECART_IMPROVEMENTS, SATURATION_PLUS_RULES, Value, available_rules,
+};
 
 /// Permission levels (Commands.LEVEL_*).
 pub const ALL: u8 = 0;
@@ -585,22 +587,58 @@ pub fn game_dispatcher() -> &'static Dispatcher {
 /// The server's tree for this world's enabled features. Cache entries are
 /// separate from vanilla-only worlds and from each server/command selection.
 pub fn game_dispatcher_with_features(features: &[String]) -> &'static Dispatcher {
-    if !features.iter().any(|f| f == MINECART_IMPROVEMENTS) {
+    game_dispatcher_for_world(features, false)
+}
+
+pub fn game_dispatcher_for_world(features: &[String], saturation_plus: bool) -> &'static Dispatcher {
+    let minecart = features.iter().any(|f| f == MINECART_IMPROVEMENTS);
+    if !minecart && !saturation_plus {
         return game_dispatcher();
     }
-    static TREES: [std::sync::OnceLock<Dispatcher>; 8] = [const { std::sync::OnceLock::new() }; 8];
+    static TREES: [std::sync::OnceLock<Dispatcher>; 32] = [const { std::sync::OnceLock::new() }; 32];
     let dev = std::env::var_os("ATLAS_DEV_COMMANDS").is_some();
     let atlas = ATLAS_COMMANDS.load(std::sync::atomic::Ordering::Relaxed);
     let dedicated = DEDICATED_COMMANDS.load(std::sync::atomic::Ordering::Relaxed);
-    TREES[usize::from(dev) | usize::from(atlas) << 1 | usize::from(dedicated) << 2].get_or_init(
-        || {
-            let mut d = build_for_features(dev, dedicated, true);
-            if atlas {
-                atlas_commands(&mut d, 0);
-            }
-            d
-        },
-    )
+    let key = usize::from(dev)
+        | usize::from(atlas) << 1
+        | usize::from(dedicated) << 2
+        | usize::from(minecart) << 3
+        | usize::from(saturation_plus) << 4;
+    TREES[key].get_or_init(|| {
+        let mut d = build_for_features(dev, dedicated, minecart);
+        if atlas {
+            atlas_commands(&mut d, 0);
+        }
+        if saturation_plus {
+            register_saturation_plus(&mut d);
+        }
+        d
+    })
+}
+
+pub const SATURATION_PLUS_MUTATORS: [(&str, f64); 2] =
+    [("addSaturation", -f64::MAX), ("setSaturation", 0.0)];
+
+fn register_saturation_plus(d: &mut Dispatcher) {
+    let gamerule = d.find("gamerule").expect("registered by vanilla");
+    for rule in SATURATION_PLUS_RULES {
+        let literal = d.literal(gamerule, rule.name);
+        d.executes(literal, "gamerule");
+        let ty = match rule.default {
+            Value::Bool(_) => ArgType::Bool,
+            Value::Int(_) => integer(rule.min),
+        };
+        let value = d.argument(literal, "value", ty);
+        d.executes(value, "gamerule");
+    }
+    let get = d.literal(0, "getSaturation");
+    d.executes(get, "getSaturation");
+    for (name, min) in SATURATION_PLUS_MUTATORS {
+        let command = d.literal(0, name);
+        let value = d.argument(command, "value", ArgType::Double { min, max: f64::MAX });
+        d.requires(value, 3);
+        d.executes(value, name);
+    }
 }
 /// Whether this process is a dedicated server, whose tree has the dedicated
 /// commands (`/op`, `/ban`, `/whitelist`...). Single player's server thread

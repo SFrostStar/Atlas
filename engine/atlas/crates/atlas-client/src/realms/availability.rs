@@ -194,6 +194,12 @@ fn no_answer(reason: Option<String>) -> Availability {
 /// The process's one cache (vanilla's static field).
 static SHARED: AvailabilityCache = AvailabilityCache::new();
 
+pub(super) fn clear_account() {
+    if let Ok(mut current) = SHARED.current.lock() {
+        *current = None;
+    }
+}
+
 /// `RealmsAvailability.get()` for `session` against the production service. Without a
 /// session: [`Availability::AuthenticationError`], already answered, nothing asked.
 pub fn get(session: Option<&Arc<AuthSession>>) -> Pending {

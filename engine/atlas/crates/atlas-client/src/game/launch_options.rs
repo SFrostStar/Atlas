@@ -2,6 +2,53 @@
 //! then the game folder and the account it names.
 use super::*;
 
+impl Game<'_> {
+    /// Called by account mods on the title screen, before the next world login.
+    pub(super) fn atlas_switch_account(
+        &mut self,
+        name: String,
+        session_path: Option<&std::path::Path>,
+    ) -> std::result::Result<(), String> {
+        if !matches!(
+            self.title.as_ref().map(|title| &title.mode),
+            Some(crate::title::Mode::Main | crate::title::Mode::Multiplayer(_))
+        ) || self.remote.is_some()
+            || self.remote_loading()
+            || self.options.paced_by_split
+            || self.options.split_guest
+            || self.split_auth.is_some()
+        {
+            return Err("atlas.ias.return_to_title".into());
+        }
+        if !(3..=16).contains(&name.len())
+            || !name.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        {
+            return Err("atlas.ias.invalid_name".into());
+        }
+        let session = match session_path {
+            Some(path) => {
+                let root = std::env::var_os("ATLAS_ACCOUNT_SWITCH_SESSION_ROOT")
+                    .ok_or("atlas.ias.failed")?;
+                Some(atlas_client::auth::AuthSession::load_switch(
+                    std::path::Path::new(&root), path, &name,
+                ).ok_or("atlas.ias.failed")?)
+            }
+            None => None,
+        };
+        let online = session.is_some();
+        atlas_client::social::switch_account(session);
+        self.options.player_name = Some(name);
+        self.social = Default::default();
+        self.reset_account_cosmetics();
+        crate::realms::clear_previous_account();
+        if let Some(title) = &mut self.title {
+            title.switch_account(online);
+        }
+        atlas_client::auth::prepare_chat_keys(true);
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct Options {
     pub(super) resources: PathBuf,

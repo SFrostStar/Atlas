@@ -11,7 +11,7 @@ use super::{Dim, Game, commands::execute, lan::LanHost, lan_actions::GuestComman
 // Their old home, for mixin code that names them here.
 pub(crate) use atlas_client::mod_api::{NativeCommand, NativeServerPlayer};
 use atlas_client::{
-    command::{Dispatcher, vanilla},
+    command::Dispatcher,
     items::ItemStack,
     lan::data::component_nbt,
     mod_api::{NativeCommandInfo, NativeCommandResult},
@@ -1045,7 +1045,7 @@ impl Game<'_> {
                 vanilla: false,
             });
         }
-        let d = vanilla::game_dispatcher_with_features(&self.level.enabled_features);
+        let d = self.command_dispatcher();
         vanilla_command_info(d, label)
     }
     /// Runs `line` (a leading slash allowed) as the player `uuid` typing it

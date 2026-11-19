@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { copyNativeSource } = require('./native-source.cjs');
 
 (async () => {
   const { packager } = await import('@electron/packager');
@@ -8,6 +9,7 @@ const path = require('node:path');
     dir: root, name: 'Atlas Launcher', platform: 'win32', arch: 'x64',
     icon: path.join(root, 'assets/atlas-launcher.ico'), out, overwrite: true,
     asar: true, prune: true,
+    afterCopy: [({ buildPath }) => copyNativeSource(root, path.join(buildPath, 'native-source'))],
     electronZipDir: process.env.ATLAS_ELECTRON_ZIP_DIR || undefined,
     ignore: [
       /^\/(engine|data|dist|docs|scripts|tests|work|tools|runtime|bundle|bootstrap|versions|website)(\/|$)/,

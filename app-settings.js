@@ -5,7 +5,6 @@ function applyAppearance() {
   const settings = state.settings;
   const root = document.documentElement;
   root.lang = settings.language;
-  root.dataset.theme = settings.theme;
   root.dataset.hero = settings.heroStyle;
   root.dataset.heroText = String(settings.showHeroText);
   root.dataset.reducedMotion = String(settings.reducedMotion);
@@ -19,10 +18,9 @@ function settingsSelect(key, values, labels) {
 function appearanceSettingsPanel() {
   return `<section class="panel"><div class="panel-heading">${icon('palette')}<h3>Оформление</h3></div>
   <div class="settings-row"><strong>Язык лаунчера</strong>${settingsSelect('language',['ru','en'],{0:'Русский',1:'English',title:'Язык лаунчера'})}</div>
-  <div class="settings-row"><strong>Тема</strong>${settingsSelect('theme',['dark','light'],{0:'Тёмная',1:'Светлая',title:'Тема'})}</div>
   <div class="settings-row"><strong>Акцентный цвет</strong><div class="accent-options" role="group" aria-label="Акцентный цвет">${Object.entries(launcherAccents).map(([id,[color,,name]])=>`<button type="button" class="accent-choice" style="--swatch:${color}" data-action="set-accent" data-accent="${id}" aria-label="${name}" aria-pressed="${state.settings.accentColor===id}">${state.settings.accentColor===id?icon('check'):''}</button>`).join('')}</div></div></section>
   <section class="panel"><div class="panel-heading">${icon('sliders-horizontal')}<h3>Персонализация</h3></div>
-  <div class="settings-row"><strong>Фон главной</strong>${settingsSelect('heroStyle',['landscape','sunset','minimal'],{0:'Пейзаж',1:'Закат',2:'Минимализм',title:'Фон главной'})}</div>
+  <div class="settings-row"><strong>Фон главной</strong>${settingsSelect('heroStyle',['landscape','minimal'],{0:'Пейзаж',1:'Минимализм',title:'Фон главной'})}</div>
   ${appearanceToggle('showHeroText','Текст на главной',state.settings.showHeroText)}
   ${appearanceToggle('reducedMotion','Анимации интерфейса',!state.settings.reducedMotion,true)}</section>`;
 }

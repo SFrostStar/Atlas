@@ -129,6 +129,19 @@ impl CommandTree {
         features: &[String],
         granted: &[String],
     ) -> Commands {
+        self.packet_for_world(level, dedicated, builtin, extra, features, granted, false)
+    }
+
+    pub fn packet_for_world(
+        &self,
+        level: u8,
+        dedicated: bool,
+        builtin: &Builtin,
+        extra: &Value,
+        features: &[String],
+        granted: &[String],
+        saturation_plus: bool,
+    ) -> Commands {
         let minecart_improvements = features
             .iter()
             .any(|f| f == crate::gamerules::MINECART_IMPROVEMENTS);
@@ -175,6 +188,21 @@ impl CommandTree {
                 &mut paths,
             );
         }
+        if saturation_plus {
+            let (roots, rules) = saturation_plus_nodes();
+            fill(
+                roots, 0, &mut Vec::new(), level, granted, dedicated,
+                minecart_improvements, &suggestions, &mut nodes, &mut paths,
+            );
+            let mut path = vec!["gamerule".to_owned()];
+            if let Some(&parent) = paths.get(&path) {
+                let rule_level = if granted.contains(&path[0]) { level.max(2) } else { level };
+                fill(
+                    rules, parent, &mut path, rule_level, granted, dedicated,
+                    minecart_improvements, &suggestions, &mut nodes, &mut paths,
+                );
+            }
+        }
         // enumerateNodes: breadth first from the root, each node's children
         // (in registration order) then its redirect target.
         let mut ids = vec![None; nodes.len()];
@@ -220,6 +248,40 @@ impl CommandTree {
             root: 0,
         }
     }
+}
+
+fn saturation_plus_nodes() -> &'static (Value, Value) {
+    use crate::gamerules::{SATURATION_PLUS_RULES, Value as RuleValue};
+    use serde_json::{Map, json};
+    static NODES: OnceLock<(Value, Value)> = OnceLock::new();
+    NODES.get_or_init(|| {
+        let mut roots = Map::from_iter([
+            ("getSaturation".to_owned(), json!({"type": "literal", "executable": true})),
+        ]);
+        for (name, min) in crate::command::vanilla::SATURATION_PLUS_MUTATORS {
+            let properties = if min == 0.0 { json!({"min": min}) } else { Value::Null };
+            roots.insert(name.to_owned(), json!({
+                "type": "literal",
+                "children": {"value": {
+                    "type": "argument", "parser": "brigadier:double", "executable": true,
+                    "properties": properties, "permissions": {"permission": {"level": "admins"}}
+                }}
+            }));
+        }
+        let rules: Map<String, Value> = SATURATION_PLUS_RULES.iter().map(|rule| {
+            let (parser, properties) = match rule.default {
+                RuleValue::Bool(_) => ("brigadier:bool", Value::Null),
+                RuleValue::Int(_) => ("brigadier:integer", json!({"min": rule.min})),
+            };
+            (rule.name.to_owned(), json!({
+                "type": "literal", "executable": true,
+                "children": {"value": {
+                    "type": "argument", "parser": parser, "executable": true, "properties": properties
+                }}
+            }))
+        }).collect();
+        (json!({"children": roots}), json!({"children": rules}))
+    })
 }
 
 /// Commands.fillUsableCommands over the report: the children the source may use.

@@ -101,6 +101,12 @@ impl Field {
 }
 
 pub(super) fn definition(id: &str) -> Option<Definition> {
+    if id == super::ias::ID {
+        return Some(super::ias::definition());
+    }
+    if id == super::totem_tweaks::ID {
+        return Some(super::totem_tweaks::definition());
+    }
     if id == "atlas-gammautils" {
         return Some(gamma::definition());
     }

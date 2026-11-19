@@ -210,10 +210,15 @@ impl Game<'_> {
     pub(super) fn can_eat(&self, stack: &ItemStack, can_always_eat: bool) -> bool {
         let mut can_eat = can_always_eat
             || self.creative
-            || self
-                .player
-                .as_ref()
-                .is_some_and(|p| p.health.food.food < 20);
+            || self.player.as_ref().is_some_and(|p| {
+                p.health.food.needs_food()
+                    || !p.client_side
+                        && self
+                            .world
+                            .health_rules
+                            .saturation_plus
+                            .is_some_and(|r| r.always_hungry)
+            });
         self.native_can_eat(stack, &mut can_eat);
         can_eat
     }
