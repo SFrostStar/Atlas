@@ -3,8 +3,10 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
+const { createHash } = require('node:crypto');
 const { syncNativeStage } = require('../lib/native-stage.cjs');
 const { guard } = require('../lib/release-updater.cjs');
+const { nativeWorkspace } = require('../lib/native-overlay.cjs');
 
 async function fixture(t) {
   const temp = await fs.realpath(os.tmpdir());
@@ -61,4 +63,34 @@ test('native stage refuses overlap and linked directories without touching their
   t.after(() => fs.unlink(link).catch(() => {}));
   await assert.rejects(syncNativeStage(source, stage), /linked/i);
   assert.equal(await fs.readFile(sentinel, 'utf8'), 'keep');
+});
+
+test('native overlays verify source content, deduplicate compatible changes and only modify a scratch copy', async t => {
+  const { root, source, stage } = await fixture(t);
+  const mods = path.join(root, 'mods');
+  const relative = 'crates/game/src/lib.rs';
+  const digest = value => createHash('sha256').update(value).digest('hex');
+  const original = path.join(source, relative);
+  await fs.mkdir(path.dirname(original), { recursive: true });
+  await fs.writeFile(original, 'old');
+  await fs.mkdir(stage);
+  async function writeMod(id, value, before = digest('old')) {
+    const dir = path.join(mods, id);
+    const file = path.join(dir, 'source-overlay', relative);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, value);
+    await fs.writeFile(path.join(dir, 'source-overlay.json'), JSON.stringify({
+      schema: 1, files: [{ path: relative, before, after: digest(value) }],
+    }));
+  }
+  await writeMod('first', 'new');
+  await writeMod('second', 'new');
+  const applied = await nativeWorkspace(source, stage, mods, ['first', 'second']);
+  assert.equal(await fs.readFile(path.join(applied, relative), 'utf8'), 'new');
+  assert.equal(await fs.readFile(original, 'utf8'), 'old');
+  await writeMod('second', 'different');
+  await assert.rejects(nativeWorkspace(source, stage, mods, ['first', 'second']), /conflicting/i);
+  await writeMod('second', 'new', digest('wrong base'));
+  await assert.rejects(nativeWorkspace(source, stage, mods, ['second']), /does not match/i);
+  assert.equal(await fs.readFile(original, 'utf8'), 'old');
 });

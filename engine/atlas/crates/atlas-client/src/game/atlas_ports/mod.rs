@@ -10,6 +10,8 @@ mod esc_music;
 mod esc_music_ui;
 mod food;
 mod ias;
+mod inventory_hud;
+mod macro_keybinds;
 mod mouse_tweaks;
 pub(super) mod saturation_plus;
 mod totem_tweaks;
@@ -35,6 +37,8 @@ pub(super) struct State {
     utility: utility::UtilityState,
     food: food::State,
     ias: ias::State,
+    inventory_hud: inventory_hud::State,
+    macro_keybinds: macro_keybinds::State,
     armor: armor::State,
     aspect_ratio: aspect_ratio::State,
     esc_music: esc_music::State,
@@ -69,6 +73,8 @@ impl State {
                             || *id == aspect_ratio::ID
                             || *id == esc_music::ID
                             || *id == ias::ID
+                            || *id == inventory_hud::ID
+                            || *id == macro_keybinds::ID
                             || *id == saturation_plus::ID
                             || *id == mouse_tweaks::ID
                             || *id == totem_tweaks::ID
@@ -81,6 +87,12 @@ impl State {
         }
         if state.installed.contains(ias::ID) {
             state.ias.load_config(home);
+        }
+        if state.installed.contains(inventory_hud::ID) {
+            state.inventory_hud = inventory_hud::State::load(home);
+        }
+        if state.installed.contains(macro_keybinds::ID) {
+            state.macro_keybinds = macro_keybinds::State::load(home);
         }
         if state.installed.contains(saturation_plus::ID) {
             state.saturation_plus = saturation_plus::State::load(home);
@@ -107,6 +119,7 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_config_value(&self, id: &str) -> Option<serde_json::Value> {
         match id {
             ias::ID => Some(self.atlas_ports.ias.config_value()),
+            inventory_hud::ID => Some(self.atlas_ports.inventory_hud.config_value()),
             "atlas-appleskin" => Some(self.atlas_ports.food.config_value()),
             "atlas-zoomify" => self.atlas_utility_config(id),
             totem_tweaks::ID => Some(self.atlas_ports.totem_tweaks.config_value()),
@@ -117,6 +130,7 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_config_default(&self, id: &str) -> Option<serde_json::Value> {
         match id {
             ias::ID => Some(ias::State::config_default()),
+            inventory_hud::ID => Some(inventory_hud::State::default_config()),
             "atlas-appleskin" => Some(food::State::default_config()),
             "atlas-zoomify" => serde_json::to_value(utility::config::Zoom::default()).ok(),
             totem_tweaks::ID => Some(totem_tweaks::State::default_config()),
@@ -130,6 +144,7 @@ impl Game<'_> {
     ) -> Result<(), String> {
         match id {
             ias::ID => self.atlas_ports.ias.apply_config(&Self::game_dir(), value),
+            inventory_hud::ID => self.atlas_ports.inventory_hud.set_config(&Self::game_dir(), value),
             "atlas-appleskin" => self.atlas_ports.food.set_config(&Self::game_dir(), value),
             "atlas-zoomify" => self.atlas_utility_set_config(id, value),
             totem_tweaks::ID => self.atlas_ports.totem_tweaks.set_config(&Self::game_dir(), value),
@@ -139,15 +154,12 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_open_original_mod_config(&mut self, id: &str) -> bool {
         match id {
             mouse_tweaks::ID => self.atlas_mouse_tweaks_open(),
+            macro_keybinds::ID => self.atlas_macros_open(),
             ias::ID | "atlas-appleskin" | "atlas-chunkanimator" | "atlas-zoomify" | "atlas-gammautils"
-            | totem_tweaks::ID => {
+            | totem_tweaks::ID | inventory_hud::ID => {
                 self.atlas_config_open(id)
             }
             "atlas-armorindicator" | "atlas-radarmod" => self.atlas_original_open_screen(id),
-            "atlas-hotcommands" | "atlas-viewmodel" => {
-                self.atlas_ports.actions.active_screen = Some(id.to_owned());
-                self.atlas_open_port_screen(id)
-            }
             _ => false,
         }
     }
@@ -238,6 +250,16 @@ impl Game<'_> {
                 "Totem Tweaks",
                 "Customize held totems and their activation animation.",
             ),
+            (
+                inventory_hud::ID,
+                "Inventory HUD +",
+                "atlas.inventory_hud.description",
+            ),
+            (
+                macro_keybinds::ID,
+                "Macro Keybinds",
+                "atlas.macro_keybinds.description",
+            ),
         ];
         for (id, name, description) in definitions
             .into_iter()
@@ -250,7 +272,11 @@ impl Game<'_> {
             mods.push(NativeMod {
                 id: id.into(),
                 title: name.into(),
-                description: description.into(),
+                description: if matches!(id, inventory_hud::ID | macro_keybinds::ID) {
+                    atlas_client::lang::get(description)
+                } else {
+                    description.into()
+                },
                 keys: if matches!(
                     id,
                     esc_music::ID | ias::ID | saturation_plus::ID | mouse_tweaks::ID | totem_tweaks::ID
@@ -310,6 +336,10 @@ impl Game<'_> {
                     ]]
                 } else if id == aspect_ratio::ID {
                     aspect_ratio::keys()
+                } else if id == inventory_hud::ID {
+                    inventory_hud::keys()
+                } else if id == macro_keybinds::ID {
+                    macro_keybinds::keys()
                 } else {
                     if visual::IDS.contains(&id) {
                         visual::keys(id)
@@ -329,6 +359,6 @@ impl Game<'_> {
             armor::draw(self, batch);
         }
         self.atlas_visual_hud(batch);
-        self.atlas_actions_viewmodel_hud(batch);
+        self.draw_inventory_hud(batch);
     }
 }

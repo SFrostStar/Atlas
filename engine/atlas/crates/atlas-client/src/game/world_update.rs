@@ -325,22 +325,9 @@ impl Game<'_> {
                     }
                 }
             }
-            let g = &self.settings.atlas;
-            let budgeted = g.chunk_updates > 0 || g.upload_budget_kib > 0;
-            // The meshes, once copied, are freed by a worker (`Streaming::free`).
-            if !budgeted && self.pending_uploads.is_empty() && uploads.len() <= AUTO_UPLOADS_AT_ONCE
-            {
-                atlas_client::spans::time("upload", || {
-                    for (key, mesh) in &uploads {
-                        renderer.upload(*key, mesh);
-                    }
-                });
-                self.streaming.free(uploads);
-            } else {
-                // Atlas's chunk-update and upload budgets: the nearest
-                // sections go first, the rest wait for later frames; a newer
-                // mesh of a waiting section replaces it, and sections of
-                // chunks no longer loaded are dropped.
+            if !uploads.is_empty() || !self.pending_uploads.is_empty() {
+                // Nearest sections go first. A newer mesh replaces a waiting
+                // one and sections of unloaded chunks are dropped.
                 let pending = &mut self.pending_uploads;
                 let fresh: atlas_client::fast_hash::FxHashSet<(i32, i32, i32)> =
                     uploads.iter().map(|(k, _)| *k).collect();
@@ -367,28 +354,18 @@ impl Game<'_> {
                     (k.0 - centre.0).pow(2) + (k.1 - cam_y).pow(2) + (k.2 - centre.1).pow(2)
                 };
                 pending.sort_unstable_by_key(|(k, _)| std::cmp::Reverse(far(k)));
-                let (limit, budget) = if budgeted {
-                    (
-                        g.chunk_updates as usize,
-                        u64::from(g.upload_budget_kib) * 1024,
-                    )
-                } else {
-                    (0, 0)
-                };
+                let g = &self.settings.atlas;
+                let limit = g.chunk_updates as usize;
+                let budget = u64::from(g.upload_budget_kib) * 1024;
+                let auto = limit == 0 && budget == 0;
                 let (mut count, mut bytes) = (0, 0u64);
-                // Without the player's budgets, uploads stop once they took
-                // AUTO_UPLOAD_TIME of this frame (at least one goes): a burst of
-                // finished meshes spreads over frames, nearest first.
-                let auto = !budgeted;
-                let auto_time = if arriving {
-                    AUTO_UPLOAD_TIME_ARRIVING
-                } else {
-                    AUTO_UPLOAD_TIME
-                };
+                // The arrival burst is when the render thread most needs the
+                // time budget. Start at least one mesh so large sections still
+                // make progress.
                 let started = Instant::now();
                 let upload_span = atlas_client::spans::guard("upload_queue");
                 while let Some((_, mesh)) = pending.last() {
-                    if auto && count > 0 && started.elapsed() >= auto_time {
+                    if auto && count > 0 && started.elapsed() >= AUTO_UPLOAD_TIME {
                         break;
                     }
                     let size = ((mesh.solid.len() + mesh.translucent.len())
@@ -406,6 +383,7 @@ impl Game<'_> {
                     bytes += size;
                 }
                 drop(upload_span);
+                // Free the uploaded and discarded meshes off the render thread.
                 self.streaming.free(spent);
             }
             renderer.remove_columns(unloaded.iter().map(|c| (c.x, c.z)));

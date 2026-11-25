@@ -72,7 +72,7 @@ try {
     Atlas-Guard $atlasStage $atlasPlan.backup | Out-Null
     if ($atlasPlan.started) {
         $atlasStarted = Atlas-Guard $atlasStage $atlasPlan.started
-        [IO.File]::WriteAllText($atlasStarted, (@{ version=$atlasPlan.version; parentPid=$atlasPlan.parentPid } | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($atlasStarted, (@{ version=$atlasPlan.version; parentPid=$atlasPlan.parentPid; helperPid=$PID } | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     }
     $atlasBlockedPaths = @($atlasPlan.executable, (Join-Path $atlasPlan.projectRoot 'runtime/atlas-client.exe'), (Join-Path $atlasPlan.projectRoot 'runtime/atlas-prepare.exe'), (Join-Path $atlasPlan.projectRoot 'bundle/game/atlas-client.exe'), (Join-Path $atlasPlan.projectRoot 'bundle/game/atlas-prepare.exe'))
     # A game open in another launcher window is protected too. Never force-close a game.

@@ -13,7 +13,7 @@ const { GameInstallManager } = require('./lib/game-install.cjs');
 const { resolveLauncherLayout } = require('./lib/portable-root.cjs');
 const { ModManager } = require('./lib/mod-manager.cjs');
 const { NativeMods } = require('./lib/native-mods.cjs');
-const { ReleaseUpdater } = require('./lib/release-updater.cjs');
+const { ReleaseUpdater, pruneUpdates } = require('./lib/release-updater.cjs');
 
 app.setName('Atlas Launcher');
 if (process.platform === 'win32') app.setAppUserModelId('Atlas.Launcher.Desktop');
@@ -326,6 +326,7 @@ else {
       project: projectRoot, dataRoot: store.dataRoot, version: launcherVersion,
       source: guiTest && process.env.ATLAS_GUI_NATIVE_SOURCE
         ? process.env.ATLAS_GUI_NATIVE_SOURCE : path.join(__dirname, 'native-source'),
+      sourceManifest: path.join(__dirname, 'native-source.json'),
       progress(stage, details = null) { nativeBuildStage = stage; nativeBuild = details; publishSoon(); },
       async confirm(bundles) {
         const language = store.config.settings.language;
@@ -334,7 +335,8 @@ else {
           title: t('Rust-моды', language),
           message: t('Доверяешь этим модам?', language),
           detail: bundles.map(mod => `${mod.name} · ${mod.version}`).join('\n') + '\n\n'
-            + t('Atlas соберёт игру с этими модами. Их код получит доступ к файлам с правами твоего пользователя.', language),
+            + t('Atlas соберёт игру с этими модами. Их код получит доступ к файлам с правами твоего пользователя.', language)
+            + '\n\n' + t('При первой сборке могут скачаться исходники и инструменты.', language),
           buttons: [t('Отмена', language), t('Доверять и собрать', language)],
           defaultId: 0, cancelId: 0, noLink: true,
         });
@@ -383,6 +385,13 @@ else {
         window.show();
       }
       setImmediate(startDiscord);
+      setImmediate(() => {
+        void Promise.allSettled([
+          pruneUpdates(store.dataRoot, launcherVersion),
+          installer.prunePreparation(),
+          nativeMods.maintain(),
+        ]);
+      });
       if (updater) {
         setTimeout(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 2500).unref();
         updatePoll = setInterval(() => checkUpdates().catch(error => { appendLog(error.message, 'error'); publishSoon(); }), 30 * 60 * 1000);

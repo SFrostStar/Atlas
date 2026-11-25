@@ -1,60 +1,14 @@
-//! World passes for TotemPops and Lootbeams. These preserve the original world-space
-//! geometry; neither feature is represented by an unrelated screen-space widget.
-use super::{Game, IDS, config, logic, now_ms};
+//! World-space name tags for TotemPops.
+use super::{Game, TOTEM_POPS, config, logic};
 use atlas_client::{
     gfx::WORLD_TEXT_OVERLAY,
-    hud::{HudBatch, rgba},
+    hud::HudBatch,
     mesher::Vertex,
     text::{Style, Text},
 };
-use glam::{DVec3, Vec3};
+use glam::DVec3;
 
 impl Game<'_> {
-    pub(in crate::game) fn atlas_visual_loot_color(
-        &self,
-        stack: &atlas_client::items::ItemStack,
-    ) -> Option<u32> {
-        let c = &self.atlas_ports.visual.loot;
-        if !self.atlas_port_on(IDS[4]) || !c.enabled || stack.count == 0 {
-            return None;
-        }
-        let props = self.stations().enchantments.props(&stack.item);
-        let rarity = atlas_client::item_tooltip::rarity(
-            stack,
-            props.map_or("common", |p| p.rarity.as_str()),
-        );
-        c.color(&stack.item, &rarity.to_uppercase())
-    }
-    /// Vanilla silhouette outline, matching EntityMixin.isGlowing/getTeamColorValue.
-    /// The source's lineWidth/expand/visibleAlpha/xrayAlpha fields are intentionally unused.
-    pub(in crate::game) fn atlas_visual_loot_outline(&self, id: u32) -> Option<u32> {
-        let c = &self.atlas_ports.visual.loot;
-        if !c.outline.enabled {
-            return None;
-        }
-        let item = self.dropped.iter().find(|i| i.id == id)?;
-        let player = self.player.as_ref()?;
-        if item.position.distance_squared(player.position)
-            > c.max_render_distance * c.max_render_distance
-        {
-            return None;
-        }
-        let color = self.atlas_visual_loot_color(&item.stack)?;
-        if !c.outline.through_walls {
-            let eye = self.eye_position()?;
-            let target = [item.position.x, item.position.y + 0.2125, item.position.z];
-            let delta = DVec3::from_array(target) - DVec3::from_array(eye);
-            let distance = delta.length();
-            if distance > 0.0
-                && self
-                    .clip_ray(eye, (delta / distance).to_array(), distance)
-                    .is_some()
-            {
-                return None;
-            }
-        }
-        Some(color)
-    }
     /// Call beside name_tag_geometry, after entities, with the same two destination passes.
     pub(in crate::game) fn atlas_visual_world_geometry(
         &mut self,
@@ -66,66 +20,8 @@ impl Game<'_> {
         if !self.native_window() || self.player.is_none() {
             return;
         }
-        if self.atlas_port_on(IDS[7]) && self.atlas_ports.visual.totem.enabled {
+        if self.atlas_port_on(TOTEM_POPS) && self.atlas_ports.visual.totem.enabled {
             self.atlas_visual_pop_geometry(camera, partial, out, through)
-        }
-        if self.atlas_port_on(IDS[4]) {
-            self.atlas_visual_beam_geometry(camera, out, through)
-        }
-    }
-    fn atlas_visual_beam_geometry(
-        &self,
-        camera: DVec3,
-        out: &mut Vec<Vertex>,
-        through: &mut Vec<Vertex>,
-    ) {
-        let c = &self.atlas_ports.visual.loot;
-        if !c.enabled || !c.beam.enabled {
-            return;
-        }
-        // Preserve Java's wall-clock-to-float conversion, including its phase at launch.
-        let rotation = if c.beam.spin_degrees_per_second == 0.0 {
-            0.0
-        } else {
-            (now_ms() as f32 / 1000.0 * c.beam.spin_degrees_per_second) % 360.0
-        };
-        let Some(sprite) = self.gui.atlas.sprites.get("atlas/white").copied() else {
-            return;
-        };
-        let uv = [(sprite.u0 + sprite.u1) * 0.5, (sprite.v0 + sprite.v1) * 0.5];
-        for item in &self.dropped {
-            let pos = DVec3::new(item.position.x, item.position.y, item.position.z);
-            if pos.distance_squared(camera) > c.max_render_distance * c.max_render_distance {
-                continue;
-            }
-            let Some(color) = self.atlas_visual_loot_color(&item.stack) else {
-                continue;
-            };
-            let offset = (pos - camera).as_vec3();
-            let vertices =
-                logic::beam_vertices(c.beam.width, c.beam.height, c.beam.alpha, rotation);
-            let append = |dest: &mut Vec<Vertex>, alpha: f32| {
-                for v in vertices {
-                    dest.push(Vertex {
-                        pos: (offset + Vec3::from_array(v.position)).to_array(),
-                        uv,
-                        layer: WORLD_TEXT_OVERLAY,
-                        color: rgba(
-                            (color >> 16) as u8,
-                            (color >> 8) as u8,
-                            color as u8,
-                            (v.alpha * alpha * 255.0) as u8,
-                        ),
-                        light: 0xf0f0,
-                        normal: [0; 4],
-                        glint_uv: [0.; 2],
-                    })
-                }
-            };
-            append(out, 1.0);
-            if c.beam.through_walls {
-                append(through, 0.6)
-            }
         }
     }
     fn atlas_visual_pop_geometry(

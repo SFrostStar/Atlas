@@ -1,5 +1,5 @@
 //! Original client commands and configuration.
-use super::{Game, IDS, config, now_ms};
+use super::{Game, NO_FLUID, PVP_SURVIVED, RADAR, TOTEM_POPS, config, now_ms};
 use serde_json::{Value, json};
 use std::fs;
 
@@ -10,22 +10,12 @@ impl Game<'_> {
             return false;
         };
         let sub = args.next().unwrap_or("");
-        let value = args.next().unwrap_or("");
         match name {
-            "friend" if self.atlas_port_on(IDS[2])=>{
-                let message=match sub {
-                    "add" if !value.is_empty()=>{let v=&mut self.atlas_ports.visual;if v.friends.insert(value.to_lowercase()){v.save_friends();format!("§a✔ {value} добавлен в друзья!")}else{format!("§e{value} уже в списке друзей.")}},
-                    "remove" if !value.is_empty()=>{let v=&mut self.atlas_ports.visual;if v.friends.remove(&value.to_lowercase()){v.save_friends();format!("§c✖ {value} удалён из друзей.")}else{format!("§e{value} не найден в списке друзей.")}},
-                    "list"=>{let f=&self.atlas_ports.visual.friends;if f.is_empty(){"§eСписок друзей пуст.".into()}else{format!("§aДрузья ({}): §f{}",f.len(),f.iter().cloned().collect::<Vec<_>>().join(", "))}},
-                    "clear"=>{let v=&mut self.atlas_ports.visual;let count=v.friends.len();v.friends.clear();v.save_friends();format!("§eСписок друзей очищен (удалено {count}).")},
-                    _=>"§6=== [ FriendList ] ===\n§a/friend add <ник>§7 - добавить игрока в друзья\n§c/friend remove <ник>§7 - удалить игрока из друзей\n§e/friend list§7 - список друзей\n§4/friend clear§7 - очистить список друзей".into(),
-                };self.native_chat(&message);
-            },
-            "radar" if self.atlas_port_on(IDS[0])=>{
+            "radar" if self.atlas_port_on(RADAR)=>{
                 if sub=="toggle"{let v=&mut self.atlas_ports.visual;v.radar.enabled=!v.radar.enabled;config::save(&v.dir,"radarmod.json",&v.radar);self.native_chat(&format!("Радар {}",if self.atlas_ports.visual.radar.enabled{"§aВКЛЮЧЕН"}else{"§cВЫКЛЮЧЕН"}));}
-                else{self.atlas_ports.visual.open_settings=Some(IDS[0].into())}
+                else{self.atlas_ports.visual.open_settings=Some(RADAR.into())}
             },
-            "nofluid" if self.atlas_port_on(IDS[5])=>{
+            "nofluid" if self.atlas_port_on(NO_FLUID)=>{
                 let c=&mut self.atlas_ports.visual.nofluid;let message=match sub {
                     "toggle"=>{c.enabled=!c.enabled;format!("§b[NoFluid] §fМод {}",if c.enabled{"§aВКЛЮЧЕН"}else{"§cВЫКЛЮЧЕН"})},
                     "water"=>{c.no_water_fog=!c.no_water_fog;format!("§b[NoFluid] §fВодный туман: {}",if c.no_water_fog{"§aУДАЛЕН"}else{"§cСТАНДАРТ"})},
@@ -36,19 +26,12 @@ impl Game<'_> {
                     _=>"§b=== [NoFluid CPvP 1.21.4] ===\n§f/nofluid toggle\n/nofluid water\n/nofluid lava\n/nofluid fire\n/nofluid overlay\n/nofluid nightvision".into(),
                 };config::save(&self.atlas_ports.visual.dir,"nofluid.json",&self.atlas_ports.visual.nofluid);self.native_chat(&message);
             },
-            "totempops" if self.atlas_port_on(IDS[7])=>match sub {
+            "totempops" if self.atlas_port_on(TOTEM_POPS)=>match sub {
                 "reload"=>{let v=&mut self.atlas_ports.visual;v.totem=fs::read_to_string(v.dir.join("totempops/config.yml")).map(|s|config::Totem::parse(&s)).unwrap_or_default();self.native_chat("[TotemPops] Конфиг перезагружен")},
                 "reset"=>{self.atlas_ports.visual.pops.entries.clear();self.native_chat("[TotemPops] Счётчики сброшены")},
                 _=>self.native_chat("/totempops reload | /totempops reset"),
             },
-            "killnotification" if self.atlas_port_on(IDS[3])=>{
-                let c=&mut self.atlas_ports.visual.kill;let message=match sub {
-                    "on"=>{c.enabled=true;"§a[KillNotification] Мод успешно включен!".into()},
-                    "off"=>{c.enabled=false;"§c[KillNotification] Мод успешно выключен!".into()},
-                    _=>format!("§6[KillNotification] Статус: {}§7. Команды: §e/killnotification on §7| §e/killnotification off",if c.enabled{"§aВКЛЮЧЕН"}else{"§cВЫКЛЮЧЕН"}),
-                };config::save(&self.atlas_ports.visual.dir,"killnotification.json",&self.atlas_ports.visual.kill);self.native_chat(&message)
-            },
-            "pvpsurvived" if self.atlas_port_on(IDS[6])=>{
+            "pvpsurvived" if self.atlas_port_on(PVP_SURVIVED)=>{
                 match sub {
                     "test"=>{if self.atlas_ports.visual.pvp_state.trigger(now_ms()){self.atlas_visual_pvp_sound()}self.native_chat("§a[PvPSurvived] Тестовое появление надписи под прицелом активировано!")},
                     "reload"=>{let v=&mut self.atlas_ports.visual;v.pvp=config::load(&v.dir,"pvpsurvived.json");self.native_chat("§a[PvPSurvived] Конфигурация успешно перезагружена!")},
@@ -67,8 +50,6 @@ impl Game<'_> {
             "atlas-radarmod" => serde_json::to_value(&v.radar).ok()?,
             "atlas-nofluid" => serde_json::to_value(&v.nofluid).ok()?,
             "atlas-pvpsurvived" => serde_json::to_value(&v.pvp).ok()?,
-            "atlas-lootbeams" => serde_json::to_value(&v.loot).ok()?,
-            "atlas-killnotification" => serde_json::to_value(&v.kill).ok()?,
             "atlas-totempops" => totem_json(&v.totem),
             _ => return None,
         })
@@ -93,8 +74,6 @@ impl Game<'_> {
             }
             "atlas-nofluid" => apply!(nofluid, "nofluid.json"),
             "atlas-pvpsurvived" => apply!(pvp, "pvpsurvived.json"),
-            "atlas-lootbeams" => apply!(loot, "lootbeams.json"),
-            "atlas-killnotification" => apply!(kill, "killnotification.json"),
             "atlas-totempops" => {
                 let obj = value.as_object().ok_or("Expected a configuration object")?;
                 let yaml = obj
@@ -130,12 +109,6 @@ impl Game<'_> {
                     }
                 ));
             }
-        }
-        if id == IDS[2] {
-            buttons.push(format!(
-                "Friends: {} — /friend add <name>",
-                self.atlas_ports.visual.friends.len()
-            ))
         }
     }
     pub(in crate::game) fn atlas_visual_settings_click(&mut self, id: &str, index: usize) {
@@ -197,8 +170,8 @@ fn range(id: &str, key: &str) -> (f64, f64, f64) {
     match key {
         "scale" => (
             0.05,
-            if id == IDS[7] { 0.2 } else { 0.5 },
-            if id == IDS[7] { 5.0 } else { 2.0 },
+            if id == TOTEM_POPS { 0.2 } else { 0.5 },
+            if id == TOTEM_POPS { 5.0 } else { 2.0 },
         ),
         "maxPlayers" => (1., 1., 20.),
         "maxDistance" | "max_distance" => (10., 10., 200.),
@@ -210,13 +183,6 @@ fn range(id: &str, key: &str) -> (f64, f64, f64) {
         "durationMs" => (100., 500., 10000.),
         "soundPitch" => (0.1, 0.1, 2.),
         "soundVolume" => (0.1, 0., 1.),
-        "beam.width" => (0.05, 0.05, 2.),
-        "beam.height" => (5., 5., 256.),
-        "beam.alpha" | "outline.visibleAlpha" | "outline.xrayAlpha" => (0.05, 0., 1.),
-        "beam.spinDegreesPerSecond" => (5., 0., 180.),
-        "outline.lineWidth" => (0.5, 0.5, 5.),
-        "outline.expand" => (0.01, 0., 0.5),
-        "maxRenderDistance" => (8., 8., 256.),
         "reset_timeout" => (5., 0., 300.),
         _ => (1., 0., 100.),
     }

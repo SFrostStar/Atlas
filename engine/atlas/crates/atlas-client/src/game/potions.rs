@@ -2085,6 +2085,9 @@ impl Game<'_> {
     /// `Hud.extractEffects`: icons top-right, beneficial row then harmful row;
     /// every screen but the inventories keeps them.
     pub(super) fn draw_effect_icons(&self, batch: &mut HudBatch) {
+        if self.atlas_inventory_replaces_effect_icons() {
+            return;
+        }
         if self.atlas_gamma_hud_effects(batch){return;}
         if self.potions.effects.list.is_empty() || self.screen_shows_active_effects(batch) {
             return;

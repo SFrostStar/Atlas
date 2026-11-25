@@ -9448,7 +9448,6 @@ impl Game<'_> {
         } else if let Some((i, distance, _)) = self.mob_hit()
             && self.before_block(distance)
         {
-            if self.remote_player_name(self.mobs[i].id).is_some_and(|name|self.atlas_visual_friend(name)){return false;}
             // Minecraft.startAttack: an item's attack_range must hold the hit.
             if self.held_range_allows(distance) {
                 self.send(S::Attack(play::Attack {
@@ -9460,7 +9459,6 @@ impl Game<'_> {
                     &*self.mobs[i].kind.id == "minecraft:player",
                 );
                 self.native_client_attack(target, player);
-                self.atlas_visual_attacked(self.mobs[i].id);
                 self.remote_player_attack(i);
                 self.reset_attack_strength();
             }

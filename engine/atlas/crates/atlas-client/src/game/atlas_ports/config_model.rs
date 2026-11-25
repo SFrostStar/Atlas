@@ -107,6 +107,9 @@ pub(super) fn definition(id: &str) -> Option<Definition> {
     if id == super::totem_tweaks::ID {
         return Some(super::totem_tweaks::definition());
     }
+    if id == super::inventory_hud::ID {
+        return Some(super::inventory_hud::definition());
+    }
     if id == "atlas-gammautils" {
         return Some(gamma::definition());
     }

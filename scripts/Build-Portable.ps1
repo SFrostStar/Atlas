@@ -61,6 +61,12 @@ Worlds, profiles and settings are stored in data next to the launcher.
 Updates download automatically and install when the launcher closes.
 Keep the complete folder together and preserve the data folder.
 '@ | Set-Content -LiteralPath (Join-Path $atlasDestination 'START-HERE.txt') -Encoding UTF8
+$atlasSourceName = "Atlas-$atlasVersion-Native-Source.zip"
+$atlasSource = Join-Path (Split-Path -Parent $atlasLauncher) $atlasSourceName
+$atlasSourceDestination = Join-Path (Split-Path -Parent $atlasDestination) $atlasSourceName
+if ($atlasSource -ne $atlasSourceDestination -and (Test-Path -LiteralPath $atlasSource -PathType Leaf)) {
+    Copy-Item -LiteralPath $atlasSource -Destination $atlasSourceDestination -Force
+}
 if ($Zip) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $atlasArchive = $atlasDestination + '.zip'

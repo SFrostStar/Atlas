@@ -1,6 +1,6 @@
 {
   "name": "atlas-launcher",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "author": {
     "name": "SFrostStar",
@@ -15,6 +15,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
+    "clean:qa": "node scripts/qa-workspace.cjs",
     "package": "node scripts/package-launcher.cjs"
   },
   "dependencies": {

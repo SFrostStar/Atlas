@@ -231,7 +231,7 @@ impl State {
 }
 impl Game<'_> {
     fn atlas_gamma_virtual_effects(&self) -> Vec<(&'static str, bool, i32)> {
-        if !self.native_window() || !self.atlas_port_on(IDS[9]) || self.player.is_none() {
+        if !self.native_window() || !self.atlas_port_on(IDS[6]) || self.player.is_none() {
             return vec![];
         }
         let state = &self.atlas_ports.actions.gamma;
@@ -351,14 +351,14 @@ impl Game<'_> {
         ))
     }
     pub(in crate::game) fn atlas_actions_gamma(&self, vanilla: f32) -> f32 {
-        if self.atlas_port_on(IDS[9]) {
+        if self.atlas_port_on(IDS[6]) {
             self.atlas_ports.actions.gamma.value(false) as f32
         } else {
             vanilla
         }
     }
     pub(in crate::game) fn atlas_actions_night_vision(&self, vanilla: f32) -> f32 {
-        if self.atlas_port_on(IDS[9]) {
+        if self.atlas_port_on(IDS[6]) {
             let g = &self.atlas_ports.actions.gamma;
             if g.channel(true)["enabled"] == true || g.channel(true)["dynamic"]["enabled"] == true {
                 return (g.value(true) / 100.0) as f32;
@@ -413,7 +413,7 @@ impl Game<'_> {
         self.titles.set_overlay(text, false);
     }
     pub(in crate::game) fn atlas_gamma_key(&mut self, key: KeyCode) -> bool {
-        if !self.atlas_port_on(IDS[9]) {
+        if !self.atlas_port_on(IDS[6]) {
             return false;
         }
         for (binding, default, nv, operation) in [
@@ -426,7 +426,7 @@ impl Game<'_> {
             ("increaseNightVision", "key.keyboard.right", true, 1),
             ("decreaseNightVision", "key.keyboard.left", true, -1),
         ] {
-            if keybinds::key_code(&self.native_mod_key(IDS[9], binding, default)) != Some(key) {
+            if keybinds::key_code(&self.native_mod_key(IDS[6], binding, default)) != Some(key) {
                 continue;
             }
             let now = now_ms();
@@ -508,7 +508,7 @@ impl Game<'_> {
         total / f64::from(count)
     }
     pub(in crate::game) fn atlas_gamma_tick(&mut self) {
-        if !self.atlas_port_on(IDS[9]) {
+        if !self.atlas_port_on(IDS[6]) {
             return;
         }
         let now = now_ms();
@@ -566,7 +566,7 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_gamma_command(&mut self, message: &str) -> bool {
-        if !self.atlas_port_on(IDS[9]) {
+        if !self.atlas_port_on(IDS[6]) {
             return false;
         }
         let words: Vec<_> = message.trim_start_matches('/').split_whitespace().collect();
@@ -698,7 +698,7 @@ impl Game<'_> {
         true
     }
     pub(in crate::game) fn atlas_actions_close(&mut self) {
-        if !self.native_window() || !self.atlas_port_on(IDS[9]) {
+        if !self.native_window() || !self.atlas_port_on(IDS[6]) {
             return;
         }
         let g = &mut self.atlas_ports.actions.gamma;

@@ -46,7 +46,7 @@ const HELP: &[&str] = &[
     "hotbar 1-9                     select a hotbar slot",
     "give ITEM [COUNT]              add items to the inventory",
     "render-distance N              chunks, 2..128",
-    "lod-distance N                 far surface chunks, 0 disables, up to1024",
+    "lod-distance N                 far terrain distance in chunks, 0 disables it",
     "time TICKS                     set the time of day",
     "summon KIND [X Y Z] [baby]     spawn a mob (in front of the player without a position)",
     "mobs [RADIUS]                  list mobs near the player with their AI state",

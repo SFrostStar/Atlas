@@ -22,20 +22,38 @@ test('every new native port installs independently without touching instance dat
   assert.equal(fs.readFileSync(path.join(worlds,'level.dat'),'utf8'),'world sentinel');
   assert.deepEqual(fs.readdirSync(f.home('a')).sort(),['atlas-mods.txt','atlas-ports.json','saves']);
 });
-test('native catalogue uses supplied metadata versions and describes the real CullParticles behavior',()=>{
+test('native catalogue uses supplied metadata versions',()=>{
   assert.equal(new Set(PORTS.map(p=>p.id)).size,PORTS.length);
   for(const p of PORTS){assert.match(p.id,/^atlas-[a-z0-9-]+$/);assert(p.description&&p.descriptionEn&&p.scope&&p.scopeEn&&p.version);if(p.config)assert(p.config.startsWith('config/'))}
-  assert.equal(PORTS.find(p=>p.id==='atlas-lootbeams').version,'1.1.0');
   assert.equal(PORTS.find(p=>p.id==='atlas-dropall').version,'1.0.0');
   assert.equal(PORTS.find(p=>p.id==='atlas-sortmod').version,'1.0.0');
-  assert.match(PORTS.find(p=>p.id==='atlas-cullparticles').descriptionEn,/push-out-of-blocks/);
-  assert.match(PORTS.find(p=>p.id==='atlas-cullparticles').scopeEn,/does not optimize particles/);
   assert.equal(PORTS.find(p=>p.id==='atlas-appleskin').config,'config/appleskin.json5');
   assert.equal(PORTS.find(p=>p.id==='atlas-saturation-plus').config,'config/saturation_plus-config.properties');
+  const inGame = require('../engine/atlas/crates/atlas-client-render/src/atlas/mod_menu/ports.json');
+  for (const [id, version] of [['atlas-inventoryhud', '3.4.27'], ['atlas-macrokeybinds', '1.3.1']]) {
+    assert.equal(PORTS.find(port => port.id === id).version, version);
+    assert.equal(inGame.find(port => port.id === id).version, version);
+  }
 });
 
 
-test('removed ports are unavailable even when left in an older instance configuration',t=>{const f=fixture(t);const file=path.join(f.home('a'),'atlas-ports.json');const legacy=JSON.stringify({schema:1,installed:['atlas-rwjoiner','atlas-viewmodel']});fs.writeFileSync(file,legacy);const snapshot=f.manager.snapshot('a');assert(!snapshot.ports.some(p=>p.id==='atlas-rwjoiner'));assert(snapshot.ports.find(p=>p.id==='atlas-viewmodel').installed);assert.throws(()=>f.manager.change('a','atlas','atlas-rwjoiner','install'),/адаптация/);assert.equal(fs.readFileSync(file,'utf8'),legacy);});
+test('removed ports are unavailable and generated legacy markers are cleaned',t=>{
+  const f=fixture(t), home=f.home('a'), ports=path.join(home,'atlas-ports.json'), folder=path.join(home,'atlas-mods');
+  const legacy=JSON.stringify({schema:1,installed:['atlas-retired-test','atlas-appleskin']});
+  fs.writeFileSync(ports,legacy);
+  fs.mkdirSync(folder);
+  const marker=path.join(folder,'atlas-retired-test.atlas-port.json'), custom=path.join(folder,'atlas-external-test.atlas-port.json');
+  fs.writeFileSync(marker,JSON.stringify({format:'atlas-client-built-in',id:'atlas-retired-test'}));
+  fs.writeFileSync(custom,'external metadata');
+  const snapshot=f.manager.snapshot('a');
+  assert(!snapshot.ports.some(p=>p.id==='atlas-retired-test'));
+  assert(snapshot.ports.find(p=>p.id==='atlas-appleskin').installed);
+  assert.throws(()=>f.manager.change('a','atlas','atlas-retired-test','install'),/адаптация/);
+  f.manager.syncPortFiles('a');
+  assert.equal(fs.existsSync(marker),false);
+  assert.equal(fs.readFileSync(custom,'utf8'),'external metadata');
+  assert.equal(fs.readFileSync(ports,'utf8'),legacy);
+});
 
 test('mod folder lists legacy installs and preserves other files', t => {
   const f = fixture(t);

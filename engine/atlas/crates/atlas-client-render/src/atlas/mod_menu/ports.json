@@ -197,78 +197,6 @@
     "client": true
   },
   {
-    "id": "atlas-friendlist",
-    "name": "FriendList",
-    "version": "1.0.0",
-    "description": "Добавляй друзей, они становятся полупрозрачными и их нельзя бить.",
-    "authors": [
-      "slmnk"
-    ],
-    "licenses": [
-      "MIT"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "client": true
-  },
-  {
-    "id": "atlas-killnotification",
-    "name": "KillNotification",
-    "version": "1.0.0",
-    "description": "Автоматически отправляет !-ник в чат при убийстве игрока.",
-    "authors": [
-      "Slmnk"
-    ],
-    "licenses": [
-      "MIT"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "client": true
-  },
-  {
-    "id": "atlas-lootbeams",
-    "name": "Lootbeams",
-    "version": "1.1.0",
-    "description": "Highlights items on the ground with a rarity-colored contour that follows the item's real shape (visible through walls) and an optional beam of light. Fully configurable.",
-    "authors": [
-      "you"
-    ],
-    "licenses": [
-      "CC0-1.0"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "client": true
-  },
-  {
     "id": "atlas-nofluid",
     "name": "No Fluid (Clear Water & Lava)",
     "version": "1.0.0",
@@ -343,31 +271,6 @@
     "client": true
   },
   {
-    "id": "atlas-cullparticles",
-    "name": "CullParticles",
-    "version": "1.21.4_1.0",
-    "description": "A client-side mod that culls particles that are not visible to increase performance.",
-    "authors": [
-      "quikjay"
-    ],
-    "licenses": [
-      "MIT"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "icon": "atlas/modmenu/icons/atlas-cullparticles",
-    "client": true
-  },
-  {
     "id": "atlas-autocraft",
     "name": "AutoCraft",
     "version": "1.0.0",
@@ -398,54 +301,6 @@
     "description": "Adds a Drop All button to the player inventory",
     "authors": [
       "Author"
-    ],
-    "licenses": [
-      "MIT"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "client": true
-  },
-  {
-    "id": "atlas-hotcommands",
-    "name": "HotCommands",
-    "version": "1.0.0",
-    "description": "Customizable hot command menu with submenus, categories and in-game editor.",
-    "authors": [
-      "Slmnk"
-    ],
-    "licenses": [
-      "MIT"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "client": true
-  },
-  {
-    "id": "atlas-inventory-manager",
-    "name": "Раскладчик инвентаря",
-    "version": "1.01",
-    "description": "Save, rename and restore inventory layouts. Client-side Fabric mod for Minecraft 1.21.4.",
-    "authors": [
-      "Inventory Layouts"
     ],
     "licenses": [
       "MIT"
@@ -533,31 +388,6 @@
       "atlas": ">=1.0.0"
     },
     "icon": "atlas/modmenu/icons/atlas-streamermode",
-    "client": true
-  },
-  {
-    "id": "atlas-viewmodel",
-    "name": "ViewModel",
-    "version": "1.0.0",
-    "description": "Interactive ViewModel drag & drop and 13 custom Swing Animations for Minecraft 1.21.4 Fabric",
-    "authors": [
-      "ViewModel"
-    ],
-    "licenses": [
-      "MIT"
-    ],
-    "homepage": "",
-    "issues": "",
-    "source": "",
-    "credits": {
-      "contributor": [
-        "SFrostStar (Atlas Rust port)"
-      ]
-    },
-    "dependencies": {
-      "atlas": ">=1.0.0"
-    },
-    "icon": "atlas/modmenu/icons/atlas-viewmodel",
     "client": true
   },
   {
@@ -739,17 +569,52 @@
     "name": "In-Game Account Switcher",
     "version": "9.0.7",
     "description": "Manage and switch saved accounts without restarting the game.",
-    "authors": ["VidTu"],
-    "licenses": ["LGPL-3.0-or-later"],
+    "authors": [
+      "VidTu"
+    ],
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ],
     "homepage": "https://modrinth.com/mod/in-game-account-switcher",
     "source": "https://github.com/The-Fireplace-Minecraft-Mods/In-Game-Account-Switcher",
     "client": true,
     "credits": {
-      "contributor": ["The_Fireplace", "The_BrainStone", "2xsaiko", "Elvm", "Fhilips613", "WyattMarks", "SFrostStar (Atlas port)"]
+      "contributor": [
+        "The_Fireplace",
+        "The_BrainStone",
+        "2xsaiko",
+        "Elvm",
+        "Fhilips613",
+        "WyattMarks",
+        "SFrostStar (Atlas port)"
+      ]
     },
     "dependencies": {
       "atlas": ">=1.4.1"
     },
     "icon": "atlas/ias/button_plain"
+  },
+  {
+    "id": "atlas-inventoryhud",
+    "name": "Inventory HUD +",
+    "version": "3.4.27",
+    "description": "Display inventory items, equipment durability, and active effects during play.",
+    "authors": ["SFrostStar"],
+    "licenses": ["MIT"],
+    "homepage": "https://www.curseforge.com/minecraft/mc-mods/inventory-hud-forge",
+    "credits": {"contributor": ["DmitryLovin (reference mod)"]},
+    "dependencies": {"atlas": ">=1.4.1"},
+    "client": true
+  },
+  {
+    "id": "atlas-macrokeybinds",
+    "name": "Macro Keybinds",
+    "version": "1.3.1",
+    "description": "Bind chat messages and commands to shortcuts using global and per-server profiles.",
+    "authors": ["SFrostStar"],
+    "licenses": ["MIT"],
+    "credits": {"contributor": ["Thomas7520 (reference mod)"]},
+    "dependencies": {"atlas": ">=1.4.1"},
+    "client": true
   }
 ]

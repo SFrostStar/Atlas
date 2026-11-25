@@ -40,6 +40,7 @@ test('first-run installs bundled client, verified official resources and Java, t
  for(const key of ['completed','total','bytesDone','bytesTotal'])assert.equal(publishing[key],0,`publishing must clear stale download ${key}`);
  const requests=f.requests;await f.manager.start();assert.equal(f.requests,requests,'ready installations never download again');
  assert.equal(fs.existsSync(path.join(f.root,'data','instances')),false);
+ assert.ok(fs.readdirSync(path.join(f.root,'data','install')).every(name=>!name.startsWith('preparation-root')));
 });
 test('unsafe URLs and path traversal are rejected before fetch',()=>{
  for(const url of ['http://piston-data.mojang.com/a','https://evil.example/a','https://piston-data.mojang.com.evil/a','https://user:pass@piston-data.mojang.com/a'])assert.throws(()=>safeUrl(url));
@@ -79,4 +80,45 @@ test('cancel is observable, keeps verified files and can retry',async t=>{
  const f=fixture(t,{onChange:s=>{if(s.phase==='download'&&s.completed===1)f.manager.cancel();}});
  await f.manager.start();assert.equal(f.manager.snapshot().status,'cancelled');assert.equal(f.manager.inspect().ready,false);
  f.manager.onChange=()=>{};await f.manager.start();assert.equal(f.manager.inspect().ready,true);
+});
+test('cancel during resource publication clears temporaries and keeps verified game downloads', async t => {
+ const f=fixture(t);
+ const copy=f.manager.copyTree.bind(f.manager);
+ f.manager.copyTree=async(source,target,root)=>{
+  await copy(source,target,root);
+  if(path.basename(target).startsWith('26.3.install-'))f.manager.cancel();
+ };
+ await f.manager.start();
+ assert.equal(f.manager.snapshot().status,'cancelled');
+ assert.equal(f.manager.inspect().ready,false);
+ const cache=path.join(f.root,'data','install');
+ assert.ok(fs.readdirSync(cache).every(name=>!name.startsWith('preparation-root')));
+ assert.equal(fs.readFileSync(path.join(cache,'minecraft','versions','26.3','26.3.jar'),'utf8'),'client');
+ assert.equal(fs.readFileSync(path.join(cache,'java','java-runtime-epsilon','bin','java.exe'),'utf8'),'java');
+ assert.deepEqual(fs.readdirSync(path.join(f.root,'runtime','.local','atlas-client')),[]);
+ f.manager.copyTree=copy;await f.manager.start();assert.equal(f.manager.inspect().ready,true);
+});
+test('a replaced resources version leaves only the installed directory', async t => {
+ const f=fixture(t);await f.manager.start();
+ const resources=f.manager.inspect().resourcesPath;
+ fs.writeFileSync(path.join(resources,'atlas-prepare.json'),JSON.stringify({output_version:2}));
+ await f.manager.start();
+ assert.equal(f.manager.inspect().ready,true);
+ assert.deepEqual(fs.readdirSync(path.dirname(resources)),['26.3']);
+});
+test('startup prunes an abandoned preparation tree without following links or removing an active owner', async t => {
+ const f=fixture(t), cache=path.join(f.root,'data','install');
+ const stale=new Date(Date.now()-2*24*60*60*1000);
+ const create=name=>{const dir=path.join(cache,name);fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'asset'),'keep');fs.utimesSync(dir,stale,stale);return dir;};
+ const legacy=create('preparation-root');
+ const alive=create(`preparation-root-${process.pid}-abc123`);
+ const minecraft=create('minecraft');
+ const fresh=create('preparation-root-2147483647-aBc246');
+ fs.utimesSync(fresh,new Date(),new Date());
+ const external=path.join(f.root,'external');fs.mkdirSync(external);fs.writeFileSync(path.join(external,'world.dat'),'private');
+ const linked=path.join(cache,'preparation-root-2147483647-deF357');fs.symlinkSync(external,linked,process.platform==='win32'?'junction':'dir');
+ await f.manager.prunePreparation();
+ assert.equal(fs.existsSync(legacy),false);
+ for(const dir of [alive,minecraft,fresh,linked])assert.ok(fs.existsSync(dir),dir);
+ assert.equal(fs.readFileSync(path.join(external,'world.dat'),'utf8'),'private');
 });

@@ -7,6 +7,7 @@ use atlas_client::{multiplayer, reconnect::Retry, title::Mode};
 impl Game<'_> {
     /// Auto-reconnect: a connection to `address` as `name` starts.
     pub(in crate::game) fn extras_connecting(&mut self, address: &str, name: &str, lan: bool) {
+        self.atlas_macros_stop();
         self.extras.reconnect.connecting(address, name, lan);
     }
     /// The server this game connected to last.
@@ -23,6 +24,7 @@ impl Game<'_> {
     }
     /// Auto-reconnect: the player left the server on purpose.
     pub(in crate::game) fn extras_left(&mut self) {
+        self.atlas_macros_stop();
         self.extras.reconnect.reset();
     }
     /// Auto-reconnect's next attempt after a disconnect, when it is on and

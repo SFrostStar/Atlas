@@ -1408,9 +1408,6 @@ impl Game<'_> {
         if message.is_empty() || !self.chat_abilities().allows(&message) {
             return;
         }
-        if message.starts_with(".viewmodel") && self.atlas_actions_command(&message) {
-            return;
-        }
         if !self.atlas_actions_suppress_history(&message) {
             self.ui.chat.add_recent(&message);
         }

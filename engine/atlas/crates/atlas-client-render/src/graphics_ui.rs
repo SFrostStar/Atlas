@@ -661,7 +661,7 @@ const UPLOAD_STEPS: [u32; 8] = [0, 256, 512, 1024, 2048, 4096, 8192, 16384];
 /// for a short ring of far terrain past a small render distance (a phone or an
 /// integrated GPU at 8 chunks wants LOD to 12 or 16, not 64), then each doubling
 /// up to the whole world.
-const LOD_STEPS: [u32; 24] = [
+pub(super) const LOD_STEPS: [u32; 24] = [
     0,
     16,
     24,
@@ -687,6 +687,16 @@ const LOD_STEPS: [u32; 24] = [
     2097152,
     crate::lod::MAX_CHUNKS,
 ];
+
+pub(super) fn lod_slider_position(distance: u32) -> f32 {
+    let last = LOD_STEPS.len() - 1;
+    let index = LOD_STEPS.iter().position(|&step| step >= distance).unwrap_or(last);
+    index as f32 / last as f32
+}
+
+pub(super) fn lod_distance_at(position: f32) -> u32 {
+    LOD_STEPS[(position.clamp(0.0, 1.0) * (LOD_STEPS.len() - 1) as f32).round() as usize]
+}
 
 /// `out`: the output of the renderer the settings are shown for, with what its display reports.
 fn setup(s: &Settings, out: &EffectiveOutput) -> Setup {
@@ -798,13 +808,7 @@ impl H {
                     .unwrap_or(UPLOAD_STEPS.len() - 1);
                 Some(i as f32 / (UPLOAD_STEPS.len() - 1) as f32)
             }
-            H::LodDistance => {
-                let i = LOD_STEPS
-                    .iter()
-                    .position(|&d| d >= g.lod_distance)
-                    .unwrap_or(LOD_STEPS.len() - 1);
-                Some(i as f32 / (LOD_STEPS.len() - 1) as f32)
-            }
+            H::LodDistance => Some(lod_slider_position(g.lod_distance)),
             H::Workers => Some(g.workers as f32 / max_workers() as f32),
             H::ResolutionScale => Some((g.resolution_scale as f32 - 50.0) / 150.0),
             H::TargetFps => Some((g.target_fps as f32 - 30.0) / 210.0),
@@ -989,9 +993,7 @@ impl H {
                 g.upload_budget_kib =
                     UPLOAD_STEPS[(v * (UPLOAD_STEPS.len() - 1) as f32).round() as usize]
             }
-            H::LodDistance => {
-                g.lod_distance = LOD_STEPS[(v * (LOD_STEPS.len() - 1) as f32).round() as usize]
-            }
+            H::LodDistance => g.lod_distance = lod_distance_at(v),
             H::Workers => g.workers = (v * max_workers() as f32).round() as u32,
             H::ResolutionScale => g.resolution_scale = (50.0 + (v * 30.0).round() * 5.0) as u32,
             H::TargetFps => g.target_fps = (30.0 + (v * 42.0).round() * 5.0) as u32,

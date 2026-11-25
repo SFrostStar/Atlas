@@ -1,8 +1,6 @@
 //! Native adapters of the exact supplied mod versions, not similarly named replacements.
-//! MIT: Radar / slmnk; Crystal Optimizer / Author; FriendList / slmnk;
-//! KillNotification / Slmnk; TotemPops / you;
-//! CullParticles / quikjay. CC0: Lootbeams / you, NoFluid / slmnk,
-//! PvPSurvived / Slmnk. Original notices are retained in the project's mod-port notices.
+//! MIT: Radar / slmnk; Crystal Optimizer / Author; TotemPops / you.
+//! CC0: NoFluid / slmnk, PvPSurvived / Slmnk. Original notices are retained in the project's mod-port notices.
 //! Java entry points/mixins are adapted to Atlas client hooks; no Java bytecode is shipped.
 #[path = "visual_commands.rs"]
 mod commands;
@@ -22,68 +20,44 @@ use atlas_client::{
     text::{Style, Text},
 };
 use std::{
-    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub(in crate::game) const IDS: [&str; 9] = [
-    "atlas-radarmod",
-    "atlas-crystaloptimizer",
-    "atlas-friendlist",
-    "atlas-killnotification",
-    "atlas-lootbeams",
-    "atlas-nofluid",
-    "atlas-pvpsurvived",
-    "atlas-totempops",
-    "atlas-cullparticles",
+const RADAR: &str = "atlas-radarmod";
+const CRYSTAL_OPTIMIZER: &str = "atlas-crystaloptimizer";
+const NO_FLUID: &str = "atlas-nofluid";
+const PVP_SURVIVED: &str = "atlas-pvpsurvived";
+const TOTEM_POPS: &str = "atlas-totempops";
+pub(in crate::game) const IDS: [&str; 5] = [
+    RADAR, CRYSTAL_OPTIMIZER, NO_FLUID, PVP_SURVIVED, TOTEM_POPS,
 ];
-pub(super) const DEFINITIONS: [(&str, &str, &str); 9] = [
+pub(super) const DEFINITIONS: [(&str, &str, &str); 5] = [
     (
-        IDS[0],
+        RADAR,
         "Radar",
         "Radar 1.0.0: nearby players, health, distance and direction; R opens settings.",
     ),
     (
-        IDS[1],
+        CRYSTAL_OPTIMIZER,
         "Crystal Optimizer",
         "Crystal Optimizer 1.0.0: remove attacked crystals immediately and clear crystal interaction delay.",
     ),
     (
-        IDS[2],
-        "FriendList",
-        "FriendList 1.0.0: /friend commands, translucent friends and attack protection.",
-    ),
-    (
-        IDS[3],
-        "KillNotification",
-        "KillNotification 1.0.0: send the original !-<player> chat notification after a kill.",
-    ),
-    (
-        IDS[4],
-        "Lootbeams",
-        "Lootbeams 1.1.0: rarity silhouettes and rotating gradient loot beams.",
-    ),
-    (
-        IDS[5],
+        NO_FLUID,
         "NoFluid",
         "NoFluid 1.0.0: configurable fluid fog, overlays and underwater visibility; H toggles.",
     ),
     (
-        IDS[6],
+        PVP_SURVIVED,
         "PvPSurvived",
         "PvPSurvived 1.0.0: combat-end message and sound from server boss bars and chat.",
     ),
     (
-        IDS[7],
+        TOTEM_POPS,
         "TotemPops",
         "TotemPops 1.0.0: colored pop counters under player names and live YAML settings.",
-    ),
-    (
-        IDS[8],
-        "CullParticles",
-        "CullParticles 1.21.4_1.0: the supplied JAR disables push-out-of-blocks; it does not cull particles.",
     ),
 ];
 
@@ -123,12 +97,8 @@ pub(super) struct State {
     pub(super) radar: config::Radar,
     pub(super) nofluid: config::NoFluid,
     pub(super) pvp: config::Pvp,
-    pub(super) loot: config::Lootbeams,
-    pub(super) kill: config::Kill,
     pub(super) totem: config::Totem,
-    pub(super) friends: BTreeSet<String>,
     pub(super) pops: logic::Pops,
-    pub(super) kills: logic::Kills,
     pub(super) pvp_state: logic::PvpState,
     pub(super) open_settings: Option<String>,
     radar_rows: Vec<RadarRow>,
@@ -152,24 +122,13 @@ impl State {
         let totem = fs::read_to_string(&totem_file)
             .map(|s| config::Totem::parse(&s))
             .unwrap_or_default();
-        let friends = fs::read_to_string(dir.join("friendlist.txt"))
-            .unwrap_or_default()
-            .lines()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_lowercase)
-            .collect();
         Self {
             radar,
             nofluid: config::load(&dir, "nofluid.json"),
             pvp: config::load(&dir, "pvpsurvived.json"),
-            loot: config::load(&dir, "lootbeams.json"),
-            kill: config::load(&dir, "killnotification.json"),
             totem,
-            friends,
             dir,
             pops: Default::default(),
-            kills: Default::default(),
             pvp_state: Default::default(),
             open_settings: None,
             radar_rows: vec![],
@@ -179,14 +138,6 @@ impl State {
             ui: Default::default(),
             materialized: false,
         }
-    }
-    fn save_friends(&self) {
-        let _ = fs::create_dir_all(&self.dir).and_then(|()| {
-            fs::write(
-                self.dir.join("friendlist.txt"),
-                self.friends.iter().cloned().collect::<Vec<_>>().join("\n"),
-            )
-        });
     }
     fn save_totem(&self) {
         let path = self.dir.join("totempops/config.yml");
@@ -223,24 +174,12 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_visual_take_settings_request(&mut self) -> Option<String> {
         self.atlas_ports.visual.open_settings.take()
     }
-    pub(in crate::game) fn atlas_visual_friend(&self, name: &str) -> bool {
-        self.atlas_port_on(IDS[2])
-            && self
-                .atlas_ports
-                .visual
-                .friends
-                .contains(&name.to_lowercase())
-    }
     pub(in crate::game) fn atlas_visual_no_fluid(&self) -> Option<&config::NoFluid> {
         let c = &self.atlas_ports.visual.nofluid;
-        (self.atlas_port_on(IDS[5]) && c.enabled).then_some(c)
+        (self.atlas_port_on(NO_FLUID) && c.enabled).then_some(c)
     }
     pub(in crate::game) fn atlas_visual_crystal(&self) -> bool {
-        self.native_window() && self.atlas_port_on(IDS[1])
-    }
-    /// This is the actual sole mixin in the provided CullParticles JAR, verified against Yarn.
-    pub(in crate::game) fn atlas_visual_no_push_out(&self) -> bool {
-        self.native_window() && self.atlas_port_on(IDS[8])
+        self.native_window() && self.atlas_port_on(CRYSTAL_OPTIMIZER)
     }
     pub(in crate::game) fn atlas_visual_disconnect(&mut self) {
         let v = &mut self.atlas_ports.visual;
@@ -261,11 +200,9 @@ impl Game<'_> {
             self.atlas_ports.visual.materialized = true;
             let v = &self.atlas_ports.visual;
             for (id, name) in [
-                (IDS[0], "radarmod.json"),
-                (IDS[3], "killnotification.json"),
-                (IDS[4], "lootbeams.json"),
-                (IDS[5], "nofluid.json"),
-                (IDS[6], "pvpsurvived.json"),
+                (RADAR, "radarmod.json"),
+                (NO_FLUID, "nofluid.json"),
+                (PVP_SURVIVED, "pvpsurvived.json"),
             ] {
                 if self.atlas_ports.installed.contains(id)
                     && !v.dir.join(name).exists()
@@ -274,20 +211,16 @@ impl Game<'_> {
                     config::save(&v.dir, name, &value);
                 }
             }
-            if self.atlas_ports.installed.contains(IDS[7])
+            if self.atlas_ports.installed.contains(TOTEM_POPS)
                 && !v.dir.join("totempops/config.yml").exists()
             {
                 v.save_totem();
             }
-            if self.atlas_ports.installed.contains(IDS[2]) && !v.dir.join("friendlist.txt").exists()
-            {
-                v.save_friends();
-            }
         }
         let now = now_ms();
         for (index, (id, name, default)) in [
-            (IDS[0], "open_config", "key.keyboard.r"),
-            (IDS[5], "toggle", "key.keyboard.h"),
+            (RADAR, "open_config", "key.keyboard.r"),
+            (NO_FLUID, "toggle", "key.keyboard.h"),
         ]
         .into_iter()
         .enumerate()
@@ -334,7 +267,7 @@ impl Game<'_> {
             return;
         }
         let names = self.remote_player_names();
-        if self.atlas_port_on(IDS[0]) {
+        if self.atlas_port_on(RADAR) {
             let pos = self.player.as_ref().unwrap().position;
             let clock = self.hud_clock();
             let cfg = &self.atlas_ports.visual.radar;
@@ -378,7 +311,7 @@ impl Game<'_> {
             self.atlas_ports.visual.radar_rows = rows.into_iter().map(|(_, r)| r).collect();
             self.atlas_ports.visual.radar_count = count;
         }
-        if self.atlas_port_on(IDS[7]) {
+        if self.atlas_port_on(TOTEM_POPS) {
             let v = &mut self.atlas_ports.visual;
             v.pops.tick += 1;
             if v.pops.tick % 40 == 0 {
@@ -419,29 +352,7 @@ impl Game<'_> {
                 self.atlas_ports.visual.pops.expire((timeout * 20.0) as u64)
             }
         }
-        if self.atlas_port_on(IDS[3]) {
-            let local = self.own_profile_name();
-            let enabled = self.atlas_ports.visual.kill.enabled;
-            for (id, name) in &names {
-                if let Some(m) = self.mobs.iter().find(|m| m.id == *id && m.health <= 0.0) {
-                    let _ = m;
-                    let uuid = self.remote_player_uuid(*id).unwrap_or(*id as u128);
-                    self.atlas_ports
-                        .visual
-                        .kills
-                        .death(uuid, name, now, &local, enabled)
-                }
-            }
-            if let Some(msg) = self
-                .atlas_ports
-                .visual
-                .kills
-                .tick(now, self.remote.is_some())
-            {
-                self.send_chat(&msg)
-            }
-        }
-        if self.atlas_port_on(IDS[6]) && self.atlas_ports.visual.pvp.enabled {
+        if self.atlas_port_on(PVP_SURVIVED) && self.atlas_ports.visual.pvp.enabled {
             if self
                 .player
                 .as_ref()
@@ -476,16 +387,8 @@ impl Game<'_> {
                 .fold(0u128, |a, &w| (a << 32) | u128::from(w as u32))
         })
     }
-    pub(in crate::game) fn atlas_visual_attacked(&mut self, id: u32) {
-        if self.atlas_port_on(IDS[3])
-            && let Some(name) = self.remote_player_name(id).map(str::to_owned)
-        {
-            let uuid = self.remote_player_uuid(id).unwrap_or(id as u128);
-            self.atlas_ports.visual.kills.attack(uuid, &name, now_ms())
-        }
-    }
     pub(in crate::game) fn atlas_visual_entity_status(&mut self, id: u32, status: u8) {
-        if status != 35 || !self.atlas_port_on(IDS[7]) {
+        if status != 35 || !self.atlas_port_on(TOTEM_POPS) {
             return;
         }
         let own = self
@@ -508,7 +411,7 @@ impl Game<'_> {
         self.atlas_visual_totem(uuid, &name, own);
     }
     pub(in crate::game) fn atlas_visual_totem(&mut self, uuid: u128, name: &str, is_self: bool) {
-        if !self.atlas_port_on(IDS[7]) {
+        if !self.atlas_port_on(TOTEM_POPS) {
             return;
         }
         let count = self.atlas_ports.visual.pops.pop(uuid);
@@ -529,22 +432,9 @@ impl Game<'_> {
             )
         }
     }
-    pub(in crate::game) fn atlas_visual_chat(&mut self, message: &str) {
-        let now = now_ms();
-        if self.atlas_port_on(IDS[3]) {
-            let local = self.own_profile_name();
-            let enabled = self.atlas_ports.visual.kill.enabled;
-            self.atlas_ports
-                .visual
-                .kills
-                .chat(message, &local, now, enabled)
-        }
-        self.atlas_visual_overlay(message);
-    }
-    /// Only PvPSurvived consumes actionbar/overlay messages; KillNotification excludes them.
     pub(in crate::game) fn atlas_visual_overlay(&mut self, message: &str) {
         let now = now_ms();
-        if self.atlas_port_on(IDS[6])
+        if self.atlas_port_on(PVP_SURVIVED)
             && self.atlas_ports.visual.pvp.enabled
             && self
                 .player
@@ -564,10 +454,10 @@ impl Game<'_> {
         if !self.native_window() || self.player.is_none() || self.ui.hide_gui {
             return;
         }
-        if self.atlas_port_on(IDS[0]) && self.atlas_ports.visual.radar.enabled {
+        if self.atlas_port_on(RADAR) && self.atlas_ports.visual.radar.enabled {
             self.atlas_visual_radar_draw(batch)
         }
-        if self.atlas_port_on(IDS[6]) && self.atlas_ports.visual.pvp.enabled {
+        if self.atlas_port_on(PVP_SURVIVED) && self.atlas_ports.visual.pvp.enabled {
             let c = &self.atlas_ports.visual.pvp;
             if let Some(alpha) =
                 self.atlas_ports

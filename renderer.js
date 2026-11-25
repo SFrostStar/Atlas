@@ -702,7 +702,7 @@ function openInstanceEditor(id=null,onlyName=false){
  document.getElementById('instance-dialog').showModal();document.getElementById('instance-name').focus();
 }
 function nativeBuildLabel() {
-  return { tools: 'Подготовка компилятора…', apply: 'Подключение Rust-модов…', compile: 'Сборка игры с модами…' }[state?.nativeBuildStage];
+  return { source: 'Скачивание исходников для Rust-модов…', tools: 'Подготовка компилятора…', apply: 'Подключение Rust-модов…', compile: 'Сборка игры с модами…' }[state?.nativeBuildStage];
 }
 
 function durationText(seconds) {
@@ -717,10 +717,18 @@ function updateNativeBuild() {
   if (!label) return;
   const build = state.nativeBuild;
   const track = document.getElementById('native-build-track');
+  document.getElementById('native-build-label').textContent = tr(label);
+  if (state.nativeBuildStage === 'source') {
+    const percent = Math.floor(100 * build.bytesDone / build.bytesTotal);
+    track.setAttribute('aria-valuenow', percent);
+    track.style.setProperty('--build-fill', percent + '%');
+    document.getElementById('native-build-count').textContent = `${Math.floor(build.bytesDone / 1024**2)} / ${Math.ceil(build.bytesTotal / 1024**2)} ${tr('МБ')}`;
+    document.getElementById('native-build-time').textContent = '';
+    return;
+  }
   const hasCount = Number.isFinite(build?.total) && build.total > 0;
   const completed = hasCount ? Math.min(build.completed, build.total) : 0;
   const percent = hasCount ? Math.min(99, Math.floor(100 * completed / build.total)) : 0;
-  document.getElementById('native-build-label').textContent = tr(label);
   document.getElementById('native-build-count').textContent = hasCount ? `${completed} / ${build.total}` : '';
   if (hasCount) track.setAttribute('aria-valuenow', percent);
   else track.removeAttribute('aria-valuenow');

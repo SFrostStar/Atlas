@@ -16,7 +16,7 @@ pub const NAME: &str = "Atlas";
 pub const NOTICE: &str = "Not affiliated with Mojang or Microsoft";
 
 /// Bundled artwork; individual mod assets retain the licenses in MOD-PORT-NOTICES.md.
-pub fn images() -> [(&'static str, &'static [u8]); 14] {
+pub fn images() -> [(&'static str, &'static [u8]); 16] {
     [
         ("atlas/loading-logo", include_bytes!("assets/logo.png")),
         ("atlas/menu-night", include_bytes!("assets/night.png")),
@@ -67,6 +67,14 @@ pub fn images() -> [(&'static str, &'static [u8]); 14] {
         (
             "atlas/ias/down_focus",
             include_bytes!("assets/ias/down_focus.png"),
+        ),
+        (
+            "atlas/inventoryhud/backpack",
+            include_bytes!("assets/inventoryhud/backpack.png"),
+        ),
+        (
+            "atlas/inventoryhud/ammo",
+            include_bytes!("assets/inventoryhud/ammo.png"),
         ),
     ]
 }

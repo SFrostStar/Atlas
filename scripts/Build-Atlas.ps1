@@ -101,6 +101,7 @@ try {
                 (Join-Path $runtimePath 'atlas-runtime.json'),
                 (@{ version = $env:ATLAS_VERSION } | ConvertTo-Json)
             )
+            Limit-AtlasBuildCache
             Write-Host "Built Atlas: $runtimePath\atlas-client.exe" -ForegroundColor Green
             Write-Host 'Restart Atlas Launcher to use the new client. Close the game before building again.'
         }

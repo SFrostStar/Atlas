@@ -9,10 +9,11 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PORTS = ROOT / "engine/atlas/crates/atlas-client/src/game/atlas_ports"
+RENDER = ROOT / "engine/atlas/crates/atlas-client-render/src"
 SOURCES = [PORTS / name for name in (
     "food_logic.rs", "utility_logic.rs", "actions_logic.rs",
-    "actions_viewmodel.rs", "actions_inventory_planner.rs", "visual_logic.rs",
-)] + [ROOT / "engine/atlas/crates/atlas-client-render/src/atlas/chunk_animation.rs"]
+    "visual_logic.rs",
+)] + [RENDER / "atlas/chunk_animation.rs"]
 env = os.environ.copy()
 portable = ROOT / "tools/cargo/bin/rustc.exe"
 rustc = str(portable) if portable.exists() else shutil.which("rustc")
@@ -28,9 +29,17 @@ scratch = Path(tempfile.mkdtemp(prefix="atlas-mod-models-", dir=temp_root))
 try:
     for source in SOURCES:
         driver = scratch / (source.stem + "-test.rs")
+        flags = []
+        if source.name == "visual_logic.rs":
+            motion = scratch / "motion.rs"
+            motion_lib = scratch / "libatlas_client.rlib"
+            motion_path = json.dumps(str(RENDER / "hud_kit/motion.rs"))
+            motion.write_text(f"#[path={motion_path}] pub mod motion;\npub mod hud_kit {{ pub use crate::motion; }}\n", encoding="utf-8")
+            subprocess.run([rustc, "--edition=2024", "--crate-name", "atlas_client", "--crate-type", "rlib", str(motion), "-o", str(motion_lib)], check=True, env=env)
+            flags = ["--extern", f"atlas_client={motion_lib}"]
         driver.write_text("#![allow(dead_code)]\nmod game { #[path=" + json.dumps(str(source)) + "] mod subject; }\n", encoding="utf-8")
         output = scratch / (source.stem + (".exe" if os.name == "nt" else ""))
-        subprocess.run([rustc, "--edition=2024", "--crate-name", "port_model", "--test", str(driver), "-o", str(output)], check=True, env=env)
+        subprocess.run([rustc, "--edition=2024", "--crate-name", "port_model", "--test", *flags, str(driver), "-o", str(output)], check=True, env=env)
         print(source.name, flush=True)
         subprocess.run([str(output)], check=True, env=env)
 finally:

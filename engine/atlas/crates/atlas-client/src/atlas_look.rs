@@ -8,6 +8,8 @@ use atlas_theme as theme;
 
 /// Give the engine Atlas's look; call it once, before the first window opens.
 pub(crate) fn give() {
+    #[cfg(target_os = "windows")]
+    atlas_threads::system_menu::identify_game();
     atlas_client::window::set_icon_png(include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"), "/../../.local/atlas-icons/game-icon.png"
     )));

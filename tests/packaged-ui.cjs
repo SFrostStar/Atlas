@@ -3,19 +3,29 @@ const { _electron } = require('playwright-core');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const { performance } = require('node:perf_hooks');
+const { createQaWorkspace } = require('../scripts/qa-workspace.cjs');
 
 const root = path.resolve(__dirname, '..');
-const fixture = path.join(root, 'work', 'package-fixture');
-const executable = path.join(fixture, 'dist', 'Atlas Launcher-win32-x64', 'Atlas Launcher.exe');
-const profile = path.join(fixture, `profile-${crypto.randomUUID()}`);
+const appFolder = path.join('dist', 'Atlas Launcher-win32-x64');
+const staged = path.resolve(process.argv[2] || path.join(root, 'work', 'package-fixture', appFolder));
 
 (async () => {
-  assert.ok(fs.existsSync(executable), 'Package the staged release first.');
-  const started = performance.now();
-  const app = await _electron.launch({ executablePath: executable, args: [`--user-data-dir=${profile}`], cwd: fixture });
+  assert.ok(fs.existsSync(path.join(staged, 'Atlas Launcher.exe')), 'Package the staged release first.');
+  const scratch = createQaWorkspace(root);
+  const fixture = scratch.directory;
+  const executable = path.join(fixture, appFolder, 'Atlas Launcher.exe');
+  let app;
   try {
+    fs.cpSync(staged, path.dirname(executable), { recursive: true });
+    const started = performance.now();
+    app = await _electron.launch({
+      executablePath: executable,
+      args: [`--user-data-dir=${path.join(fixture, 'profile')}`],
+      cwd: fixture,
+      env: { ...process.env, ATLAS_NO_AUDIO: '1', ATLAS_NO_DISCORD: '1', ATLAS_LAUNCHER_NO_SELF_UPDATE: '1' },
+    });
+    scratch.trackChild(app.process().pid);
     const page = await app.firstWindow();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -61,6 +71,9 @@ const profile = path.join(fixture, `profile-${crypto.randomUUID()}`);
     assert.ok(packagedFiles.some(file => file.startsWith('/node_modules/lucide/')));
     assert.ok(!packagedFiles.some(file => file.startsWith('/node_modules/playwright-core/')));
     assert.ok(!packagedFiles.some(file => file.startsWith('/node_modules/electron/')));
-    console.log(JSON.stringify({ passed: true, executable, fixture, readyMs, checks: 'packaged isolation, context isolation, RU/EN, appearance, RAM and persistence, production dependency pruning' }));
-  } finally { await app.close(); }
+    console.log(JSON.stringify({ passed: true, readyMs, checks: 'packaged isolation, context isolation, RU/EN, appearance, RAM and persistence, production dependency pruning' }));
+  } finally {
+    await app?.close();
+    scratch.close();
+  }
 })().catch(error => { console.error(error); process.exitCode = 1; });

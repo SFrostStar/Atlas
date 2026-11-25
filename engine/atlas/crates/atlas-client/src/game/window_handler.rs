@@ -330,7 +330,7 @@ impl ApplicationHandler for Game<'_> {
         atlas_client::window::settle_created_fullscreen(&window, fullscreen);
         #[cfg(target_os = "windows")]
         if let Some(hwnd) = hwnd(&window) {
-            atlas_threads::system_menu::suppress(hwnd);
+            atlas_threads::system_menu::configure_game_window(hwnd);
         }
         drop(window_step);
         atlas_client::telemetry::note_display(&window);

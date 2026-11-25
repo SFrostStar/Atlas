@@ -382,7 +382,7 @@ impl Game<'_> {
     }
     pub(in crate::game) fn atlas_port_chat(&mut self, message: &str, source: ChatSource) {
         if source != ChatSource::Client {
-            self.atlas_visual_chat(message);
+            self.atlas_visual_overlay(message);
         }
         if !self.atlas_port_on(MENTION_SOUND)
             || !self.native_window()

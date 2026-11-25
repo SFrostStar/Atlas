@@ -1,15 +1,13 @@
 //! Source-derived calculations/state machines. Intentionally independent of the game and serde
 //! so boundary fixtures can run without linking the renderer.
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 
-pub(super) fn strip_formatting(input: &str, upper: bool) -> String {
+fn strip_formatting(input: &str) -> String {
     let mut chars = input.chars().peekable();
     let mut out = String::new();
     while let Some(c) = chars.next() {
         if c == '§'
-            && chars.peek().is_some_and(|c| {
-                "0123456789abcdefklmnor".contains(*c) || (upper && "ABCDEFKLMNOR".contains(*c))
-            })
+            && chars.peek().is_some_and(|c| "0123456789abcdefklmnor".contains(*c))
         {
             chars.next();
         } else {
@@ -99,7 +97,7 @@ impl Pops {
 }
 
 pub(super) fn pvp_end(message: &str, custom: &[String]) -> bool {
-    let s = strip_formatting(message, false).trim().to_lowercase();
+    let s = strip_formatting(message).trim().to_lowercase();
     if !s.is_empty()
         && custom
             .iter()
@@ -156,7 +154,7 @@ pub(super) fn pvp_end(message: &str, custom: &[String]) -> bool {
             .any(|w| s.contains(w))
 }
 pub(super) fn pvp_boss(message: &str, custom: &[String]) -> bool {
-    let s = strip_formatting(message, false).trim().to_lowercase();
+    let s = strip_formatting(message).trim().to_lowercase();
     !s.is_empty()
         && !pvp_end(&s, custom)
         && (custom
@@ -212,179 +210,12 @@ impl PvpState {
     }
 }
 
-#[derive(Default)]
-pub(super) struct Kills {
-    attacks: BTreeMap<u128, (String, u64)>,
-    killed_ids: BTreeMap<u128, u64>,
-    killed_names: BTreeMap<String, u64>,
-    queue: VecDeque<String>,
-    last_sent: u64,
-}
-impl Kills {
-    pub fn attack(&mut self, id: u128, name: &str, now: u64) {
-        self.attacks.insert(id, (name.into(), now));
-    }
-    pub fn death(&mut self, id: u128, name: &str, now: u64, local: &str, enabled: bool) {
-        if self
-            .attacks
-            .get(&id)
-            .is_some_and(|(_, t)| now.saturating_sub(*t) <= 6500)
-        {
-            self.trigger(Some(id), name, now, local, enabled)
-        }
-    }
-    pub fn trigger(&mut self, id: Option<u128>, name: &str, now: u64, local: &str, enabled: bool) {
-        if !enabled {
-            return;
-        }
-        let name = sanitize_name(name);
-        if name.is_empty() || name.eq_ignore_ascii_case(local) {
-            return;
-        }
-        if let Some(id) = id {
-            if self
-                .killed_ids
-                .get(&id)
-                .is_some_and(|t| now.saturating_sub(*t) < 5000)
-            {
-                return;
-            }
-            self.killed_ids.insert(id, now);
-            self.attacks.remove(&id);
-        }
-        let key = name.to_lowercase();
-        if self
-            .killed_names
-            .get(&key)
-            .is_some_and(|t| now.saturating_sub(*t) < 5000)
-        {
-            return;
-        }
-        self.killed_names.insert(key, now);
-        self.queue.push_back(format!("!-{name}"));
-    }
-    pub fn chat(&mut self, message: &str, local: &str, now: u64, enabled: bool) {
-        let s = strip_formatting(message, true).trim().to_owned();
-        if local.is_empty() || !s.contains(local) {
-            return;
-        }
-        let lower = s.to_lowercase();
-        let me = local.to_lowercase();
-        // Same three grammars as KillTracker: vanilla English and the two Russian forms.
-        for phrase in [
-            " was slain by ",
-            " was shot by ",
-            " was killed by ",
-            " was blown up by ",
-            " was pummeled by ",
-            " was doomed to fall by ",
-            " was fireballed by ",
-            " был убит ",
-            " погиб от руки ",
-            " пал от руки ",
-            " пал в бою против ",
-            " был застрелен ",
-            " погиб в бою с ",
-        ] {
-            if let Some(index) = lower.find(phrase) {
-                let remainder = lower[index + phrase.len()..].trim_start();
-                let remainder = remainder
-                    .strip_prefix("игроком ")
-                    .or_else(|| remainder.strip_prefix("игрока "))
-                    .unwrap_or(remainder);
-                let matches = if phrase.starts_with(" was ") {
-                    remainder == me
-                        || remainder
-                            .strip_prefix(&me)
-                            .is_some_and(|s| s.starts_with(" using "))
-                } else {
-                    remainder == me
-                        || remainder
-                            .strip_prefix(&me)
-                            .is_some_and(|s| s.starts_with(' '))
-                };
-                if matches {
-                    let victim = s[..index]
-                        .trim()
-                        .strip_prefix("Игрок ")
-                        .unwrap_or(s[..index].trim());
-                    self.trigger(None, victim, now, local, enabled);
-                    break;
-                }
-            }
-        }
-    }
-    pub fn tick(&mut self, now: u64, connected: bool) -> Option<String> {
-        if now % 2000 < 50 {
-            self.attacks
-                .retain(|_, (_, t)| now.saturating_sub(*t) <= 13000);
-            self.killed_ids
-                .retain(|_, t| now.saturating_sub(*t) <= 10000);
-            self.killed_names
-                .retain(|_, t| now.saturating_sub(*t) <= 10000)
-        }
-        if connected && now.saturating_sub(self.last_sent) >= 400 {
-            let message = self.queue.pop_front();
-            if message.is_some() {
-                self.last_sent = now
-            }
-            message
-        } else {
-            None
-        }
-    }
-}
-pub(super) fn sanitize_name(name: &str) -> String {
-    let s = strip_formatting(name, true);
-    let mut s = s.trim();
-    if s.starts_with('[') {
-        if let Some(i) = s.find(']') {
-            s = s[i + 1..].trim_start()
-        }
-    }
-    s.rsplit(' ').next().unwrap_or(s).trim().into()
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(in crate::game) struct BeamVertex {
-    pub position: [f32; 3],
-    pub alpha: f32,
-}
-/// Exactly four intersecting gradient quads, at 0/45/90/135 degrees.
-pub(in crate::game) fn beam_vertices(
-    width: f32,
-    height: f32,
-    alpha: f32,
-    rotation_degrees: f32,
-) -> [BeamVertex; 16] {
-    std::array::from_fn(|index| {
-        let i = index / 4;
-        let vertex = index % 4;
-        let a = (f64::from(rotation_degrees) + i as f64 * 45.0).to_radians() as f32;
-        let half = width / 2.0;
-        let sign = if vertex == 0 || vertex == 3 {
-            -1.0
-        } else {
-            1.0
-        };
-        let top = vertex >= 2;
-        BeamVertex {
-            position: [
-                half * sign * f64::from(a).cos() as f32,
-                if top { height } else { 0.0 },
-                half * sign * f64::from(a).sin() as f32,
-            ],
-            alpha: if top { 0.0 } else { alpha },
-        }
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     /// Expected values were obtained by compiling and running the supplied Java methods.
     #[test]
-    fn supplied_java_oracle_phrases_and_names() {
+    fn supplied_java_oracle_pvp_phrases() {
         for (message, end, boss) in [
             ("§aВы вышли из режима боя", true, false),
             ("Идёт бой", false, true),
@@ -396,21 +227,8 @@ mod tests {
             assert_eq!(pvp_end(message, &[]), end, "{message}");
             assert_eq!(pvp_boss(message, &[]), boss, "{message}");
         }
-        for (input, expected) in [
-            ("§cVictim", "Victim"),
-            ("[VIP] Player", "Player"),
-            ("[VIP] Игрок Bad", "Bad"),
-            ("  Bad  ", "Bad"),
-        ] {
-            assert_eq!(sanitize_name(input), expected);
-        }
         assert!(!pvp_end("", &[String::new()]));
         assert!(!pvp_end("ordinary text", &[String::new()]));
-        let mut kills = Kills::default();
-        kills.chat("Wrong was slain by Me unrelated suffix", "Me", 20000, true);
-        assert!(kills.tick(20000, true).is_none());
-        kills.chat("Correct was slain by Me using Sword", "Me", 21000, true);
-        assert_eq!(kills.tick(21000, true).as_deref(), Some("!-Correct"));
     }
     #[test]
     fn radar_octants_match_java_half_open_boundaries() {
@@ -477,30 +295,5 @@ mod tests {
         assert!(!pvp_boss("Arena #3", &["arena".into()]));
         assert!(pvp_end("§aВы вышли из режима боя", &[]));
         assert!(!pvp_end("Идёт бой", &[]));
-    }
-    #[test]
-    fn kill_windows_and_chat_throttling_match_java() {
-        let mut k = Kills::default();
-        k.attack(1, "Victim", 10000);
-        k.death(1, "Victim", 16500, "Me", true);
-        assert_eq!(k.tick(16500, true).as_deref(), Some("!-Victim"));
-        k.trigger(None, "[VIP] Victim", 17000, "Me", true);
-        assert!(k.tick(17000, true).is_none());
-        k.trigger(None, "Other", 17100, "Me", true);
-        assert_eq!(k.tick(17100, true).as_deref(), Some("!-Other"));
-        k.chat("Target was slain by Me using Sword", "Me", 18000, true);
-        assert_eq!(k.tick(18000, true).as_deref(), Some("!-Target"));
-        k.chat("Игрок Bad был убит игроком Me", "Me", 19000, true);
-        assert_eq!(k.tick(19000, true).as_deref(), Some("!-Bad"));
-    }
-    #[test]
-    fn crystal_beam_has_original_four_gradient_quads() {
-        let v = beam_vertices(0.25, 60., 0.5, 0.);
-        assert_eq!(v[0].position, [-0.125, 0., 0.]);
-        assert_eq!(v[1].position, [0.125, 0., 0.]);
-        assert_eq!(v[2].position, [0.125, 60., 0.]);
-        assert_eq!(v[0].alpha, 0.5);
-        assert_eq!(v[2].alpha, 0.);
-        assert!((v[4].position[0] + 0.08838835).abs() < 1e-7);
     }
 }

@@ -55,6 +55,8 @@
     'Готово к запуску':'Ready to play','Выбери клиент в настройках':'Choose a client in Settings','Запускаем…':'Starting…','Играть':'Play',
     'Rust-моды':'Rust mods','Доверяешь этим модам?':'Do you trust these mods?','Доверять и собрать':'Trust and build',
     'Atlas соберёт игру с этими модами. Их код получит доступ к файлам с правами твоего пользователя.':'Atlas will build the game with these mods. Their code can access files with your user permissions.',
+    'Скачивание исходников для Rust-модов…':'Downloading source files for Rust mods…',
+    'При первой сборке могут скачаться исходники и инструменты.':'The first build may download source files and build tools.',
     'Подготовка компилятора…':'Preparing compiler…','Подключение Rust-модов…':'Applying Rust mods…','Сборка игры с модами…':'Building the game with mods…',
     'Прошло':'Elapsed','Примерно осталось':'Estimated time left','Оцениваем время…':'Estimating time…','Сборка дольше оценки':'Build is taking longer than estimated',
     'Уже идёт сборка Rust-модов.':'A Rust mod build is already running.','Rust-моды пока поддерживаются на Windows x64.':'Rust mods currently support Windows x64.',

@@ -770,6 +770,8 @@ impl Settings {
 pub enum Opt {
     Fov,
     RenderDistance,
+    LodDistance,
+    FarDetail,
     SimulationDistance,
     Sensitivity,
     WheelSensitivity,

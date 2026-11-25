@@ -2245,6 +2245,7 @@ impl Game<'_> {
     /// there: the single player server thread, a dedicated server).
     pub(super) fn native_tick(&mut self) {
         self.native_process_tasks();
+        self.atlas_macros_tick();
         mod_api::dispatch_tick(self, mod_api::mods());
     }
     /// Before an eligible targeted block's selection outline is built.
@@ -2820,7 +2821,7 @@ impl Game<'_> {
     /// completes and lists them as the game's own; a name the game already
     /// has keeps that command's behaviour. API 35.
     pub(super) fn native_commands(&mut self, commands: &mut Vec<&'static str>) {
-        for (id,name) in [("atlas-friendlist","friend"),("atlas-radarmod","radar"),("atlas-totempops","totempops"),("atlas-noshakehand","noshakehand"),("atlas-viewmodel","viewmodel"),("atlas-gammautils","gamma"),("atlas-gammautils","nightvision"),("atlas-gammautils","gammautils:gamma"),("atlas-gammautils","gammautils:nightvision")] {
+        for (id,name) in [("atlas-radarmod","radar"),("atlas-totempops","totempops"),("atlas-noshakehand","noshakehand"),("atlas-gammautils","gamma"),("atlas-gammautils","nightvision"),("atlas-gammautils","gammautils:gamma"),("atlas-gammautils","gammautils:nightvision")] {
             if self.atlas_port_on(id){commands.push(name);}
         }
         if self.atlas_totem_tweaks_enabled() {
@@ -4117,7 +4118,6 @@ impl Game<'_> {
     }
     pub(super) fn screen_mouse_dragged(&mut self, previous: (f32, f32)) -> bool {
         if self.atlas_esc_music_drag() || self.atlas_config_drag() || self.atlas_aspect_drag() { return true; }
-        if let Some(button)=self.drag_button {if self.atlas_actions_drag(super::glfw_button(button),self.cursor.0-previous.0,self.cursor.1-previous.1){return true;}}
         if self.pad_synthetic_input() || self.cursor == previous {
             return false;
         }
@@ -4182,18 +4182,21 @@ impl Game<'_> {
     /// False when no screen of the hooks' is open, and for a key with no
     /// vanilla name.
     pub(super) fn screen_key_pressed(&mut self, key: KeyCode, repeat: bool) -> bool {
+        if self.atlas_macros_binding_key() {
+            return self.atlas_macros_key(key);
+        }
         if self.atlas_ias_key(key, repeat) || self.atlas_aspect_screen_key(key, repeat) {
             return true;
         }
         if self.has_control_down_with_quirk(){
             use atlas_client::clipboard::EditShortcut;
             let shortcut=match key{KeyCode::KeyA=>Some(EditShortcut::SelectAll),KeyCode::KeyC=>Some(EditShortcut::Copy),KeyCode::KeyV=>Some(EditShortcut::Paste),KeyCode::KeyX=>Some(EditShortcut::Cut),_=>None};
-            if let Some(shortcut)=shortcut&&(self.atlas_config_shortcut(shortcut)||self.atlas_visual_screen_shortcut(shortcut)){return true;}
+            if let Some(shortcut)=shortcut&&(self.atlas_macros_shortcut(shortcut)||self.atlas_config_shortcut(shortcut)||self.atlas_visual_screen_shortcut(shortcut)){return true;}
         }
-        if self.atlas_mouse_tweaks_key(key) {
+        if self.atlas_macros_key(key) || self.atlas_mouse_tweaks_key(key) {
             return true;
         }
-        if self.atlas_config_key(key,self.modifiers.control_key(),self.modifiers.shift_key())||self.atlas_visual_screen_key(key,true,self.modifiers.control_key(),self.modifiers.shift_key())||self.atlas_actions_screen_key(key,self.modifiers.control_key(),self.modifiers.shift_key()){return true;}
+        if self.atlas_config_key(key,self.modifiers.control_key(),self.modifiers.shift_key())||self.atlas_visual_screen_key(key,true,self.modifiers.control_key(),self.modifiers.shift_key()){return true;}
         let Some(name) = keybinds::key_name(key) else {
             return false;
         };
@@ -4232,7 +4235,7 @@ impl Game<'_> {
     /// included (a text box reads Backspace, Delete and the like as keys).
     /// `None` when none of them is left to type.
     pub(super) fn screen_text_typed(&mut self, text: &str) -> Option<String> {
-        if self.atlas_config_char(text)||self.atlas_visual_screen_char(text)||self.atlas_actions_screen_char(text){return None;}
+        if self.atlas_macros_text(text)||self.atlas_config_char(text)||self.atlas_visual_screen_char(text){return None;}
         let Some(screen) = self.screen_view_now() else {
             return Some(text.to_owned());
         };
@@ -4255,7 +4258,7 @@ impl Game<'_> {
         let Some(text) = text else {
             return;
         };
-        if self.atlas_visual_screen_char(text)||self.atlas_actions_screen_char(text){return;}
+        if (self.types_text() && self.atlas_macros_text(text)) || self.atlas_visual_screen_char(text){return;}
         if self.types_text()
             && let Some(result) = self.type_text_field_input(text)
         {
@@ -12524,8 +12527,12 @@ impl Game<'_> {
         }
         self.atlas_utility_key(key, pressed);
         self.atlas_armor_key(key, pressed, repeat);
-        if pressed { self.atlas_actions_key(key); }
+        if pressed {
+            self.atlas_actions_key(key);
+            self.atlas_inventory_hud_key(key);
+        }
         if let Some(name) = keybinds::key_name(key) {
+            self.atlas_macros_input(name, pressed);
             if pressed {
                 self.atlas_aspect_open_key(name);
                 self.native_panel_key(name);
@@ -12555,6 +12562,7 @@ impl Game<'_> {
     pub(super) fn native_mouse_event(&mut self, button: MouseButton, pressed: bool) {
         if pressed&&self.native_playing(){self.atlas_actions_mouse_pearl(super::glfw_button(button));}
         let name = keybinds::mouse_name(button);
+        self.atlas_macros_input(&name, pressed);
         if pressed {
             self.atlas_aspect_open_key(&name);
         }
@@ -12575,7 +12583,7 @@ impl Game<'_> {
         if self.lan_acting.is_some() {
             return false;
         }
-        if self.atlas_utility_command(command)||self.atlas_visual_command(command)||self.atlas_actions_command(command) {return true;}
+        if self.atlas_utility_command(command)||self.atlas_visual_command(command)||self.atlas_gamma_command(command) {return true;}
         if self.atlas_totem_tweaks_command(command) {
             return true;
         }

@@ -49,16 +49,14 @@ async function verify(scratch) {
     await ctl('mouse','middle','click');await delay(250);const inv=await ctl('inventory');
     assert.equal(inv.selected,1,'Pearl restores selected slot');
     const pearl=inv.hotbar.find(s=>s.item==='minecraft:ender_pearl');assert.equal(pearl?.count,7,'Pearl consumes exactly one item');checks.push('MiddleClickPearl');
-    await ctl('key','v','tap');await delay(250);assert.equal((await ctl('state')).screen,'mod');await shot('02-viewmodel');await closeScreens();checks.push('ViewModel settings');
-    await ctl('key','h','tap');await delay(250);assert.equal((await ctl('state')).screen,'mod');await shot('03-hotcommands');await closeScreens();checks.push('HotCommands settings');
-    await ctl('command','radar config');await delay(200);assert.equal((await ctl('state')).screen,'mod');await shot('04-radar-config');await closeScreens();checks.push('Radar editable settings');
+    await ctl('command','radar config');await delay(200);assert.equal((await ctl('state')).screen,'mod');await shot('02-radar-config');await closeScreens();checks.push('Radar editable settings');
     await ctl('command','gamma max');await delay(200);
     const gamma=JSON.parse(fs.readFileSync(path.join(home,'config/gammautils.json'),'utf8'));assert.equal(gamma.gamma.value,15);checks.push('GammaUtils commands/config');
-    await ctl('options','mods');await delay(200);const mods=await ctl('screen');await shot('05-mods');
+    await ctl('options','mods');await delay(200);const mods=await ctl('screen');await shot('03-mods');
     assert(JSON.stringify(mods).includes('AppleSkin'));
     await ctl('scroll-at','200','110','-40');await delay(200);const bottom=await ctl('screen');
     assert(JSON.stringify(bottom).includes('Gamma Utils'));checks.push('Native mod catalog');
-    await closeScreens();await ctl('key','e','tap');await delay(200);await shot('06-inventory');await closeScreens();
+    await closeScreens();await ctl('key','e','tap');await delay(200);await shot('04-inventory');await closeScreens();
   } catch (error) {
     if(log)console.error(log.slice(-3000));
     throw error;

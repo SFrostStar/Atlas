@@ -630,12 +630,6 @@ use winit::{
 /// The time a frame spends uploading chunk meshes when the player set no
 /// Chunk Updates or Upload Budget: a burst past it waits for the next frames.
 const AUTO_UPLOAD_TIME: Duration = Duration::from_millis(2);
-/// `AUTO_UPLOAD_TIME` while the view's terrain is still arriving (a world's
-/// open, a teleport): the meshes waiting then are the view itself, not edits
-/// to it, so a frame gives them more of its time to fill the view sooner.
-const AUTO_UPLOAD_TIME_ARRIVING: Duration = Duration::from_millis(6);
-/// A frame's finished meshes up to this many upload at once, unqueued.
-const AUTO_UPLOADS_AT_ONCE: usize = 8;
 /// The most changed columns far terrain waits on behind a mod's hold (`Game::lod_held`): past
 /// it, they go in as ever.
 const HELD_FAR_COLUMNS: usize = 1 << 13;
@@ -3584,7 +3578,6 @@ impl Game<'_> {
     /// Suffocating is a full collision cube that is also a full render cube,
     /// as `in_wall` has it.
     fn closest_space_nudge(&self) -> [Option<f64>; 2] {
-        if self.atlas_visual_no_push_out(){return [None;2];}
         match self.player.as_ref() {
             Some(p) if !p.spectator && self.riding.is_none() => {
                 closest_space_nudge(p, &self.world, self.res.facts())
@@ -10183,8 +10176,14 @@ impl Game<'_> {
                 return Ok(());
             }
             if let WindowEvent::MouseInput {state,button,..}=&event {
-                let button = glfw_button(*button);
                 let pressed = *state == ElementState::Pressed;
+                if !pressed {
+                    self.atlas_macros_input(&atlas_client::keybinds::mouse_name(*button), false);
+                }
+                if self.atlas_macros_mouse(*button, pressed) {
+                    return Ok(());
+                }
+                let button = glfw_button(*button);
                 if self.atlas_ias_mouse(button, pressed)
                     || self.atlas_esc_music_mouse(button, pressed)
                     || self.atlas_aspect_mouse(button, pressed)
@@ -10373,7 +10372,7 @@ impl Game<'_> {
                         }) * wheel_sensitivity
                     };
                     let d = scaled(raw_y) as f32;
-                    if self.atlas_ias_scroll(d) || self.atlas_config_scroll(d)||self.atlas_visual_screen_scroll(d)||self.atlas_actions_scroll(d){return Ok(());}
+                    if self.atlas_macros_scroll(d)||self.atlas_ias_scroll(d)||self.atlas_config_scroll(d)||self.atlas_visual_screen_scroll(d){return Ok(());}
                     // ScreenEvent.MouseScrolled.Pre: the open screen hears of
                     // the wheel before anything scrolls, and a cancelled turn
                     // scrolls nothing — no bundle, no list, slider or

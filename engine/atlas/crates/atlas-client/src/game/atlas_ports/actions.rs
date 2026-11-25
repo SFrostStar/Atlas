@@ -12,28 +12,21 @@ use std::{
 use winit::keyboard::KeyCode;
 #[path = "actions_gamma.rs"]
 mod gamma;
-#[path = "actions_inventory.rs"]
-mod inventory;
 #[path = "actions_logic.rs"]
 mod logic;
 #[path = "actions_ui.rs"]
 mod ui;
-#[path = "actions_viewmodel.rs"]
-pub(super) mod viewmodel;
 
-pub(super) const IDS: [&str; 10] = [
+pub(super) const IDS: [&str; 7] = [
     "atlas-autocraft",
     "atlas-dropall",
-    "atlas-hotcommands",
-    "atlas-inventory-manager",
     "atlas-middleclickpearl",
     "atlas-sortmod",
     "atlas-streamermode",
-    "atlas-viewmodel",
     "atlas-chunkanimator",
     "atlas-gammautils",
 ];
-pub(super) const DEFINITIONS: [(&str, &str, &str); 10] = [
+pub(super) const DEFINITIONS: [(&str, &str, &str); 7] = [
     (
         IDS[0],
         "AutoCraft",
@@ -46,51 +39,34 @@ pub(super) const DEFINITIONS: [(&str, &str, &str); 10] = [
     ),
     (
         IDS[2],
-        "HotCommands",
-        "Nested command buttons and an in-game command editor.",
-    ),
-    (
-        IDS[3],
-        "Inventory Manager",
-        "Save, rename and apply 41-slot inventory layouts.",
-    ),
-    (
-        IDS[4],
         "MiddleClickPearl",
         "Use a hotbar ender pearl with the middle mouse button.",
     ),
     (
-        IDS[5],
+        IDS[3],
         "Chest Sorter",
         "Sort chest stacks using the supplied mod's click schedule.",
     ),
     (
-        IDS[6],
+        IDS[4],
         "StreamerMode",
         "Hide auth passwords while preserving the real sent command.",
     ),
     (
-        IDS[7],
-        "ViewModel",
-        "Hand transforms, thirteen swing styles and interactive chat controls.",
-    ),
-    (
-        IDS[8],
+        IDS[5],
         "Chunk Animator",
         "Five chunk entrance modes with eleven easing functions.",
     ),
     (
-        IDS[9],
+        IDS[6],
         "Gamma Utils",
         "Gamma and night vision controls with transitions and dynamic lighting.",
     ),
 ];
 pub(super) fn keys(id: &str) -> Vec<[String; 3]> {
     let bindings: Vec<(&str, &str, &str)> = match id {
-        id if id == IDS[2] => vec![("open", "key.hotcommands.open", "key.keyboard.h")],
-        id if id == IDS[4] => vec![("throw", "key.middleclickpearl.throw", "key.mouse.middle")],
-        id if id == IDS[7] => vec![("open", "key.viewmodel.open_gui", "key.keyboard.v")],
-        id if id == IDS[9] => vec![
+        id if id == IDS[2] => vec![("throw", "key.middleclickpearl.throw", "key.mouse.middle")],
+        id if id == IDS[6] => vec![
             (
                 "gammaToggle",
                 "key.gammautils.gammaToggle",
@@ -150,22 +126,15 @@ pub(super) struct State {
     password: logic::PasswordOptions,
     protect_history: bool,
     suppress_suggestions: bool,
-    pub(super) viewmodel: viewmodel::Config,
-    pub(super) viewmodel_editor: viewmodel::ChatEditor,
     chunk_mode: chunk::Mode,
     easing: chunk::Easing,
     duration: u64,
     disable_near: bool,
     sort_queue: VecDeque<usize>,
     sort_cooldown: u8,
-    pub(super) active_screen: Option<String>,
-    pub(super) commands: Vec<HotCommand>,
-    command_path: Vec<usize>,
     pub(super) autocraft: Option<usize>,
     craft_delay: u8,
     craft_count: u64,
-    ui: ui::State,
-    inventory: inventory::State,
     gamma: gamma::State,
 }
 impl Default for State {
@@ -175,22 +144,15 @@ impl Default for State {
             password: logic::PasswordOptions::default(),
             protect_history: true,
             suppress_suggestions: true,
-            viewmodel: viewmodel::Config::default(),
-            viewmodel_editor: viewmodel::ChatEditor::default(),
             chunk_mode: chunk::Mode::Below,
             easing: chunk::Easing::Sine,
             duration: 1000,
             disable_near: false,
             sort_queue: VecDeque::new(),
             sort_cooldown: 0,
-            active_screen: None,
-            commands: default_commands(),
-            command_path: vec![],
             autocraft: None,
             craft_delay: 0,
             craft_count: 0,
-            ui: ui::State::default(),
-            inventory: inventory::State::default(),
             gamma: gamma::State::default(),
         }
     }
@@ -213,12 +175,6 @@ fn save_config(home: &Path, name: &str, value: &Value) {
     {
         let _ = fs::write(dir.join(name), bytes);
     }
-}
-fn number(v: &Value, key: &str, default: f32) -> f32 {
-    v[key]
-        .as_f64()
-        .filter(|v| v.is_finite())
-        .map_or(default, |v| v as f32)
 }
 fn boolean(v: &Value, key: &str, default: bool) -> bool {
     v[key].as_bool().unwrap_or(default)
@@ -248,34 +204,6 @@ impl State {
         }
         s.protect_history = boolean(&p, "protectChatHistory", true);
         s.suppress_suggestions = boolean(&p, "suppressSuggestions", true);
-        let v = read_config(home, "viewmodel.json");
-        for (key, hand) in [
-            ("mainHand", &mut s.viewmodel.main),
-            ("offHand", &mut s.viewmodel.off),
-        ] {
-            let v = &v[key];
-            hand.position = [
-                number(v, "posX", 0.0),
-                number(v, "posY", 0.0),
-                number(v, "posZ", 0.0),
-            ];
-            hand.rotation = [
-                number(v, "pitch", 0.0),
-                number(v, "yaw", 0.0),
-                number(v, "roll", 0.0),
-            ];
-            hand.scale = number(v, "scale", 1.0);
-        }
-        s.viewmodel.swing = viewmodel::Swing::ALL
-            .into_iter()
-            .find(|k| Some(k.name()) == v["swingType"].as_str())
-            .unwrap_or_default();
-        s.viewmodel.strength = number(&v, "swingStrength", 1.0);
-        s.viewmodel.duration = number(&v, "swingDuration", 1.0);
-        s.viewmodel.only_target = boolean(&v, "onlyOnTarget", false);
-        s.viewmodel.auto_swing = boolean(&v, "autoSwing", false);
-        s.viewmodel.interactive = boolean(&v, "interactiveInChat", true);
-        s.viewmodel.outline = boolean(&v, "outlineSelected", true);
         let c = read_config(home, "chunkanimator.json");
         s.chunk_mode = match c["mode"].as_str() {
             Some("ABOVE") => chunk::Mode::Above,
@@ -299,13 +227,6 @@ impl State {
         };
         s.duration = c["animationDuration"].as_i64().unwrap_or(1000).max(0) as u64;
         s.disable_near = boolean(&c, "disableAroundPlayer", false);
-        if let Some(list) = read_config(home, "hotcommands.json").as_array() {
-            let commands: Vec<_> = list.iter().filter_map(HotCommand::from_json).collect();
-            if !commands.is_empty() {
-                s.commands = commands;
-            }
-        }
-        s.inventory = inventory::State::load(home);
         s.gamma = gamma::State::load(home);
         s
     }
@@ -314,14 +235,6 @@ impl State {
             &self.home,
             "streamermode.json",
             &json!({"enabled":self.password.enabled,"maskCharacter":self.password.mask,"preserveSpaces":self.password.preserve_spaces,"protectedCommands":self.password.protected_commands,"protectChatHistory":self.protect_history,"suppressSuggestions":self.suppress_suggestions}),
-        );
-    }
-    pub(super) fn save_viewmodel(&self) {
-        let hand = |h: &viewmodel::HandSettings| json!({"posX":h.position[0],"posY":h.position[1],"posZ":h.position[2],"scale":h.scale,"pitch":h.rotation[0],"yaw":h.rotation[1],"roll":h.rotation[2]});
-        save_config(
-            &self.home,
-            "viewmodel.json",
-            &json!({"mainHand":hand(&self.viewmodel.main),"offHand":hand(&self.viewmodel.off),"swingType":self.viewmodel.swing.name(),"swingStrength":self.viewmodel.strength,"swingDuration":self.viewmodel.duration,"onlyOnTarget":self.viewmodel.only_target,"autoSwing":self.viewmodel.auto_swing,"interactiveInChat":self.viewmodel.interactive,"outlineSelected":self.viewmodel.outline}),
         );
     }
     fn save_chunks(&self) {
@@ -339,105 +252,6 @@ impl State {
             &json!({"mode":mode,"easingFunction":easing,"animationDuration":self.duration,"disableAroundPlayer":self.disable_near}),
         );
     }
-    fn save_commands(&self) {
-        save_config(
-            &self.home,
-            "hotcommands.json",
-            &Value::Array(self.commands.iter().map(HotCommand::json).collect()),
-        );
-    }
-}
-#[derive(Clone, Debug)]
-pub(super) struct HotCommand {
-    pub id: String,
-    pub name: String,
-    pub command: String,
-    pub icon: String,
-    pub children: Vec<HotCommand>,
-}
-impl HotCommand {
-    fn new(name: &str, command: &str, icon: &str) -> Self {
-        Self {
-            id: format!("atlas-{}-{name}", now_ms()),
-            name: name.into(),
-            command: command.into(),
-            icon: icon.into(),
-            children: vec![],
-        }
-    }
-    fn group(name: &str, icon: &str, children: &[(&str, &str, &str)]) -> Self {
-        let mut s = Self::new(name, "", icon);
-        s.children = children
-            .iter()
-            .map(|(n, c, i)| Self::new(n, c, i))
-            .collect();
-        s
-    }
-    fn from_json(v: &Value) -> Option<Self> {
-        v.as_object()?;
-        Some(Self {
-            id: v["id"]
-                .as_str()
-                .filter(|s| !s.is_empty())
-                .map_or_else(|| format!("atlas-{}", now_ms()), str::to_owned),
-            name: v["name"].as_str().unwrap_or_default().into(),
-            command: v["command"].as_str().unwrap_or_default().into(),
-            icon: v["icon"].as_str().unwrap_or_default().into(),
-            children: v["children"]
-                .as_array()
-                .map(|v| v.iter().filter_map(Self::from_json).collect())
-                .unwrap_or_default(),
-        })
-    }
-    fn json(&self) -> Value {
-        json!({"id":self.id,"name":self.name,"command":self.command,"icon":self.icon,"children":self.children.iter().map(Self::json).collect::<Vec<_>>()})
-    }
-}
-fn default_commands() -> Vec<HotCommand> {
-    vec![
-        HotCommand::group(
-            "/home",
-            "red_bed",
-            &[
-                ("Основной дом", "/home", "red_bed"),
-                ("Реклама / Магазин", "/home ad", "emerald"),
-                ("Ферма", "/home farm", "wheat"),
-                ("Шахта", "/home mine", "iron_pickaxe"),
-                ("Поставить точку дома", "/sethome", "anvil"),
-            ],
-        ),
-        HotCommand::group(
-            "/tpa",
-            "ender_pearl",
-            &[
-                ("Друг 1 (/tpa Friend1)", "/tpa Friend1", "player_head"),
-                ("Друг 2 (/tpa Friend2)", "/tpa Friend2", "player_head"),
-                ("Принять ТП (/tpaccept)", "/tpaccept", "lime_dye"),
-                ("Отклонить ТП (/tpdeny)", "/tpdeny", "red_dye"),
-            ],
-        ),
-        HotCommand::new("/spawn", "/spawn", "compass"),
-        HotCommand::group(
-            "/warp",
-            "beacon",
-            &[
-                ("Магазин (/warp shop)", "/warp shop", "gold_ingot"),
-                ("ПВП Арена (/warp pvp)", "/warp pvp", "diamond_sword"),
-                ("Эндер-мир (/warp end)", "/warp end", "ender_eye"),
-            ],
-        ),
-        HotCommand::new("/back", "/back", "clock"),
-        HotCommand::new("/feed", "/feed", "cooked_beef"),
-        HotCommand::new("/heal", "/heal", "golden_apple"),
-        HotCommand::group(
-            "/kit",
-            "chest",
-            &[
-                ("Кит Старт (/kit start)", "/kit start", "stone_sword"),
-                ("Кит Бонус (/kit bonus)", "/kit bonus", "iron_chestplate"),
-            ],
-        ),
-    ]
 }
 impl Game<'_> {
     fn atlas_craft_name(&self, recipe: usize) -> String {
@@ -505,11 +319,11 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_actions_config(&self, id: &str) -> Option<Value> {
         let s = &self.atlas_ports.actions;
         match id {
-            id if id == IDS[6] => Some(
+            id if id == IDS[4] => Some(
                 json!({"enabled":s.password.enabled,"maskCharacter":s.password.mask,"preserveSpaces":s.password.preserve_spaces,"protectedCommands":s.password.protected_commands,"protectChatHistory":s.protect_history,"suppressSuggestions":s.suppress_suggestions}),
             ),
-            id if id == IDS[9] => Some(s.gamma.config.clone()),
-            id if id == IDS[8] => Some(json!({
+            id if id == IDS[6] => Some(s.gamma.config.clone()),
+            id if id == IDS[5] => Some(json!({
                 "mode": match s.chunk_mode {
                     chunk::Mode::Below => "BELOW", chunk::Mode::Above => "ABOVE",
                     chunk::Mode::Hybrid => "HYBRID", chunk::Mode::HorizontalSlide => "HORIZONTAL_SLIDE",
@@ -539,7 +353,7 @@ impl Game<'_> {
             return Err(atlas_client::lang::get("atlas.ports.invalid_config"));
         }
         let s = &mut self.atlas_ports.actions;
-        if id == IDS[6] {
+        if id == IDS[4] {
             for k in [
                 "enabled",
                 "preserveSpaces",
@@ -571,7 +385,7 @@ impl Game<'_> {
                 .collect();
             s.save_password();
             Ok(())
-        } else if id == IDS[8] {
+        } else if id == IDS[5] {
             let mode = match value["mode"].as_str() {
                 Some("BELOW") => chunk::Mode::Below,
                 Some("ABOVE") => chunk::Mode::Above,
@@ -606,7 +420,7 @@ impl Game<'_> {
             s.disable_near = disable_near;
             s.save_chunks();
             Ok(())
-        } else if id == IDS[9] {
+        } else if id == IDS[6] {
             s.gamma.apply_config(value);
             s.gamma.save(&s.home);
             Ok(())
@@ -615,24 +429,24 @@ impl Game<'_> {
         }
     }
     pub(in crate::game) fn atlas_actions_mask_chat(&self, input: &str) -> String {
-        if self.atlas_port_on(IDS[6]) {
+        if self.atlas_port_on(IDS[4]) {
             logic::mask_password(input, &self.atlas_ports.actions.password)
         } else {
             input.into()
         }
     }
     pub(in crate::game) fn atlas_actions_suppress_history(&self, input: &str) -> bool {
-        self.atlas_port_on(IDS[6])
+        self.atlas_port_on(IDS[4])
             && self.atlas_ports.actions.protect_history
             && logic::password_prefix(input, &self.atlas_ports.actions.password).is_some()
     }
     pub(in crate::game) fn atlas_actions_suppress_suggestions(&self, input: &str) -> bool {
-        self.atlas_port_on(IDS[6])
+        self.atlas_port_on(IDS[4])
             && self.atlas_ports.actions.suppress_suggestions
             && logic::password_prefix(input, &self.atlas_ports.actions.password).is_some()
     }
     pub(in crate::game) fn atlas_actions_middle_click(&mut self) -> bool {
-        self.atlas_port_on(IDS[4])
+        self.atlas_port_on(IDS[2])
             && self.screen == Screen::Playing
             && self.player.is_some()
             && self
@@ -643,7 +457,7 @@ impl Game<'_> {
                 .any(|s| &*s.item == "minecraft:ender_pearl")
     }
     fn atlas_actions_throw_pearl(&mut self) -> bool {
-        if !self.atlas_port_on(IDS[4]) || self.screen != Screen::Playing || self.player.is_none() {
+        if !self.atlas_port_on(IDS[2]) || self.screen != Screen::Playing || self.player.is_none() {
             return false;
         }
         let items: Vec<_> = self
@@ -690,7 +504,7 @@ impl Game<'_> {
         true
     }
     pub(in crate::game) fn atlas_actions_start_sort(&mut self) -> bool {
-        if !self.atlas_port_on(IDS[5]) || !self.atlas_actions_chest() {
+        if !self.atlas_port_on(IDS[3]) || !self.atlas_actions_chest() {
             return false;
         }
         let slots: Vec<_> = self
@@ -723,7 +537,7 @@ impl Game<'_> {
         if !self.native_window() {
             return;
         }
-        if !self.atlas_actions_chest() || !self.atlas_port_on(IDS[5]) {
+        if !self.atlas_actions_chest() || !self.atlas_port_on(IDS[3]) {
             self.atlas_ports.actions.sort_queue.clear();
         } else if self.atlas_ports.actions.sort_cooldown > 0 {
             self.atlas_ports.actions.sort_cooldown -= 1;
@@ -732,37 +546,16 @@ impl Game<'_> {
             self.atlas_ports.actions.sort_cooldown = 2;
         }
         self.atlas_actions_craft_tick();
-        self.atlas_inventory_tick();
         self.atlas_gamma_tick();
-        if self.atlas_actions_auto_swing()
-            && self.screen == Screen::Playing
-            && self.player.is_some()
-            && self.left
-        {
-            self.clicks.miss_time = 0;
-            self.attack_clicks = self.attack_clicks.saturating_add(1);
-        }
     }
     pub(in crate::game) fn atlas_actions_key(&mut self, key: KeyCode) -> bool {
         if self.screen != Screen::Playing {
             return false;
         }
-        let pearl = keybinds::key_code(&self.native_mod_key(IDS[4], "throw", "key.mouse.middle"))
+        let pearl = keybinds::key_code(&self.native_mod_key(IDS[2], "throw", "key.mouse.middle"))
             == Some(key)
             && self.atlas_actions_throw_pearl();
         let gamma = self.atlas_gamma_key(key);
-        for (id, binding, default) in [
-            (IDS[2], "open", "key.keyboard.h"),
-            (IDS[7], "open", "key.keyboard.v"),
-        ] {
-            if self.atlas_port_on(id)
-                && keybinds::key_code(&self.native_mod_key(id, binding, default)) == Some(key)
-            {
-                self.atlas_ports.actions.active_screen = Some(id.into());
-                self.atlas_ports.actions.command_path.clear();
-                return self.atlas_open_port_screen(id);
-            }
-        }
         gamma || pearl
     }
     pub(in crate::game) fn atlas_actions_mouse_pearl(&mut self, button: i32) -> bool {
@@ -772,14 +565,14 @@ impl Game<'_> {
             2 => "key.mouse.middle".to_owned(),
             _ => format!("key.mouse.{}", button + 1),
         };
-        if self.native_mod_key(IDS[4], "throw", "key.mouse.middle") == name {
+        if self.native_mod_key(IDS[2], "throw", "key.mouse.middle") == name {
             self.atlas_actions_throw_pearl()
         } else {
             false
         }
     }
     pub(in crate::game) fn atlas_actions_chunk_config(&self) -> Option<chunk::Config> {
-        if !self.atlas_port_on(IDS[8]) {
+        if !self.atlas_port_on(IDS[5]) {
             return None;
         }
         let s = &self.atlas_ports.actions;
@@ -797,90 +590,10 @@ impl Game<'_> {
             player,
         })
     }
-    pub(in crate::game) fn atlas_actions_viewmodel_pose(
-        &self,
-        main: bool,
-        left_dominant: bool,
-    ) -> Vec<viewmodel::PoseOp> {
-        if self.atlas_port_on(IDS[7]) {
-            self.atlas_ports.actions.viewmodel.hand_pose(
-                main,
-                left_dominant,
-                self.atlas_ports.actions.viewmodel_editor.selected == Some(main),
-                now_ms(),
-            )
-        } else {
-            vec![]
-        }
-    }
-    pub(in crate::game) fn atlas_actions_swing_pose(
-        &self,
-        right: bool,
-        progress: f32,
-        entity_target: bool,
-    ) -> Option<Vec<viewmodel::PoseOp>> {
-        self.atlas_port_on(IDS[7])
-            .then(|| {
-                self.atlas_ports
-                    .actions
-                    .viewmodel
-                    .swing_pose(right, progress, entity_target)
-            })
-            .flatten()
-    }
-    pub(in crate::game) fn atlas_actions_swing_duration(&self, original: i32) -> i32 {
-        if self.atlas_port_on(IDS[7]) {
-            self.atlas_ports.actions.viewmodel.swing_duration(original)
-        } else {
-            original
-        }
-    }
-    pub(in crate::game) fn atlas_actions_auto_swing(&self) -> bool {
-        self.atlas_port_on(IDS[7]) && self.atlas_ports.actions.viewmodel.auto_swing
-    }
-    pub(in crate::game) fn atlas_actions_hand_adjustment(
-        &self,
-        hand: super::super::Hand,
-    ) -> glam::Mat4 {
-        pose_matrix(self.atlas_actions_viewmodel_pose(
-            hand == super::super::Hand::Main,
-            self.settings.main_hand_left,
-        ))
-    }
-    pub(in crate::game) fn atlas_actions_item_pose(
-        &self,
-        left: bool,
-        equip: f32,
-        attack: f32,
-        pose: atlas_client::first_person::ItemPose,
-        targeted: bool,
-    ) -> glam::Mat4 {
-        if matches!(pose, atlas_client::first_person::ItemPose::Swing)
-            && let Some(ops) = self.atlas_actions_swing_pose(!left, attack, targeted)
-        {
-            atlas_client::first_person::item_pose(
-                left,
-                equip,
-                0.0,
-                atlas_client::first_person::ItemPose::Using,
-            ) * pose_matrix(ops)
-        } else {
-            atlas_client::first_person::item_pose(left, equip, attack, pose)
-        }
-    }
-    pub(in crate::game) fn atlas_actions_hand_selected(&self, hand: super::super::Hand) -> bool {
-        self.atlas_port_on(IDS[7])
-            && self.atlas_ports.actions.viewmodel.outline
-            && self.atlas_ports.actions.viewmodel_editor.selected
-                == Some(hand == super::super::Hand::Main)
-    }
     pub(in crate::game) fn atlas_actions_settings(&self, id: &str, buttons: &mut Vec<String>) {
         let s = &self.atlas_ports.actions;
         match id {
-            id if id == IDS[2] || id == IDS[7] => {
-                buttons.push(atlas_client::lang::get("atlas.ports.open_settings"))
-            }
-            id if id == IDS[6] => {
+            id if id == IDS[4] => {
                 for (key, value) in [
                     ("atlas.streamermode.enabled", s.password.enabled),
                     ("atlas.streamermode.spaces", s.password.preserve_spaces),
@@ -895,7 +608,7 @@ impl Game<'_> {
                 }
                 buttons.push(atlas_client::lang::get("atlas.ports.edit_config"));
             }
-            id if id == IDS[8] => {
+            id if id == IDS[5] => {
                 buttons.push(format!(
                     "{}: {:?}",
                     atlas_client::lang::get("atlas.chunkanimator.mode"),
@@ -921,24 +634,17 @@ impl Game<'_> {
                     })
                 ));
             }
-            id if id == IDS[9] => buttons.push(atlas_client::lang::get("atlas.ports.edit_config")),
+            id if id == IDS[6] => buttons.push(atlas_client::lang::get("atlas.ports.edit_config")),
             _ => {}
         }
     }
     pub(in crate::game) fn atlas_actions_settings_click(&mut self, id: &str, index: usize) {
-        if id == IDS[2] || id == IDS[7] {
-            if index == 0 {
-                self.atlas_ports.actions.active_screen = Some(id.into());
-                self.atlas_open_port_screen(id);
-            }
-            return;
-        }
-        if (id == IDS[6] && index == 4) || (id == IDS[9] && index == 0) {
+        if (id == IDS[4] && index == 4) || (id == IDS[6] && index == 0) {
             self.atlas_visual_open_editor(id);
             return;
         }
         let s = &mut self.atlas_ports.actions;
-        if id == IDS[6] {
+        if id == IDS[4] {
             match index {
                 0 => s.password.enabled = !s.password.enabled,
                 1 => s.password.preserve_spaces = !s.password.preserve_spaces,
@@ -947,7 +653,7 @@ impl Game<'_> {
                 _ => return,
             }
             s.save_password();
-        } else if id == IDS[8] {
+        } else if id == IDS[5] {
             match index {
                 0 => {
                     let modes = [
@@ -991,23 +697,6 @@ impl Game<'_> {
         }
     }
 }
-fn pose_matrix(ops: impl IntoIterator<Item = viewmodel::PoseOp>) -> glam::Mat4 {
-    let mut matrix = glam::Mat4::IDENTITY;
-    for op in ops {
-        let next = match op {
-            viewmodel::PoseOp::Translate(v) => {
-                glam::Mat4::from_translation(glam::Vec3::from_array(v))
-            }
-            viewmodel::PoseOp::Scale(v) => glam::Mat4::from_scale(glam::Vec3::from_array(v)),
-            viewmodel::PoseOp::RotateX(v) => glam::Mat4::from_rotation_x(v.to_radians()),
-            viewmodel::PoseOp::RotateY(v) => glam::Mat4::from_rotation_y(v.to_radians()),
-            viewmodel::PoseOp::RotateZ(v) => glam::Mat4::from_rotation_z(v.to_radians()),
-        };
-        matrix *= next;
-    }
-    matrix
-}
-
 // AutoCraft: preserve the original order of slot clicks and tick delays. No
 // recipe injection or direct inventory writes: the ordinary menu predicts and
 // sends each operation, so the server remains authoritative.

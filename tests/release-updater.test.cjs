@@ -8,7 +8,8 @@ const http = require('node:http');
 const zlib = require('node:zlib');
 const { once, EventEmitter } = require('node:events');
 const { execFileSync } = require('node:child_process');
-const { ReleaseUpdater, version, newer, safeUrl, allowedFile, validateManifest, extractArchive, REQUIRED, REPOSITORY, hashFile } = require('../lib/release-updater.cjs');
+const { ReleaseUpdater, pruneUpdates, version, newer, safeUrl, allowedFile, validateManifest, extractArchive, REQUIRED, REPOSITORY, hashFile } = require('../lib/release-updater.cjs');
+const { NativeMods } = require('../lib/native-mods.cjs');
 
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 function scratch(t) {
@@ -64,6 +65,64 @@ function updater(root, fetch, extra = {}) {
   return new ReleaseUpdater({ projectRoot: root, dataRoot: path.join(root, 'data'), executable: path.join(root, 'Atlas Launcher.exe'), currentVersion: '1.0.0', enabled: true, fetch, ...extra });
 }
 
+test('native source download waits for consent and is shared by builds after restart', {
+  skip: process.platform !== 'win32' || process.arch !== 'x64',
+}, async t => {
+  const root = scratch(t), home = path.join(root, 'instance'), dataRoot = path.join(root, 'data');
+  const sourceManifest = path.join(root, 'native-source.json');
+  const revision = 'a'.repeat(40), sourceKey = 'b'.repeat(64), version = '1.4.1';
+  const archive = zip([
+    ['.atlas-source-key', sourceKey], ['ATLAS-UPSTREAM.json', JSON.stringify({ commit: revision })],
+    ['Cargo.toml', '[workspace]'], ['Cargo.lock', 'version = 4'],
+    ['crates/sample/src/lib.rs', 'pub fn noop() {}'],
+  ]);
+  fs.writeFileSync(sourceManifest, JSON.stringify({ schema: 1, version, revision, sourceKey, size: archive.length, sha256: digest(archive) }));
+  const downloads = [], stages = [];
+  let valid = false;
+  const toolStop = new Error('sources reached the compiler');
+  const create = confirm => new NativeMods({
+    project: root, dataRoot, sourceManifest, version, confirm,
+    fetch(url) {
+      downloads.push(url);
+      return new Response(valid ? archive : Buffer.alloc(archive.length));
+    },
+    progress(stage) { stages.push(stage); },
+    tools() { throw toolStop; },
+  });
+  assert.equal(await create(() => assert.fail('No mods to approve')).prepare(home), null);
+  const mods = path.join(home, 'mods');
+  fs.mkdirSync(mods, { recursive: true });
+  const mod = zip([
+    ['atlas-native.json', JSON.stringify({ schema: 1, id: 'sample', version: '1', game: '26.3', atlas: revision, mixins: '5a64af938ec86b00d53d16a408aabc0038fb3e57' })],
+    ['mixins/sample/atlas-mixin.toml', '[mod]\nid = "sample"'],
+  ]);
+  fs.writeFileSync(path.join(mods, 'Sample.hnmod'), mod);
+  assert.deepEqual(await create(() => false).prepare(home), { cancelled: true });
+  assert.deepEqual(downloads, []);
+
+  const nativeRoot = path.join(dataRoot, 'native-mods');
+  const sources = path.join(nativeRoot, `source-${sourceKey}`);
+  await assert.rejects(create(() => true).prepare(home), /checksum/i);
+  assert.equal(fs.existsSync(sources), false);
+  valid = true;
+  await assert.rejects(create(() => true).prepare(home), toolStop);
+  assert.equal(fs.readFileSync(path.join(sources, 'crates/sample/src/lib.rs'), 'utf8'), 'pub fn noop() {}');
+  await assert.rejects(create(() => true).prepare(home), toolStop);
+  assert.deepEqual(downloads, Array(2).fill(`https://github.com/${REPOSITORY}/releases/download/atlas-payload-1.4.1/Atlas-1.4.1-Native-Source.zip`));
+  assert(stages.includes('source'));
+
+  const iconRoot = path.join(__dirname, '..', 'assets');
+  const png = path.join(iconRoot, 'game-icon.png'), ico = path.join(iconRoot, 'game-icon.ico');
+  const icons = [digest(fs.readFileSync(fs.existsSync(png) ? png : path.join(iconRoot, 'icon.png'))), fs.existsSync(ico) ? digest(fs.readFileSync(ico)) : null];
+  const built = path.join(nativeRoot, 'builds', digest(JSON.stringify([version, sourceKey, [digest(mod)], icons])));
+  fs.mkdirSync(built, { recursive: true });
+  fs.writeFileSync(path.join(built, 'complete'), path.basename(built));
+  fs.writeFileSync(path.join(built, 'atlas-client.exe'), 'compiled test client');
+  const state = await create(() => assert.fail('The cached build must skip consent')).prepare(home);
+  assert.equal(state.executable, path.join(built, 'atlas-client.exe'));
+  assert.equal(downloads.length, 2);
+});
+
 test('Atlas semantic versions sort numerically and retain legacy v0.1 support', () => {
   assert.equal(version('v0.1'), '0.1.0'); assert.equal(version('atlas-1.0.0'), '1.0.0');
   assert.equal(newer('atlas-1.10.0', 'atlas-1.9.9'), true);
@@ -88,6 +147,7 @@ test('real HTTP download extracts verified files and reuses staged version acros
   const first = updater(root, server.fetch);
   assert.equal((await first.check()).status, 'available');
   assert.equal((await first.download()).status, 'ready');
+  assert.equal(fs.existsSync(path.join(first.stageDirectory, 'update.zip')), false);
   for (const [name, content] of fixture.contents) assert.equal(fs.readFileSync(path.join(first.staged, name), 'utf8'), content);
   const second = updater(root, server.fetch);
   assert.equal((await second.check()).status, 'ready');
@@ -104,6 +164,53 @@ test('corrupt and oversized archive never become ready or overwrite live files',
   assert.equal(result.status, 'error'); assert.match(result.error, /size|checksum/);
   assert.equal(fs.readFileSync(original, 'utf8'), 'old launcher');
   assert.equal(fs.existsSync(path.join(instance.root, 'ready.json')), false);
+  assert.deepEqual(fs.readdirSync(instance.root), [], 'a failed download removes its whole stage');
+});
+test('startup prunes obsolete update stages and preserves an in-flight download, helper and retry', async t => {
+  const root = scratch(t), data = path.join(root, 'data'), updates = path.join(data, 'updates');
+  const stage = (name, files) => {
+    const dir = path.join(updates, name);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [file, bytes] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), bytes);
+    return dir;
+  };
+  const old = stage('atlas-0.9.0-abc222', { 'update.zip': 'old download' });
+  const downloading = stage('atlas-0.9.1-abc333', { '.download-owner.json': JSON.stringify({ pid: process.pid }), 'update.zip.part': 'in flight' });
+  const attempt = 'de55de55-12ea-4ced-b83c-013f531184d1';
+  const installing = stage('atlas-0.9.2-abc444', {
+    [`install-plan-${attempt}.json`]: JSON.stringify({ parentPid: 2147483647 }),
+    [`helper-started-${attempt}.json`]: JSON.stringify({ helperPid: process.pid }),
+  });
+  const oldTime = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  fs.utimesSync(installing, oldTime, oldTime);
+  fs.utimesSync(path.join(installing, `install-plan-${attempt}.json`), oldTime, oldTime);
+  const retry = stage('atlas-1.1.0-abc555', { 'update.zip': 'previously verified' });
+  const other = stage('user-notes', { 'notes.txt': 'keep me' });
+  const unrecognized = stage('atlas-0.7.0-abc666', { 'notes.txt': 'keep me' });
+  const outside = path.join(root, 'external'); fs.mkdirSync(outside); fs.writeFileSync(path.join(outside, 'world.dat'), 'keep me');
+  const linked = path.join(updates, 'atlas-0.8.0-abc777'); fs.symlinkSync(outside, linked, process.platform === 'win32' ? 'junction' : 'dir');
+  fs.writeFileSync(path.join(updates, 'ready.json'), JSON.stringify({ tag: 'atlas-1.1.0', directory: path.basename(retry) }));
+  await pruneUpdates(data, '1.0.0');
+  assert.equal(fs.existsSync(old), false);
+  for (const dir of [downloading, installing, retry, other, unrecognized, linked]) assert.equal(fs.existsSync(dir), true, dir);
+  assert.equal(fs.readFileSync(path.join(outside, 'world.dat'), 'utf8'), 'keep me');
+});
+test('a new verified update replaces the superseded staging, while failed refresh keeps it', async t => {
+  const root = scratch(t), fixture = releaseFixture();
+  const archive = fixture.archive;
+  fixture.archive = Buffer.from('corrupt');
+  const server = await fixtureServer(t, fixture);
+  const instance = updater(root, server.fetch);
+  const older = path.join(instance.root, 'atlas-1.0.1-abc888');
+  fs.mkdirSync(older, { recursive: true }); fs.writeFileSync(path.join(older, 'update.zip'), 'earlier verified update');
+  fs.writeFileSync(path.join(instance.root, 'ready.json'), JSON.stringify({ tag: 'atlas-1.0.1', directory: path.basename(older) }));
+  assert.equal((await instance.check()).status, 'available');
+  assert.equal((await instance.download()).status, 'error');
+  assert.equal(fs.existsSync(older), true);
+  fixture.archive = archive;
+  assert.equal((await instance.download()).status, 'ready');
+  assert.equal(fs.existsSync(older), false);
+  assert.ok(fs.existsSync(instance.staged));
 });
 test('redirects are checked before any request can reach a different service', async t => {
   const root = scratch(t), fixture = releaseFixture();
@@ -231,14 +338,37 @@ test('production Windows installer runs after its launcher process exits', { ski
   assert.equal(fs.readFileSync(path.join(root, 'resources/app.asar'), 'utf8'), 'new launcher');
 });
 
-test('release builder creates an archive that the production updater can validate and extract', { skip: process.platform !== 'win32' }, async t => {
+test('release builder keeps verified native sources outside the main update', { skip: process.platform !== 'win32' }, async t => {
   const root = scratch(t), portable = path.join(root, 'portable'), output = path.join(root, 'release');
   const fixture = releaseFixture();
-  for (const [name, content] of fixture.contents) { const file = path.join(portable, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); }
+  const asarInput = path.join(root, 'asar-input');
+  const sourceName = 'Atlas-1.1.0-Native-Source.zip';
+  const sourcePath = path.join(root, sourceName);
+  const sourceArchive = zip([['Cargo.toml', '[workspace]']]);
+  const descriptor = { schema: 1, version: '1.1.0', sourceKey: '1'.repeat(64), revision: '2'.repeat(40), size: sourceArchive.length, sha256: digest(sourceArchive) };
+  fs.mkdirSync(asarInput);
+  fs.writeFileSync(path.join(asarInput, 'native-source.json'), JSON.stringify(descriptor));
+  const { createPackage, extractFile } = require('@electron/asar');
+  for (const [name, content] of fixture.contents) {
+    const file = path.join(portable, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    if (name === 'resources/app.asar') await createPackage(asarInput, file);
+    else fs.writeFileSync(file, content);
+  }
   const { buildRelease } = require('../scripts/build-release.cjs');
+  await assert.rejects(buildRelease(portable, output, '1.1.0'), /Missing Atlas-1\.1\.0-Native-Source\.zip/);
+  fs.writeFileSync(sourcePath, Buffer.alloc(sourceArchive.length));
+  await assert.rejects(buildRelease(portable, output, '1.1.0'), /does not match the launcher descriptor/);
+  fs.writeFileSync(sourcePath, sourceArchive);
   const built = await buildRelease(portable, output, '1.1.0');
   const release = { ...fixture.release, assets: [{ name: built.manifest.archive.name, size: built.manifest.archive.size, browser_download_url: `https://github.com/${REPOSITORY}/releases/download/atlas-1.1.0/${built.manifest.archive.name}` }] };
   validateManifest(built.manifest, release);
+  assert.deepEqual(fs.readFileSync(path.join(output, sourceName)), sourceArchive);
+  assert.equal(built.manifest.files.some(file => file.path.endsWith(sourceName)), false);
   await extractArchive(built.archive, path.join(root, 'extracted'), built.manifest.files);
-  for (const [name, content] of fixture.contents) assert.equal(fs.readFileSync(path.join(root, 'extracted', name), 'utf8'), content);
+  for (const [name, content] of fixture.contents) {
+    const file = path.join(root, 'extracted', name);
+    if (name === 'resources/app.asar') assert.deepEqual(JSON.parse(extractFile(file, 'native-source.json').toString('utf8')), descriptor);
+    else assert.equal(fs.readFileSync(file, 'utf8'), content);
+  }
 });

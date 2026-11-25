@@ -271,9 +271,6 @@ impl Game<'_> {
             } else {
                 to_world * native_hooks::hand_pose_matrix(pose)
             };
-            let to_world = to_world * self.atlas_actions_hand_adjustment(hand);
-            let selected = self.atlas_actions_hand_selected(hand);
-            let packed = if selected { 0xf0f0 } else { packed };
             // The main hand on its arm, the off hand on the other one.
             let left = self.settings.main_hand_left != (hand == Hand::Off);
             // A Legacy sword held up hides the off hand's shield.
@@ -398,9 +395,8 @@ impl Game<'_> {
                 }
                 _ => ItemPose::Swing,
             };
-            let targeted = self.mob_hit().is_some();
             let mut m = to_world
-                * self.atlas_actions_item_pose(left, inverse_height, attack, pose, targeted);
+                * atlas_client::first_person::item_pose(left, inverse_height, attack, pose);
             // PvP & HUD's shield size (100% is vanilla's), toward the hand holding it.
             let shield_size = self.pvp_shield_size();
             if shield_size != 100 && &*stack.item == "minecraft:shield" {
@@ -453,7 +449,7 @@ impl Game<'_> {
             self.submit_item_world(
                 &state,
                 m,
-                block_entity_render::vertex_light(if selected { 0xff } else { light }),
+                block_entity_render::vertex_light(light),
                 &mut out,
             );
         }

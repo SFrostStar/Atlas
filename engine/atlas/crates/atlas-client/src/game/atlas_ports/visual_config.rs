@@ -1,6 +1,6 @@
 //! Configuration adapters for the supplied Java mod versions. See visual.rs for authorship.
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{fs, path::Path};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -108,124 +108,10 @@ impl Default for Pvp {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub(super) struct Outline {
-    pub enabled: bool,
-    pub through_walls: bool,
-    pub line_width: f32,
-    pub expand: f32,
-    pub visible_alpha: f32,
-    pub xray_alpha: f32,
-}
-impl Default for Outline {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            through_walls: true,
-            line_width: 1.5,
-            expand: 0.05,
-            visible_alpha: 1.0,
-            xray_alpha: 0.35,
-        }
-    }
-}
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub(super) struct Beam {
-    pub enabled: bool,
-    pub through_walls: bool,
-    pub width: f32,
-    pub height: f32,
-    pub alpha: f32,
-    pub spin_degrees_per_second: f32,
-}
-impl Default for Beam {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            through_walls: true,
-            width: 0.25,
-            height: 60.0,
-            alpha: 0.5,
-            spin_degrees_per_second: 20.0,
-        }
-    }
-}
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub(super) struct Lootbeams {
-    pub enabled: bool,
-    pub max_render_distance: f64,
-    pub outline: Outline,
-    pub beam: Beam,
-    pub rarity_colors: BTreeMap<String, String>,
-    pub item_color_overrides: BTreeMap<String, String>,
-    pub whitelist_mode: bool,
-    pub whitelist: Vec<String>,
-    pub blacklist: Vec<String>,
-}
-impl Default for Lootbeams {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            max_render_distance: 48.0,
-            outline: Outline::default(),
-            beam: Beam::default(),
-            rarity_colors: [
-                ("COMMON", "#FFFFFF"),
-                ("UNCOMMON", "#FFFF55"),
-                ("RARE", "#55FFFF"),
-                ("EPIC", "#FF55FF"),
-            ]
-            .into_iter()
-            .map(|(k, v)| (k.into(), v.into()))
-            .collect(),
-            item_color_overrides: [
-                ("minecraft:netherite_ingot", "#B24544"),
-                ("minecraft:diamond", "#4DE6E0"),
-                ("minecraft:nether_star", "#FFD966"),
-            ]
-            .into_iter()
-            .map(|(k, v)| (k.into(), v.into()))
-            .collect(),
-            whitelist_mode: false,
-            whitelist: Vec::new(),
-            blacklist: ["arrow", "snowball", "egg", "experience_bottle"]
-                .map(|s| format!("minecraft:{s}"))
-                .to_vec(),
-        }
-    }
-}
-impl Lootbeams {
-    pub fn color(&self, id: &str, rarity: &str) -> Option<u32> {
-        if (self.whitelist_mode && !self.whitelist.iter().any(|s| s == id))
-            || (!self.whitelist_mode && self.blacklist.iter().any(|s| s == id))
-        {
-            return None;
-        }
-        self.item_color_overrides
-            .get(id)
-            .and_then(|s| hex(s))
-            .or_else(|| self.rarity_colors.get(rarity).and_then(|s| hex(s)))
-            .or(Some(0xffffff))
-    }
-}
 pub(super) fn hex(s: &str) -> Option<u32> {
     u32::from_str_radix(s.strip_prefix('#').unwrap_or(s), 16)
         .ok()
         .map(|v| v & 0xffffff)
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub(super) struct Kill {
-    pub enabled: bool,
-}
-impl Default for Kill {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
 }
 
 /// The original uses a deliberately small YAML dialect rather than a YAML library.
@@ -480,16 +366,5 @@ mod tests {
         let restored = Totem::parse(&config.yaml());
         assert_eq!(restored.label, config.label);
         assert_eq!(restored.label_color, config.label_color);
-    }
-    #[test]
-    fn loot_filters_and_overrides_use_original_precedence() {
-        let mut c = Lootbeams::default();
-        assert_eq!(c.color("minecraft:diamond", "COMMON"), Some(0x4de6e0));
-        assert_eq!(c.color("minecraft:arrow", "EPIC"), None);
-        assert_eq!(c.color("minecraft:stone", "EPIC"), Some(0xff55ff));
-        c.whitelist_mode = true;
-        c.whitelist.push("minecraft:arrow".into());
-        assert_eq!(c.color("minecraft:arrow", "UNCOMMON"), Some(0xffff55));
-        assert_eq!(c.color("minecraft:diamond", "EPIC"), None);
     }
 }

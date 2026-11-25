@@ -2,6 +2,7 @@
 use super::{
     Game,
     config_model::{self, Definition, Field, Frame, Kind},
+    inventory_hud::PositionEditor,
 };
 use atlas_client::{
     clipboard::EditShortcut,
@@ -31,6 +32,7 @@ pub(super) struct State {
     discard_dialog: bool,
     error: Option<String>,
     exit_warning: bool,
+    position_editor: Option<PositionEditor>,
 }
 
 #[cfg(test)]
@@ -178,6 +180,16 @@ impl Default for State {
             discard_dialog: false,
             error: None,
             exit_warning: false,
+            position_editor: None,
+        }
+    }
+}
+
+impl State {
+    fn finish_position_editor(&mut self) {
+        if let Some(editor) = self.position_editor.take() {
+            self.draft = editor.finish();
+            self.editors.clear();
         }
     }
 }
@@ -650,6 +662,11 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_config_render(&mut self, batch: &mut HudBatch) -> bool {
         if !self.atlas_config_active() {
             return false;
+        }
+        if let Some(mut editor) = self.atlas_ports.config_ui.position_editor.take() {
+            editor.draw(batch, self);
+            self.atlas_ports.config_ui.position_editor = Some(editor);
+            return true;
         }
         self.native_apply_screen_blur();
         self.render_transparent_background("atlas_config", batch);
@@ -1265,6 +1282,13 @@ impl Game<'_> {
                 editor.click(&self.gui.atlas, self.cursor.0, false, false);
             }
             Kind::Action { action, .. } => {
+                if action == "inventoryhud.arrange" {
+                    if state.invalid.is_empty() {
+                        state.position_editor = PositionEditor::new(&state.draft);
+                        state.focus = None;
+                    }
+                    return;
+                }
                 let mut draft = state.draft.clone();
                 match self.atlas_config_action(action, &mut draft) {
                     Ok(()) => {
@@ -1286,6 +1310,13 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_config_mouse(&mut self, button: i32, pressed: bool) -> bool {
         if !self.atlas_config_active() {
             return false;
+        }
+        let state = &mut self.atlas_ports.config_ui;
+        if let Some(editor) = &mut state.position_editor {
+            if editor.mouse([self.cursor.0, self.cursor.1], button, pressed) {
+                state.finish_position_editor();
+            }
+            return true;
         }
         if !pressed {
             self.atlas_ports.config_ui.dragging = None;
@@ -1457,6 +1488,13 @@ impl Game<'_> {
     ) -> bool {
         if !self.atlas_config_active() {
             return false;
+        }
+        let state = &mut self.atlas_ports.config_ui;
+        if let Some(editor) = &mut state.position_editor {
+            if editor.key(key, shift) {
+                state.finish_position_editor();
+            }
+            return true;
         }
         let focus = self.atlas_ports.config_ui.focus.clone();
         if key == KeyCode::Escape {
@@ -1636,6 +1674,9 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
+        if self.atlas_ports.config_ui.position_editor.is_some() {
+            return true;
+        }
         let state = &mut self.atlas_ports.config_ui;
         if state.discard_dialog {
             return true;
@@ -1654,6 +1695,9 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_config_shortcut(&mut self, shortcut: EditShortcut) -> bool {
         if !self.atlas_config_active() {
             return false;
+        }
+        if self.atlas_ports.config_ui.position_editor.is_some() {
+            return true;
         }
         let state = &mut self.atlas_ports.config_ui;
         if state.discard_dialog {
@@ -1674,6 +1718,9 @@ impl Game<'_> {
         if !self.atlas_config_active() {
             return false;
         }
+        if self.atlas_ports.config_ui.position_editor.is_some() {
+            return true;
+        }
         let Some(layout) = self.atlas_config_layout() else {
             return true;
         };
@@ -1689,6 +1736,10 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_config_drag(&mut self) -> bool {
         if !self.atlas_config_active() {
             return false;
+        }
+        if let Some(editor) = &mut self.atlas_ports.config_ui.position_editor {
+            editor.dragged([self.cursor.0, self.cursor.1]);
+            return true;
         }
         let Some(layout) = self.atlas_config_layout() else {
             return true;

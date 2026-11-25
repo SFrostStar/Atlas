@@ -21,6 +21,7 @@ impl Game<'_> {
         self.atlas_aspect_render(batch);
         self.atlas_esc_music_render(batch);
         self.atlas_mouse_tweaks_render(batch);
+        self.atlas_macros_render(batch);
         let screen = self.screen;
         if screen == Screen::Playing || self.server_packs.prompt.is_some() || self.book.is_some() {
             return;

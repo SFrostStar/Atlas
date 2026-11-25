@@ -203,6 +203,8 @@ impl Opt {
         match self {
             Opt::Fov => "options.fov",
             Opt::RenderDistance => "options.renderDistance",
+            Opt::LodDistance => "atlas.options.lod_distance",
+            Opt::FarDetail => "atlas.options.far_detail",
             Opt::SimulationDistance => "options.simulationDistance",
             Opt::Sensitivity => "options.sensitivity",
             Opt::WheelSensitivity => "options.mouseWheelSensitivity",
@@ -352,6 +354,9 @@ impl Opt {
                 2.0,
                 crate::options_file::MAX_RENDER_DISTANCE as f32,
             ),
+            Opt::LodDistance => {
+                Kind::Slider(crate::graphics_ui::lod_slider_position(s.atlas.lod_distance))
+            }
             Opt::SimulationDistance => unit(s.simulation_distance as f32, 5.0, 32.0),
             Opt::Sensitivity => Kind::Slider(s.sensitivity),
             Opt::WheelSensitivity => wheel::kind(s.mouse_wheel_sensitivity),
@@ -449,6 +454,7 @@ impl Opt {
             Opt::ChatDelay => Some(60),
             Opt::Fov => Some(80),
             Opt::RenderDistance => Some((crate::options_file::MAX_RENDER_DISTANCE - 2) as u32),
+            Opt::LodDistance => Some((crate::graphics_ui::LOD_STEPS.len() - 1) as u32),
             Opt::SimulationDistance => Some(27),
             Opt::MaxFps => Some(25),
             Opt::CloudRange => Some(126),
@@ -526,6 +532,21 @@ impl Opt {
                 v => generic(c, Text::literal(v.to_string())),
             },
             Opt::RenderDistance => generic(c, Text::tr("options.chunks", &[&s.render_distance])),
+            Opt::LodDistance => generic(
+                c,
+                if s.atlas.lod_distance == 0 {
+                    tr("options.off")
+                } else {
+                    Text::tr("options.chunks", &[&s.atlas.lod_distance])
+                },
+            ),
+            Opt::FarDetail => generic(
+                c,
+                tr(match s.atlas.far_detail {
+                    crate::graphics::FarDetail::Full => "atlas.options.far_detail.full",
+                    crate::graphics::FarDetail::Reduced => "atlas.options.far_detail.reduced",
+                }),
+            ),
             Opt::SimulationDistance => {
                 generic(c, Text::tr("options.chunks", &[&s.simulation_distance]))
             }
@@ -905,6 +926,13 @@ impl Opt {
                 s.render_distance =
                     step(2.0, crate::options_file::MAX_RENDER_DISTANCE as f32) as i32
             }
+            Opt::LodDistance => {
+                let distance = crate::graphics_ui::lod_distance_at(v);
+                if s.atlas.lod_distance != distance {
+                    s.atlas.lod_distance = distance;
+                    s.atlas.preset = crate::graphics::Preset::Custom;
+                }
+            }
             Opt::SimulationDistance => s.simulation_distance = step(5.0, 32.0) as i32,
             Opt::Sensitivity => s.sensitivity = v,
             Opt::WheelSensitivity => s.mouse_wheel_sensitivity = wheel::from_slider(v),
@@ -1078,6 +1106,14 @@ impl Opt {
                 s.clouds = order[usize::from(next(i, 3))].into();
             }
             Opt::Particles => s.particles = next(s.particles, 3),
+            Opt::FarDetail => {
+                use crate::graphics::FarDetail;
+                s.atlas.far_detail = match s.atlas.far_detail {
+                    FarDetail::Full => FarDetail::Reduced,
+                    FarDetail::Reduced => FarDetail::Full,
+                };
+                s.atlas.preset = crate::graphics::Preset::Custom;
+            }
             Opt::EntityShadows => s.entity_shadows = !s.entity_shadows,
             Opt::Vignette => s.vignette = !s.vignette,
             Opt::Autosave => s.autosave_indicator = !s.autosave_indicator,
@@ -2591,6 +2627,7 @@ impl OptionsUi {
                 atlas::rows(s.extras.no_ai)
                     .into_iter()
                     .map(|(left, right)| Row::Buttons(widget(left), right.map(widget)))
+                    .chain([Row::Big(Opt::LodDistance), Row::Big(Opt::FarDetail)])
                     .collect()
             }
             Page::Agent => {
@@ -7671,6 +7708,28 @@ mod tests {
         assert!(acts.contains(&&Act::CopyAgentDetails));
         ui.stack = vec![Page::Main, Page::Controls];
         assert!(!pushes(&mut ui).contains(&Page::Controller));
+    }
+
+    #[test]
+    fn atlas_settings_lod_changes_only_distant_terrain() {
+        let mut s = Settings::default();
+        let mut ui = OptionsUi::default();
+        ui.show(Page::Atlas);
+        let rows = ui.list_rows(&s);
+        assert!(rows.iter().any(|row| matches!(row, Row::Big(Opt::LodDistance))));
+        assert!(rows.iter().any(|row| matches!(row, Row::Big(Opt::FarDetail))));
+
+        let nearby = (s.render_distance, s.simulation_distance);
+        assert_eq!(s.atlas.lod_distance, 0);
+        Opt::LodDistance.step_slider(&mut s, true, 310.0);
+        assert_eq!(s.atlas.lod_distance, 16);
+        Opt::LodDistance.set_slider(&mut s, 1.0);
+        assert_eq!(s.atlas.lod_distance, 4_194_304);
+        Opt::FarDetail.cycle(&mut s, false, [854, 480]);
+        assert_eq!(s.atlas.far_detail, crate::graphics::FarDetail::Reduced);
+        assert_eq!(nearby, (s.render_distance, s.simulation_distance));
+        Opt::LodDistance.set_slider(&mut s, 0.0);
+        assert_eq!(s.atlas.lod_distance, 0);
     }
 
     #[test]
