@@ -64,7 +64,10 @@ using System.Reflection;
     $atlasArguments = @('/nologo', '/target:winexe', '/platform:x64', '/langversion:5', '/codepage:65001', '/optimize+',
         "/win32icon:$atlasIcon", "/win32manifest:$atlasManifest", "/out:$atlasCompiled",
         "/resource:$(Join-Path $atlasRoot 'assets\atlas-landscape.png'),atlas.landscape",
-        "/resource:$(Join-Path $atlasRoot 'assets\icon.png'),atlas.mark")
+        "/resource:$(Join-Path $atlasRoot 'assets\icon.png'),atlas.mark",
+        "/resource:$(Join-Path $atlasRoot 'assets\fonts\Geist-Regular.ttf'),atlas.geist.regular",
+        "/resource:$(Join-Path $atlasRoot 'assets\fonts\Geist-SemiBold.ttf'),atlas.geist.semibold",
+        "/resource:$(Join-Path $atlasRoot 'assets\fonts\OFL-Geist.txt'),atlas.geist.license")
     if ($Preview) { $atlasArguments += '/define:ATLAS_PREVIEW' }
     $atlasArguments += $atlasReferences | ForEach-Object { "/reference:$(Join-Path $atlasFramework "$_.dll")" }
     $atlasArguments += $atlasMetadata

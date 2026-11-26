@@ -41,11 +41,12 @@ internal sealed partial class BootstrapWindow : Form
         status = new Label {
             AutoEllipsis = true, BackColor = Color.Transparent,
             ForeColor = Color.FromArgb(220, 225, 234), TextAlign = ContentAlignment.MiddleCenter,
-            AccessibleRole = AccessibleRole.StaticText
+            AccessibleRole = AccessibleRole.StaticText, UseCompatibleTextRendering = true
         };
         cancel = new Button {
             Text = "×", AccessibleName = Copy("Отмена", "Cancel"),
-            FlatStyle = FlatStyle.Flat, ForeColor = ForeColor, BackColor = Color.Transparent
+            FlatStyle = FlatStyle.Flat, ForeColor = ForeColor, BackColor = Color.Transparent,
+            UseCompatibleTextRendering = true
         };
         cancel.FlatAppearance.BorderSize = 0;
         cancel.FlatAppearance.MouseOverBackColor = Color.FromArgb(122, 75, 37, 31);
@@ -80,12 +81,12 @@ internal sealed partial class BootstrapWindow : Form
     {
         if (stop.IsCancellationRequested) return;
         if (received >= total) {
-            status.Text = Copy("Установка Atlas…", "Installing Atlas…");
+            status.Text = Copy("Установка обновления…", "Installing update…");
             SetProgress(ReadyProgress);
             return;
         }
         status.Text = string.Format(CultureInfo.CurrentCulture,
-            Copy("Скачивание Atlas · {0:N0} / {1:N0} МБ", "Downloading Atlas · {0:N0} / {1:N0} MB"),
+            Copy("Скачивание обновления · {0:N0} / {1:N0} МБ", "Downloading update · {0:N0} / {1:N0} MB"),
             received / 1048576.0, total / 1048576.0);
         SetProgress(ReadyProgress * received / total);
     }
@@ -124,11 +125,11 @@ internal sealed partial class BootstrapWindow : Form
                         if (fallback != null) check.CancelAfter(1500);
                         update = await UpdateCore.FindUpdateAsync(current, check.Token, version => {
                             check.CancelAfter(Timeout.Infinite);
-                            ui.Post(_ => ShowProgress(Copy("Подготовка обновления Atlas…", "Preparing the Atlas update…")), null);
+                            ui.Post(_ => ShowProgress(Copy("Подготовка обновления…", "Preparing the update…")), null);
                         });
                     }
                     if (update != null) {
-                        ShowProgress(Copy("Скачивание Atlas…", "Downloading Atlas…"));
+                        ShowProgress(Copy("Скачивание обновления…", "Downloading update…"));
                         var downloadProgress = new Progress<Tuple<long, long>>(bytes => ReportBytes(bytes.Item1, bytes.Item2));
                         installed = await UpdateCore.InstallAsync(root, update,
                             (received, total) => ((IProgress<Tuple<long, long>>)downloadProgress).Report(Tuple.Create(received, total)),
@@ -213,7 +214,7 @@ internal sealed partial class BootstrapWindow : Form
     private async Task Handoff(string executable)
     {
         SetProgress(ReadyProgress);
-        status.Text = Copy("Открываем Atlas…", "Opening Atlas…");
+        status.Text = Copy("Открываем лаунчер…", "Opening the launcher…");
         cancel.Enabled = false;
         var token = Guid.NewGuid().ToString("N");
         var temporary = Path.GetTempPath();
@@ -276,5 +277,6 @@ internal sealed partial class BootstrapWindow : Form
             if (finished) stop.Dispose();
         }
         base.Dispose(disposing);
+        if (disposing) DisposeTypefaces();
     }
 }

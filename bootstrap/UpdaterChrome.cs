@@ -1,16 +1,25 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 internal sealed partial class BootstrapWindow
 {
+    private const int CaptionHeight = 36;
     private static readonly Color Accent = Color.FromArgb(255, 139, 62);
     private static readonly Color Night = Color.FromArgb(12, 16, 22);
+    private static readonly Color Caption = Color.FromArgb(72, 16, 22, 29);
+    private readonly PrivateFontCollection typefaces = new PrivateFontCollection();
+    private readonly List<GCHandle> fontMemory = new List<GCHandle>(2);
+    private Font wordmarkFont;
+    private Font statusFont;
+    private Font closeFont;
     private Bitmap mark;
     private readonly Stopwatch motion = Stopwatch.StartNew();
     private readonly Timer animation = new Timer { Interval = 16 };
@@ -61,16 +70,75 @@ internal sealed partial class BootstrapWindow
         Bounds = new Rectangle(area.Left + (area.Width - width) / 2,
             area.Top + (area.Height - height) / 2, width, height);
         int control = Px(44);
-        cancel.SetBounds(width - control - Px(2), 0, control, Px(38));
-        status.SetBounds((width - Px(460)) / 2, height / 2 + Px(28), Px(460), Px(31));
-        status.Font = new Font("Segoe UI", Px(16), FontStyle.Regular, GraphicsUnit.Pixel);
-        cancel.Font = new Font("Segoe UI", Px(17), FontStyle.Regular, GraphicsUnit.Pixel);
+        cancel.SetBounds(width - control, 0, control, Px(CaptionHeight));
+        var rail = ProgressRail();
+        status.SetBounds((int)rail.X, (int)rail.Y + Px(16), (int)rail.Width, Px(31));
+        PrepareTypefaces();
         PrepareBackdrop();
     }
 
     private int Px(int value)
     {
         return Math.Max(1, (int)Math.Round(scale * value));
+    }
+
+    private bool CompactBrand { get { return ClientSize.Width <= Px(1200); } }
+
+    private void PrepareTypefaces()
+    {
+        if (fontMemory.Count == 0) {
+            AddTypeface("atlas.geist.regular");
+            AddTypeface("atlas.geist.semibold");
+        }
+        if (wordmarkFont != null) wordmarkFont.Dispose();
+        if (statusFont != null) statusFont.Dispose();
+        if (closeFont != null) closeFont.Dispose();
+        using (var geist = new FontFamily("Geist", typefaces))
+        using (var semibold = new FontFamily("Geist SemiBold", typefaces)) {
+            wordmarkFont = new Font(semibold, Px(CompactBrand ? 23 : 28), FontStyle.Regular, GraphicsUnit.Pixel);
+            statusFont = new Font(geist, Px(15), FontStyle.Regular, GraphicsUnit.Pixel);
+            closeFont = new Font(geist, Px(18), FontStyle.Regular, GraphicsUnit.Pixel);
+        }
+        status.Font = statusFont;
+        cancel.Font = closeFont;
+    }
+
+    private void AddTypeface(string name)
+    {
+        using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
+        using (var bytes = new MemoryStream()) {
+            stream.CopyTo(bytes);
+            var memory = GCHandle.Alloc(bytes.ToArray(), GCHandleType.Pinned);
+            fontMemory.Add(memory);
+            typefaces.AddMemoryFont(memory.AddrOfPinnedObject(), (int)bytes.Length);
+        }
+    }
+
+    private void DisposeTypefaces()
+    {
+        if (wordmarkFont != null) wordmarkFont.Dispose();
+        if (statusFont != null) statusFont.Dispose();
+        if (closeFont != null) closeFont.Dispose();
+        typefaces.Dispose();
+        foreach (var memory in fontMemory) memory.Free();
+        fontMemory.Clear();
+    }
+
+    protected override void WndProc(ref Message message)
+    {
+        const int WM_NCHITTEST = 0x0084, HTCLIENT = 1, HTCAPTION = 2;
+        base.WndProc(ref message);
+        if (message.Msg != WM_NCHITTEST || message.Result.ToInt32() != HTCLIENT || cancel == null) return;
+        var position = message.LParam.ToInt64();
+        var point = PointToClient(new Point(unchecked((short)position), unchecked((short)(position >> 16))));
+        if (point.Y >= 0 && point.Y < Px(CaptionHeight) && !cancel.Bounds.Contains(point))
+            message.Result = new IntPtr(HTCAPTION);
+    }
+
+    private RectangleF ProgressRail()
+    {
+        var width = Math.Min(Px(460), ClientSize.Width - Px(48));
+        return new RectangleF((ClientSize.Width - width) / 2f, ClientSize.Height / 2f + Px(12), width, Px(5));
     }
 
     private void PrepareBackdrop()
@@ -91,10 +159,8 @@ internal sealed partial class BootstrapWindow
             using (var gradient = new LinearGradientBrush(bounds,
                 Color.FromArgb(29, Night), Color.FromArgb(184, Night), 90f))
                 graphics.FillRectangle(gradient, bounds);
-            using (var band = new SolidBrush(Color.FromArgb(142, Night)))
-                graphics.FillRectangle(band, 0, 0, bounds.Width, Px(38));
-            using (var edge = new Pen(Color.FromArgb(48, Color.White)))
-                graphics.DrawLine(edge, 0, Px(38), bounds.Width, Px(38));
+            using (var band = new SolidBrush(Caption))
+                graphics.FillRectangle(band, 0, 0, bounds.Width, Px(CaptionHeight));
         }
     }
 
@@ -107,40 +173,33 @@ internal sealed partial class BootstrapWindow
     protected override void OnPaint(PaintEventArgs args)
     {
         base.OnPaint(args);
-        if (mark == null) return;
+        if (mark == null || wordmarkFont == null) return;
         var graphics = args.Graphics;
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
         graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-        using (var foreground = new SolidBrush(Color.WhiteSmoke))
-        using (var caption = new Font("Segoe UI", Px(13), FontStyle.Regular, GraphicsUnit.Pixel))
-        using (var wordmark = new Font("Segoe UI", Px(52), FontStyle.Bold, GraphicsUnit.Pixel))
-        using (var format = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center }) {
-            graphics.DrawImage(mark, Px(15), Px(10), Px(18), Px(18));
-            graphics.DrawString("Atlas Launcher", caption, foreground,
-                new RectangleF(Px(42), 0, Px(180), Px(38)), format);
-
-            var textWidth = graphics.MeasureString("Atlas", wordmark, int.MaxValue, format).Width;
-            var markSize = Px(62);
-            var center = ClientSize.Width / 2f;
-            var top = ClientSize.Height / 2f - Px(85);
-            var left = center - (markSize + Px(20) + textWidth) / 2f;
-            graphics.DrawImage(mark, left, top, markSize, markSize);
-            graphics.DrawString("Atlas", wordmark, foreground,
-                new RectangleF(left + markSize + Px(20), top, textWidth + Px(10), markSize), format);
-
-            var bar = new RectangleF(center - Px(230), ClientSize.Height / 2f + Px(12), Px(460), Px(5));
-            RoundedRail(graphics, bar, Color.FromArgb(72, Color.White));
-            if (portion.HasValue) {
-                bar.Width *= (float)ProgressAt(motion.ElapsedMilliseconds);
-                RoundedRail(graphics, bar, Accent);
-            } else {
-                var step = SystemInformation.UIEffectsEnabled ? (motion.ElapsedMilliseconds % 1500) / 1500f : .5f;
-                var segment = bar.Width * .28f;
-                bar.X += (bar.Width - segment) * (.5f - .5f * (float)Math.Cos(step * Math.PI * 2));
-                bar.Width = segment;
-                RoundedRail(graphics, bar, Accent);
-            }
+        var markSize = Px(CompactBrand ? 25 : 30);
+        var left = Px(CompactBrand ? 24 : 40);
+        var center = Px(CaptionHeight + (CompactBrand ? 45 : 49));
+        graphics.DrawImage(mark, new Rectangle(left, center - markSize / 2, markSize, markSize));
+        using (var foreground = new SolidBrush(Color.FromArgb(245, 246, 250)))
+        using (var format = StringFormat.GenericTypographic) {
+            format.LineAlignment = StringAlignment.Center;
+            graphics.DrawString("Atlas", wordmarkFont, foreground,
+                new RectangleF(left + markSize + Px(CompactBrand ? 7 : 10), center - Px(22), Px(160), Px(44)), format);
         }
+
+        var bar = ProgressRail();
+        RoundedRail(graphics, bar, Color.FromArgb(72, Color.White));
+        if (portion.HasValue) {
+            bar.Width *= (float)ProgressAt(motion.ElapsedMilliseconds);
+        } else {
+            var step = SystemInformation.UIEffectsEnabled ? (motion.ElapsedMilliseconds % 1500) / 1500f : .5f;
+            var segment = bar.Width * .28f;
+            bar.X += (bar.Width - segment) * (.5f - .5f * (float)Math.Cos(step * Math.PI * 2));
+            bar.Width = segment;
+        }
+        RoundedRail(graphics, bar, Accent);
     }
 
     private static void RoundedRail(Graphics graphics, RectangleF bar, Color color)
