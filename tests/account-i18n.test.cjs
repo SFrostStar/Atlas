@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const i18n = require('../i18n.js');
+const i18n = require('../src/i18n.js');
 
 test('account error codes and original English IPC messages localize in either language', () => {
   const english = 'Your Microsoft sign-in expired. Sign in again.';

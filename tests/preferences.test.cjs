@@ -73,7 +73,7 @@ test('old unlimited and missing budgets migrate to finite GB without changing ot
   assert.deepEqual(new LauncherStore(store.projectRoot).config.instances,saved.instances,'migration is stable across further launches');
 });
 test('locale lookup leaves custom names unchanged and translates complete UI labels',()=>{
-  const {t}=require('../i18n.js');
+  const {t}=require('../src/i18n.js');
   assert.equal(t('Мои сборки','en'),'Instances');
   assert.equal(t('Настройки','ru'),'Настройки');
   assert.equal(t('Мой сервер Atlas','en'),'Мой сервер Atlas');

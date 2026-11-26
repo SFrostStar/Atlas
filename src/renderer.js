@@ -299,7 +299,7 @@ function discordSettingsPanel() {
   const discord=state.discord||{enabled:false,status:'disabled'};
   const labels={disabled:'Выключено',connecting:'Подключение…',connected:'Подключено к Discord',waiting_for_discord:'Открой настольный Discord',needs_application_id:'Приложение Discord не настроено',error:'Не удалось подключиться'};
   const status=labels[discord.status]||'Подключение…';
-  return `<section class="panel"><div class="panel-heading">${icon('radio')}<h3>Discord Rich Presence</h3></div><div class="settings-row"><div><strong>Показывать Atlas в Discord</strong><p>${escapeHtml(status)}</p></div><label class="switch"><input type="checkbox" id="discord-presence" ${discord.enabled?'checked':''} aria-label="Показывать Atlas в Discord"><span class="switch-track"></span></label></div><div class="discord-preview"><img src="assets/icon.png" alt=""><div><strong>Atlas</strong><span>The Fastest Minecraft Launcher</span><small>v${escapeHtml(state.version)}</small></div></div>${discord.enabled&&discord.status!=='connected'?`<p class="subtitle">${escapeHtml(discord.error||'')}${button('refresh-discord','Переподключить','refresh-cw','quiet')}</p>`:''}</section>`;
+  return `<section class="panel"><div class="panel-heading">${icon('radio')}<h3>Discord Rich Presence</h3></div><div class="settings-row"><div><strong>Показывать Atlas в Discord</strong><p>${escapeHtml(status)}</p></div><label class="switch"><input type="checkbox" id="discord-presence" ${discord.enabled?'checked':''} aria-label="Показывать Atlas в Discord"><span class="switch-track"></span></label></div><div class="discord-preview"><img src="../assets/icon.png" alt=""><div><strong>Atlas</strong><span>The Fastest Minecraft Launcher</span><small>v${escapeHtml(state.version)}</small></div></div>${discord.enabled&&discord.status!=='connected'?`<p class="subtitle">${escapeHtml(discord.error||'')}${button('refresh-discord','Переподключить','refresh-cw','quiet')}</p>`:''}</section>`;
 }
 function logsPage() {
   return intro('Журнал запуска', '', button('open-logs','Папка логов','folder-open')) + '<div class="log-toolbar" id="log-sessions" role="group" aria-label="Окна игры" hidden></div><div class="log-console" id="log-console" tabindex="0" aria-label="Журнал запуска"></div>';
@@ -677,7 +677,7 @@ const initialStateReady = (async () => {
     window.dispatchEvent(new CustomEvent('atlas:ready', { detail: { splashDuration: performance.now() - startedAt } }));
     if (handoff && ready) {
       const landscape = new Image();
-      landscape.src = 'assets/atlas-landscape.png';
+      landscape.src = '../assets/atlas-landscape.png';
       await Promise.all([landscape.decode().catch(() => {}), document.fonts.ready]);
       requestAnimationFrame(() => requestAnimationFrame(() => {
         window.atlas.startupReady().catch(console.error);

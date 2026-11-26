@@ -88,7 +88,7 @@ main { min-width: 0; min-height: 0; display: flex; flex-direction: column; backg
 .tab { position: relative; height: 32px; padding: 0 0 12px; background: none; color: #929292; font-size: 16px; }
 .tab:hover, .tab.active { color: white; }
 .tab.active::after { content: ''; position: absolute; height: 2px; background: var(--orange); bottom: 0; left: 0; right: 0; }
-.hero { position: relative; height: 330px; overflow: hidden; border-radius: 9px 9px 0 0; background: #29211b url('assets/atlas-landscape.png') center 50% / cover; }
+.hero { position: relative; height: 330px; overflow: hidden; border-radius: 9px 9px 0 0; background: #29211b url('../assets/atlas-landscape.png') center 50% / cover; }
 .hero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #171310db, #20170e70 40%, #17131005 76%), linear-gradient(0deg, #1b130c30, transparent 50%); }
 .hero-copy { position: relative; height: 100%; display: flex; align-items: center; padding: 36px; }
 .hero h2 { color: white; font-size: 46px; letter-spacing: -1.5px; line-height: 1.12; font-weight: 550; }
@@ -293,10 +293,10 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, 
 .settings-row p,.subtitle,.context-heading,.local-badge { color:var(--muted); }
 @media(max-width:1080px) { .settings-row select { min-width:140px; } }
 
-/* Atlas application system. Shared geometry and palette: DESIGN.md. */
-@font-face { font-family:Geist; src:url('assets/fonts/Geist-Regular.ttf') format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
-@font-face { font-family:Geist; src:url('assets/fonts/Geist-Medium.ttf') format('truetype'); font-weight:500; font-style:normal; font-display:swap; }
-@font-face { font-family:Geist; src:url('assets/fonts/Geist-SemiBold.ttf') format('truetype'); font-weight:600 800; font-style:normal; font-display:swap; }
+/* Atlas application system. */
+@font-face { font-family:Geist; src:url('../assets/fonts/Geist-Regular.ttf') format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:Geist; src:url('../assets/fonts/Geist-Medium.ttf') format('truetype'); font-weight:500; font-style:normal; font-display:swap; }
+@font-face { font-family:Geist; src:url('../assets/fonts/Geist-SemiBold.ttf') format('truetype'); font-weight:600 800; font-style:normal; font-display:swap; }
 :root { --bg:#151719; --surface:#1e2125; --raised:#272c32; --border:#353a42; --text:#f4f3ef; --muted:#a7adb5; --sidebar:#181b1e; --input:#181b1f; --accent-ink:#211309; --success-bg:#203d32; --success-text:#b8e7ce; --error-bg:#3b2828; --error-text:#ffc4b4; --panel-radius:12px; --control-radius:8px; --motion:160ms; }
 body { font-family:Geist,'Segoe UI Variable Text','Segoe UI',sans-serif; font-size:15px; }
 ::selection { color:var(--accent-ink); background:var(--orange); }
@@ -492,7 +492,7 @@ dialog::backdrop { background:#090c10b8; backdrop-filter:none; }
 /* Stage 2: the user's full-window landscape and floating glass navigation. */
 :root { --surface:rgba(25,29,34,.76); --glass:rgba(23,27,32,.72); --glass-strong:rgba(23,27,32,.88); --glass-edge:rgba(226,234,243,.16); --raised:rgba(59,65,74,.62); --input:rgba(17,21,27,.58); --text:#f5f6f8; --muted:#c2c9d3; --border:rgba(212,224,238,.19); }
 body { position:relative; isolation:isolate; }
-body::before { content:''; position:fixed; inset:0; z-index:-2; pointer-events:none; background:#272623 url('assets/atlas-landscape.png') center 52% / cover no-repeat; filter:saturate(1.14) brightness(.87); }
+body::before { content:''; position:fixed; inset:0; z-index:-2; pointer-events:none; background:#272623 url('../assets/atlas-landscape.png') center 52% / cover no-repeat; filter:saturate(1.14) brightness(.87); }
 body::after { content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; background:linear-gradient(110deg,rgba(11,16,24,.6),rgba(11,16,24,.12) 64%,rgba(11,16,24,.24)),linear-gradient(0deg,rgba(9,14,20,.5),rgba(9,14,20,.02) 68%); }
 html[data-hero="minimal"] body::before { background:#1c2530; filter:none; }
 .window-bar { background:rgba(16,22,29,.28); backdrop-filter:blur(16px); border:0; color:#dce2eb; }

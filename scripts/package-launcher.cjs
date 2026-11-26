@@ -24,6 +24,7 @@ const { archiveNativeSource } = require('./native-source.cjs');
         /^\/(Atlas-Launcher\.exe|atlas-bootstrap-version\.txt|atlas-bootstrap\.lock|native-source\.json|Atlas-[\d.]+-Native-Source\.zip)$/i,
         /^\/\./,
         /^\/[^/]+\.(lnk|cmd|md|png)$/i,
+        /^\/src\/[^/]+\.cmd$/i,
         /^\/(options(?:of)?\.txt|(?:atlas|horizon)-(?:extras|graphics|player|controller)\.txt|(?:atlas|horizon)-shaders\.toml)$/i,
         /^\/(atlas-ports\.json|mod-catalog\.json|(?:atlas|horizon)-mods\.txt)$/i,
         /^\/(accounts.*|launcher\.json|session\.json|control\.json|credentials\.json|tokens\.json)$/i,

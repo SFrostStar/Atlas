@@ -3,17 +3,17 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
-const { LauncherStore } = require('./lib/launcher-store.cjs');
-const { GameSessions } = require('./lib/game-sessions.cjs');
-const { DiscordPresence, readPreference } = require('./lib/discord-rpc.cjs');
-const manifest = require('./package.json');
-const { AccountManager } = require('./lib/account-manager.cjs');
+const { LauncherStore } = require('../lib/launcher-store.cjs');
+const { GameSessions } = require('../lib/game-sessions.cjs');
+const { DiscordPresence, readPreference } = require('../lib/discord-rpc.cjs');
+const manifest = require('../package.json');
+const { AccountManager } = require('../lib/account-manager.cjs');
 const { t } = require('./i18n.js');
-const { GameInstallManager } = require('./lib/game-install.cjs');
-const { resolveLauncherLayout } = require('./lib/portable-root.cjs');
-const { ModManager } = require('./lib/mod-manager.cjs');
-const { NativeMods } = require('./lib/native-mods.cjs');
-const { ReleaseUpdater, pruneUpdates } = require('./lib/release-updater.cjs');
+const { GameInstallManager } = require('../lib/game-install.cjs');
+const { resolveLauncherLayout } = require('../lib/portable-root.cjs');
+const { ModManager } = require('../lib/mod-manager.cjs');
+const { NativeMods } = require('../lib/native-mods.cjs');
+const { ReleaseUpdater, pruneUpdates } = require('../lib/release-updater.cjs');
 
 app.setName('Atlas Launcher');
 if (process.platform === 'win32') app.setAppUserModelId('Atlas.Launcher.Desktop');
@@ -38,7 +38,8 @@ const launcherVersion = manifest.version;
 const logs = [];
 let publishTimer;
 let publishLogTimer;
-const layout = app.isPackaged ? resolveLauncherLayout(process.execPath) : { projectRoot: __dirname };
+const applicationRoot = path.dirname(__dirname);
+const layout = app.isPackaged ? resolveLauncherLayout(process.execPath) : { projectRoot: applicationRoot };
 const { projectRoot, bundleDirectory, bootstrapManaged = false } = layout;
 const startupDeadline = performance.timeOrigin + 1000;
 const guiTestRoot = !app.isPackaged && process.env.ATLAS_GUI_TEST;
@@ -325,8 +326,8 @@ else {
     const nativeMods = new NativeMods({
       project: projectRoot, dataRoot: store.dataRoot, version: launcherVersion,
       source: guiTest && process.env.ATLAS_GUI_NATIVE_SOURCE
-        ? process.env.ATLAS_GUI_NATIVE_SOURCE : path.join(__dirname, 'native-source'),
-      sourceManifest: path.join(__dirname, 'native-source.json'),
+        ? process.env.ATLAS_GUI_NATIVE_SOURCE : path.join(applicationRoot, 'native-source'),
+      sourceManifest: path.join(applicationRoot, 'native-source.json'),
       progress(stage, details = null) { nativeBuildStage = stage; nativeBuild = details; publishSoon(); },
       async confirm(bundles) {
         const language = store.config.settings.language;
@@ -408,7 +409,7 @@ else {
       minHeight: Math.min(740, handoff?.bounds.height ?? 740),
       ...handoff?.bounds,
       title: 'Atlas Launcher', frame: false, backgroundColor: '#171717', show: false,
-      ...(fs.existsSync(path.join(__dirname, 'assets', 'icon.png')) ? { icon: path.join(__dirname, 'assets', 'icon.png') } : {}),
+      ...(fs.existsSync(path.join(applicationRoot, 'assets', 'icon.png')) ? { icon: path.join(applicationRoot, 'assets', 'icon.png') } : {}),
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: !app.isPackaged },
     });
     window.setMenuBarVisibility(false);
