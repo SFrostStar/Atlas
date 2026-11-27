@@ -6567,6 +6567,7 @@ impl Renderer {
         self.block_entity_section_revisions.clear();
         self.block_entity_membership_revisions.clear();
         self.section_uploaded.clear();
+        self.atlas_chunk_animations.reset();
         self.newest_upload = None;
         self.newest_lod_fade = None;
         self.block_entity_revision = next_block_entity_revision();
@@ -8791,23 +8792,34 @@ impl Renderer {
             }
             section_visibility(uploaded.get(&key), fade_ms, now)
         };
-        let animation_config=self.atlas_chunk_animation;
-        let animation_now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-        let animations=&mut self.atlas_chunk_animations;
-        if animation_config.is_none(){animations.reset();}
-        if animation_config.is_some(){
-            let retained=self.section_uploaded.keys().map(|k|[k.0*16,self.sections.min_y()+k.1*16,k.2*16]).collect();
-            animations.retain(&retained);
+        let animation_config = self.atlas_chunk_animation;
+        let animation_now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let animations = &mut self.atlas_chunk_animations;
+        let min_y = sections.min_y();
+        if animation_config.is_some() {
+            // Sections fading in over LOD have no vanilla upload timestamp.
+            animations.retain(|[x, y, z]| {
+                let key = (x / 16, (y - min_y) / 16, z / 16);
+                sections.contains(key) || uploaded.contains_key(&key)
+            });
+        } else {
+            animations.reset();
         }
         self.origins.extend(
             visible
                 .iter()
                 .map(|v| {
                     let code = fade_code(sections.get(v.slot), &v.key);
-                    let mut origin=v.origin;
-                    if let Some(config)=animation_config {
-                        let offset=animations.offset([v.key.0*16,config.min_y+v.key.1*16,v.key.2*16],config,animation_now);
-                        for i in 0..3 {origin[i]+=offset[i];}
+                    let mut origin = v.origin;
+                    if let Some(config) = animation_config {
+                        let key = [v.key.0 * 16, min_y + v.key.1 * 16, v.key.2 * 16];
+                        let offset = animations.offset(key, config, animation_now);
+                        for i in 0..3 {
+                            origin[i] += offset[i];
+                        }
                     }
                     section_instance(origin, code, visibility(v.key))
                 })

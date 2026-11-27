@@ -27,6 +27,7 @@ impl Game<'_> {
             Action::Quit => event_loop.exit(),
             Action::Options => self.open_options(true),
             Action::Mods => self.open_options_at(true, atlas_client::options_ui::Page::Mods),
+            Action::SwitchAccount => self.ias_open(),
             Action::Accessibility => {
                 self.open_options_at(true, atlas_client::options_ui::Page::Accessibility)
             }

@@ -128,18 +128,8 @@ fn arrow_rect([x, y, w, h]: Rect, direction: i8) -> Rect {
     [x + w - inset, y, 11.0, h]
 }
 
-fn badge(mode: &str, w: f32, h: f32) -> Rect {
-    let x = w / 2.0;
-    if mode == "title" {
-        [
-            (x + 104.0).min(w - 22.0).floor(),
-            (h / 4.0 + 72.0).floor(),
-            20.0,
-            20.0,
-        ]
-    } else {
-        [(x + 158.0).min(w - 22.0).floor(), h - 30.0, 20.0, 20.0]
-    }
+fn multiplayer_badge(w: f32, h: f32) -> Rect {
+    [(w / 2.0 + 158.0).min(w - 22.0).floor(), h - 30.0, 20.0, 20.0]
 }
 
 fn set_rect(field: &mut EditBox, [x, y, w, h]: Rect) {
@@ -287,8 +277,8 @@ impl Game<'_> {
         ))
     }
 
-    fn ias_open(&mut self) {
-        if !self.atlas_open_port_screen(ID) {
+    pub(in crate::game) fn ias_open(&mut self) {
+        if self.ias_opener().is_none() || !self.atlas_open_port_screen(ID) {
             return;
         }
         self.native_mod_screen = Some(ACCOUNT_SCREEN.to_owned());
@@ -303,6 +293,10 @@ impl Game<'_> {
         state.last_click = None;
     }
 
+    pub(in crate::game) fn atlas_ias_title_button(&self) -> bool {
+        self.ias_opener() == Some("title") && self.atlas_ports.ias.config.button("title")
+    }
+
     pub(in crate::game) fn atlas_ias_draw_badge(&mut self, batch: &mut HudBatch) {
         let Some(mode) = self.ias_opener() else {
             return;
@@ -310,8 +304,8 @@ impl Game<'_> {
         self.atlas_ias_poll();
         let state = &self.atlas_ports.ias;
         let atlas = &self.gui.atlas;
-        if state.config.button(mode) {
-            let rect @ [x, y, w, h] = badge(mode, batch.width, batch.height);
+        if mode == "multiplayer" && state.config.button(mode) {
+            let rect @ [x, y, w, h] = multiplayer_badge(batch.width, batch.height);
             let hover = hit(rect, self.cursor);
             let message = lang::get("atlas.ias.open");
             widgets::record(&message, rect, true);
@@ -766,9 +760,10 @@ impl Game<'_> {
                 return false;
             };
             if let Some((_, w, h)) = self.ias_layout()
+                && mode == "multiplayer"
                 && button == 0
                 && self.atlas_ports.ias.config.button(mode)
-                && hit(badge(mode, w, h), self.cursor)
+                && hit(multiplayer_badge(w, h), self.cursor)
             {
                 self.atlas_ports.ias.swallow_release = true;
                 self.ias_open();

@@ -8,6 +8,12 @@ use std::{
 
 pub(super) const ID: &str = "atlas-esc-music";
 
+#[derive(Clone)]
+pub(super) struct AppVolume {
+    pub id: Arc<str>,
+    pub level: f32,
+}
+
 pub(super) struct Track {
     pub source_id: String,
     pub title: String,
@@ -18,6 +24,7 @@ pub(super) struct Track {
     pub repeat_one: bool,
     pub can_repeat: bool,
     pub can_seek: bool,
+    pub volume: Option<AppVolume>,
     pub(super) native_repeat: bool,
     pub sampled_at: Instant,
     pub cover: Option<Arc<Picture>>,
@@ -126,12 +133,27 @@ impl State {
         #[cfg(not(windows))]
         let _ = command;
     }
+
+    pub(super) fn set_volume(&mut self, id: &str, level: f32) {
+        #[cfg(windows)]
+        if let (Some(worker), Some(track)) = (&self.worker, self.track.as_mut())
+            && let Some(volume) = &mut track.volume
+            && volume.id.as_ref() == id
+            && (0.0..=1.0).contains(&level)
+            && worker.set_volume(track.source_id.clone(), volume.id.clone(), level)
+        {
+            volume.level = level;
+        }
+        #[cfg(not(windows))]
+        let _ = (id, level);
+    }
 }
 
 #[cfg(windows)]
 mod platform {
-    use super::{Command, Track, near_track_end};
+    use super::{AppVolume, Command, Track, near_track_end};
     use atlas_client::hud::{TextureFlags, pictures::Picture};
+    use atlas_system::audio_session::Mixer;
     use std::{
         sync::{Arc, mpsc},
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -155,6 +177,7 @@ mod platform {
     enum Request {
         Refresh,
         Action(Command, String, Option<bool>, u64),
+        Volume(String, Arc<str>, f32),
     }
 
     pub(super) struct Update {
@@ -204,6 +227,12 @@ mod platform {
                 .try_send(Request::Action(command, source_id, desired, request))
                 .is_ok()
         }
+
+        pub(super) fn set_volume(&self, source: String, id: Arc<str>, level: f32) -> bool {
+            self.requests
+                .try_send(Request::Volume(source, id, level))
+                .is_ok()
+        }
     }
 
     struct LocalRepeat {
@@ -212,9 +241,11 @@ mod platform {
     }
 
     fn run(input: mpsc::Receiver<Request>, output: mpsc::Sender<Update>) {
+        let mixer = Mixer::new();
         let mut manager = None;
         let mut cover = None;
         let mut repeat: Option<LocalRepeat> = None;
+        let mut last_volume: Option<(String, Instant, Option<AppVolume>)> = None;
         loop {
             let request = if repeat.is_some() {
                 match input.recv_timeout(Duration::from_millis(75)) {
@@ -274,6 +305,38 @@ mod platform {
                 .map(|session| snapshot(session, &mut cover));
             if track.is_none() {
                 cover = None;
+                last_volume = None;
+            }
+            if let Some(track) = &mut track {
+                let refresh = matches!(request, Some(Request::Volume(..)))
+                    || last_volume.as_ref().is_none_or(|(source, when, _)| {
+                        source != &track.source_id || when.elapsed() >= Duration::from_millis(450)
+                    });
+                if refresh {
+                    let volume = mixer.as_ref().and_then(|mixer| {
+                        let target = mixer.target(&track.source_id)?;
+                        if let Some(Request::Volume(source, id, level)) = &request
+                            && &track.source_id == source
+                            && target.id == id.as_ref()
+                            && manager
+                                .as_ref()
+                                .and_then(|manager| manager.GetCurrentSession().ok())
+                                .and_then(|session| session.SourceAppUserModelId().ok())
+                                .is_some_and(|active| active.to_string() == *source)
+                        {
+                            target.set_level(*level);
+                        }
+                        let level = target.level()?;
+                        Some(AppVolume {
+                            id: target.id.into(),
+                            level,
+                        })
+                    });
+                    last_volume = Some((track.source_id.clone(), Instant::now(), volume));
+                }
+                track.volume = last_volume
+                    .as_ref()
+                    .and_then(|(_, _, volume)| volume.clone());
             }
             if repeat
                 .as_ref()
@@ -465,6 +528,7 @@ mod platform {
             repeat_one,
             can_repeat,
             can_seek,
+            volume: None,
             native_repeat,
             sampled_at: Instant::now(),
             cover: cache.as_ref().and_then(|cover| cover.picture.clone()),
@@ -535,6 +599,7 @@ mod tests {
             repeat_one: false,
             can_repeat: true,
             can_seek: true,
+            volume: None,
             native_repeat: false,
             sampled_at: Instant::now(),
             cover: None,

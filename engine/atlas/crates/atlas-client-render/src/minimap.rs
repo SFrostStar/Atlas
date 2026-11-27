@@ -186,6 +186,8 @@ pub struct View {
     pub rotate: bool,
     pub blocks_per_pixel: f32,
     pub round: bool,
+    pub grid: bool,
+    pub atlas_style: bool,
 }
 impl View {
     /// Whether the image for `self` would look different from `other`'s.
@@ -197,6 +199,8 @@ impl View {
             || turned
             || self.rotate != other.rotate
             || self.round != other.round
+            || self.grid != other.grid
+            || self.atlas_style != other.atlas_style
             || self.blocks_per_pixel != other.blocks_per_pixel
     }
     /// The world's right and forward directions as the map's x and up.
@@ -212,6 +216,17 @@ impl View {
         let (r, f) = self.axes();
         // The direction (0, -1) in the map's (right, -forward) basis.
         (-r[1] as f32, f[1] as f32)
+    }
+    /// The map image's offset in texels from its centre to a world position.
+    pub fn project(&self, x: f64, z: f64) -> [f32; 2] {
+        let (right, forward) = self.axes();
+        let dx = x - self.x;
+        let dz = z - self.z;
+        let scale = f64::from(self.blocks_per_pixel).recip();
+        [
+            ((dx * right[0] + dz * right[1]) * scale) as f32,
+            (-(dx * forward[0] + dz * forward[1]) * scale) as f32,
+        ]
     }
 }
 
@@ -255,6 +270,30 @@ fn brightness(color: u8, height: i16, north: Option<i16>, depth: u8, parity: i32
 }
 const UNKNOWN: [u8; 4] = [20, 20, 20, 200];
 const BORDER: [u8; 4] = [10, 10, 10, 230];
+
+fn terrain_color(color: u8, height: i16, north: Option<i16>, depth: u8, x: i32, z: i32) -> [u8; 4] {
+    let id = color & !WALL;
+    let rgb = match id {
+        1 => 0x6a8a47,  // grass
+        2 => 0xd7c58c,  // sand
+        7 => 0x406038,  // foliage
+        11 => 0x777a7c, // stone
+        WATER => 0x385a9b,
+        _ => MAP_COLORS.get(usize::from(id)).copied().unwrap_or_default(),
+    };
+    let light = if color & WALL != 0 {
+        -36
+    } else if id == WATER {
+        16 - i32::from(depth.min(25)) * 2
+    } else {
+        (i32::from(height) - i32::from(north.unwrap_or(height))).clamp(-4, 4) * 6
+    };
+    // Grain stays fixed on the block, including at fractional zoom.
+    let hash = (x as u32).wrapping_mul(0x9e37_79b9) ^ (z as u32).wrapping_mul(0x85eb_ca6b);
+    let grain = (hash >> 29) as i32 - 4;
+    let channel = |shift: u32| (((rgb >> shift & 255) as i32 + light + grain).clamp(0, 255)) as u8;
+    [channel(16), channel(8), channel(0), 255]
+}
 
 #[derive(Default)]
 pub struct Minimap {
@@ -326,7 +365,21 @@ impl Minimap {
         scanned
     }
     /// Recompose the image if the view or the tiles changed; true when it did.
-    pub fn compose(&mut self, view: View) -> bool {
+    pub fn compose(&mut self, mut view: View) -> bool {
+        let (r, f) = view.axes();
+        let bpp = f64::from(view.blocks_per_pixel);
+        // At a fixed heading, movement shifts whole texels without changing their samples.
+        let (origin, offset) = if view.atlas_style {
+            let [u, v] = [
+                ((view.x * r[0] + view.z * r[1]) / bpp).round(),
+                (-(view.x * f[0] + view.z * f[1]) / bpp).round(),
+            ];
+            view.x = bpp * (u * r[0] - v * f[0]);
+            view.z = bpp * (u * r[1] - v * f[1]);
+            ([0.0; 2], [u, v])
+        } else {
+            ([view.x, view.z], [0.0; 2])
+        };
         if !self.changed
             && self.composed.is_some_and(|c| !view.differs(&c))
             && !self.image.is_empty()
@@ -336,8 +389,6 @@ impl Minimap {
         self.changed = false;
         self.composed = Some(view);
         self.image.resize(SIZE * SIZE * 4, 0);
-        let (r, f) = view.axes();
-        let bpp = f64::from(view.blocks_per_pixel);
         let half = SIZE as f64 / 2.0;
         let mut cached: Option<((i32, i32), &Tile)> = None;
         let mut column = |x: i32, z: i32| -> Option<(u8, i16, u8)> {
@@ -357,35 +408,62 @@ impl Minimap {
             for i in 0..SIZE {
                 let (u, v) = (i as f64 + 0.5 - half, j as f64 + 0.5 - half);
                 let o = (j * SIZE + i) * 4;
-                let edge = if view.round {
-                    let d = (u * u + v * v).sqrt();
-                    if d > half {
-                        self.image[o..o + 4].copy_from_slice(&[0; 4]);
-                        continue;
-                    }
-                    d > half - 1.5
+                let inset = if view.round {
+                    half - (u * u + v * v).sqrt()
                 } else {
-                    i == 0 || j == 0 || i == SIZE - 1 || j == SIZE - 1
+                    half - u.abs().max(v.abs())
                 };
-                if edge {
-                    self.image[o..o + 4].copy_from_slice(&BORDER);
+                let frame = if inset < 0.0 {
+                    Some([0; 4])
+                } else if view.atlas_style {
+                    match inset as u32 {
+                        0 => Some([15, 17, 20, 255]),
+                        1 => Some(if u + v < 0.0 {
+                            [172, 177, 182, 255]
+                        } else {
+                            [131, 137, 144, 255]
+                        }),
+                        2 => Some([49, 54, 57, 255]),
+                        _ => None,
+                    }
+                } else {
+                    (inset < if view.round { 1.5 } else { 1.0 }).then_some(BORDER)
+                };
+                if let Some(frame) = frame {
+                    self.image[o..o + 4].copy_from_slice(&frame);
                     continue;
                 }
-                let wx = view.x + bpp * (u * r[0] - v * f[0]);
-                let wz = view.z + bpp * (u * r[1] - v * f[1]);
+                let (u, v) = (u + offset[0], v + offset[1]);
+                let wx = origin[0] + bpp * (u * r[0] - v * f[0]);
+                let wz = origin[1] + bpp * (u * r[1] - v * f[1]);
                 let (x, z) = (wx.floor() as i32, wz.floor() as i32);
-                let rgba = match column(x, z) {
+                let mut rgba = match column(x, z) {
                     Some((color, height, depth)) if color & !WALL != 0 => {
                         let north = column(x, z - 1).filter(|c| c.0 & !WALL != 0).map(|c| c.1);
-                        let b = brightness(color, height, north, depth, x + z);
-                        packed_rgba(color & !WALL, b)
+                        if view.atlas_style {
+                            terrain_color(color, height, north, depth, x, z)
+                        } else {
+                            let b = brightness(color, height, north, depth, x + z);
+                            packed_rgba(color & !WALL, b)
+                        }
                     }
                     _ => UNKNOWN,
                 };
+                if view.grid
+                    && rgba[3] == 255
+                    && (wx.rem_euclid(16.0) < bpp || wz.rem_euclid(16.0) < bpp)
+                {
+                    for channel in &mut rgba[..3] {
+                        *channel /= 2;
+                    }
+                }
                 self.image[o..o + 4].copy_from_slice(&rgba);
             }
         }
         true
+    }
+    pub fn rendered_view(&self) -> Option<View> {
+        self.composed
     }
     pub fn tile_count(&self) -> usize {
         self.tiles.len()
@@ -641,6 +719,8 @@ mod tests {
             rotate: false,
             blocks_per_pixel: 1.0,
             round: false,
+            grid: false,
+            atlas_style: false,
         };
         assert!(map.compose(view));
         assert!(!map.compose(view), "the same view is not recomposed");
@@ -667,6 +747,52 @@ mod tests {
         assert!(!map.compose(view));
         view.x += 0.2;
         assert!(map.compose(view));
+    }
+
+    #[test]
+    fn atlas_samples_slide_without_resampling_at_a_fixed_heading() {
+        let mut map = Minimap::default();
+        let facts = BlockFacts {
+            states: Vec::new(),
+            air: atlas_world::registry::BlockStateId(0),
+            woods: Default::default(),
+        };
+        map.palette = Some(palette());
+        let world = world_with(vec![grass_chunk(-1, -1), grass_chunk(0, 0)]);
+        map.update(
+            &world,
+            &facts,
+            (0, 0),
+            1,
+            Layer::Surface,
+            Duration::from_secs(1),
+        );
+        let mut view = View {
+            x: 0.0,
+            z: 0.0,
+            yaw: 37.0,
+            rotate: true,
+            blocks_per_pixel: 1.0,
+            round: false,
+            grid: false,
+            atlas_style: true,
+        };
+        assert!(map.compose(view));
+        let before = map.image.clone();
+        let (right, _) = view.axes();
+        view.x = 0.3 * right[0];
+        view.z = 0.3 * right[1];
+        assert!(!map.compose(view));
+        view.x = right[0];
+        view.z = right[1];
+        assert!(map.compose(view));
+        for row in 3..SIZE - 3 {
+            let pixel = |column| (row * SIZE + column) * 4;
+            assert_eq!(
+                before[pixel(4)..pixel(SIZE - 3)],
+                map.image[pixel(3)..pixel(SIZE - 4)]
+            );
+        }
     }
 
     #[test]

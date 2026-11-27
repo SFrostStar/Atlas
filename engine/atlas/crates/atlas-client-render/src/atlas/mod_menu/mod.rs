@@ -64,6 +64,10 @@ pub fn images() -> Vec<(&'static str, &'static [u8])> {
             include_bytes!("assets/atlas-saturation-plus.png"),
         ),
         (
+            "atlas/modmenu/icons/atlas-minimap",
+            include_bytes!("assets/atlas-minimap.png"),
+        ),
+        (
             "atlas/modmenu/mod_configuration",
             include_bytes!("assets/modmenu/gui/mod_configuration.png"),
         ),

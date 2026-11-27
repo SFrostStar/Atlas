@@ -14,7 +14,9 @@ pub struct Button {
     pub trailing: Option<(&'static str, f32)>,
     pub action: Option<crate::widgets::Action>,
 }
-pub fn buttons(w: f32, h: f32, microsoft_account: bool) -> Vec<Button> {
+pub const ACCOUNT_SWITCHER: u8 = 20;
+
+pub fn buttons(w: f32, h: f32, microsoft_account: bool, account_switcher: bool) -> Vec<Button> {
     let b = |x: f32, y: f32, w: f32, label: &str, enabled: bool, id: u8| Button {
         x,
         y,
@@ -131,9 +133,33 @@ pub fn buttons(w: f32, h: f32, microsoft_account: bool) -> Vec<Button> {
             }
         }
     }
+    if account_switcher {
+        // Adding one button at the end shifts the existing row by half a step.
+        let mut last_icon = None;
+        for button in buttons.iter_mut().filter(|b| b.icon.is_some()) {
+            button.x -= 12.0;
+            last_icon = Some((button.x, button.y));
+        }
+        if let Some((x, y)) = last_icon {
+            buttons.push(b(
+                x + 24.0,
+                y,
+                20.0,
+                &lang::get("atlas.ias.open"),
+                true,
+                ACCOUNT_SWITCHER,
+            ));
+        }
+    }
     buttons
 }
-pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons: &[Button]) {
+pub fn draw(
+    atlas: &HudAtlas,
+    batch: &mut HudBatch,
+    cursor: (f32, f32),
+    buttons: &[Button],
+    focused_button: Option<u8>,
+) {
     crate::atlas_menu::background(batch, atlas);
     let (w, h) = (batch.width, batch.height);
     let cx = (w / 2.0).floor();
@@ -159,16 +185,26 @@ pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons:
         rgba(237, 242, 244, 255),
         super::NAME,
     );
+    let mut tooltip = None;
     for b in buttons {
-        crate::widgets::record(&b.label, [b.x, b.y, b.w, 20.0], b.enabled);
+        let rect = [b.x, b.y, b.w, 20.0];
+        crate::widgets::record(&b.label, rect, b.enabled);
         let hover = b.enabled
             && cursor.0 >= b.x
             && cursor.0 < b.x + b.w
             && cursor.1 >= b.y
             && cursor.1 < b.y + 20.0;
+        let focused = b.enabled && focused_button == Some(b.id);
+        crate::widgets::widget_cursor(hover, b.enabled);
+        crate::widgets::narratable(|| {
+            crate::widgets::Narratable::button(b.label.clone(), rect, b.enabled)
+                .hovered(hover)
+                .focused(focused)
+        });
+        let highlighted = hover || focused;
         let fill = if !b.enabled {
             rgba(24, 32, 40, 210)
-        } else if hover {
+        } else if highlighted {
             rgba(42, 60, 71, 245)
         } else {
             rgba(23, 37, 48, 225)
@@ -182,7 +218,12 @@ pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons:
             3.0 * k,
             rgba(93, 128, 145, 65),
         );
-        if let Some((icon, size)) = b.icon {
+        if b.id == ACCOUNT_SWITCHER {
+            draw_account_icon(atlas, ui.batch, b.x + 2.0, b.y + 2.0);
+            if hover {
+                tooltip = Some(&b.label);
+            }
+        } else if let Some((icon, size)) = b.icon {
             ui.batch.sprite_scaled(
                 atlas,
                 &format!("gui/sprites/{}", if icon == "modmenu/mods/enabled" && hover { "modmenu/mods/focused" } else { icon }),
@@ -234,6 +275,40 @@ pub fn draw(atlas: &HudAtlas, batch: &mut HudBatch, cursor: (f32, f32), buttons:
         notice,
     );
     ui.finish();
+    if let Some(label) = tooltip {
+        crate::ui::tooltip(batch, atlas, &[Text::literal(label)], cursor);
+    }
+}
+
+/// The IAS arrows and faces, recoloured to sit directly on the Atlas button.
+fn draw_account_icon(atlas: &HudAtlas, batch: &mut HudBatch, x: f32, y: f32) {
+    let glyph = [
+        b".....#..........",
+        b"......#...#..#..",
+        b".#######.+.++.++",
+        b".#######.++++++.",
+        b".##...#...++++..",
+        b".##..#....+..+..",
+        b".##.............",
+        b".##..........##.",
+        b".............##.",
+        b"##..##...#...##.",
+        b"#.++.#..#....##.",
+        b"+++++..########.",
+        b"..++...########.",
+        b"..++....#.......",
+        b".........#......",
+    ];
+    for (row, pixels) in glyph.iter().enumerate() {
+        for (col, &pixel) in pixels.iter().enumerate() {
+            let color = match pixel {
+                b'#' => rgba(225, 234, 239, 255),
+                b'+' => rgba(148, 171, 185, 255),
+                _ => continue,
+            };
+            batch.fill(atlas, x + col as f32, y + row as f32, 1.0, 1.0, color);
+        }
+    }
 }
 
 impl Button {

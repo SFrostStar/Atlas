@@ -5808,7 +5808,7 @@ impl Game<'_> {
     fn title_input_active(&self) -> bool {
         self.title.is_some() && self.screen != Screen::DebugOptions
     }
-    fn hud(&mut self, size: [u32; 2]) -> HudBatch {
+    fn hud(&mut self, size: [u32; 2], waypoints: Option<(glam::DVec3, glam::Mat4)>) -> HudBatch {
         // Off a world (title, options, Win, a prompt before joining) the HUD shows nothing to
         // keep clear of; `hud_layers` fills it in once the world's HUD draws.
         let gui = HudBatch::new(size);
@@ -5822,7 +5822,7 @@ impl Game<'_> {
         {
             HudBatch::new(size)
         } else {
-            self.hud_layers(size)
+            self.hud_layers(size, waypoints)
         };
         // Vanilla's confirmation replaces the dialog as the screen.
         if self.command_prompt.is_none() {
@@ -5844,7 +5844,7 @@ impl Game<'_> {
         self.resolve_inline_profiles(&batch.inline_profiles);
         batch
     }
-    fn hud_layers(&mut self, size: [u32; 2]) -> HudBatch {
+    fn hud_layers(&mut self, size: [u32; 2], waypoints: Option<(glam::DVec3, glam::Mat4)>) -> HudBatch {
         self.input_hud_begin();
         let mut batch = HudBatch::new(size);
         batch.glint_colour = self.pvp_glint_texel();
@@ -5914,7 +5914,9 @@ impl Game<'_> {
             // TitleScreen.extractRenderState, then ToastManager over it: vanilla
             // draws the toast manager on every screen, so a pack download or a
             // resource-reload failure still shows on the title (#4428).
-            if let Some(title) = &self.title {
+            let account_switcher = self.atlas_ias_title_button();
+            if let Some(title) = &mut self.title {
+                title.atlas_account_switcher = account_switcher;
                 title.draw_with_items(
                     &self.gui.atlas,
                     Some(&self.pack.item_renderer),
@@ -5962,6 +5964,9 @@ impl Game<'_> {
         if show_hud {
             self.draw_spyglass(&mut batch);
             guide_from = batch.vertices.len();
+            if let Some((camera, projection)) = waypoints {
+                self.draw_atlas_minimap_world_labels(&mut batch, camera, projection);
+            }
             // Hud.extractCrosshair / extractItemHotbar / extractPlayerHealth /
             // extractVehicleHealth and the experience bar, laid out by hud_layout.
             // Combat feel Legacy hides the attack indicator unless the player keeps it.
@@ -6217,6 +6222,7 @@ impl Game<'_> {
             self.gui_layer("minecraft:tab_list", &mut batch, |g, batch| {
                 g.draw_tab_list(batch);
             });
+            self.draw_minimap_over_tab(&mut batch);
         }
         // Screen.extractBlurredBackground blurs the world and HUD, while the
         // screen's background, widgets, toasts and debug overlay stay sharp.
@@ -9443,7 +9449,12 @@ impl Game<'_> {
         });
         pr.lap("pr_projection");
         // GUI hooks project against this frame's camera, including its bob/spin and FOV.
-        let mut hud = atlas_client::spans::time("hud", || self.hud(size));
+        let waypoints = (!title && self.atlas_minimap_world_labels_shown()).then(|| {
+            let aspect = projection_aspect.unwrap_or_else(|| size[0] as f32 / size[1].max(1) as f32);
+            let view = atlas_client::gfx::View::screen(yaw, pitch, fov_degrees, aspect, depth_far);
+            (camera, view.view_proj(bob * spin))
+        });
+        let mut hud = atlas_client::spans::time("hud", || self.hud(size, waypoints));
         self.flush_ime(&mut hud);
         self.native_gui_render_post(&mut hud, self.ui.hide_gui, self.focused);
         self.resolve_inline_profiles(&hud.inline_profiles);
@@ -10180,7 +10191,7 @@ impl Game<'_> {
                 if !pressed {
                     self.atlas_macros_input(&atlas_client::keybinds::mouse_name(*button), false);
                 }
-                if self.atlas_macros_mouse(*button, pressed) {
+                if self.atlas_macros_mouse(*button, pressed) || self.atlas_minimap_waypoints_mouse(*button, pressed) {
                     return Ok(());
                 }
                 let button = glfw_button(*button);
@@ -10372,7 +10383,7 @@ impl Game<'_> {
                         }) * wheel_sensitivity
                     };
                     let d = scaled(raw_y) as f32;
-                    if self.atlas_macros_scroll(d)||self.atlas_ias_scroll(d)||self.atlas_config_scroll(d)||self.atlas_visual_screen_scroll(d){return Ok(());}
+                    if self.atlas_macros_scroll(d)||self.atlas_minimap_waypoints_scroll(d)||self.atlas_ias_scroll(d)||self.atlas_config_scroll(d)||self.atlas_visual_screen_scroll(d){return Ok(());}
                     // ScreenEvent.MouseScrolled.Pre: the open screen hears of
                     // the wheel before anything scrolls, and a cancelled turn
                     // scrolls nothing — no bundle, no list, slider or

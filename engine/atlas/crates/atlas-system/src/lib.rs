@@ -4,12 +4,14 @@
 //! renderer's GPU info read it; the platform re-exports it (`atlas_platform::system`) for the
 //! Atlas layer (docs/layers.md#engine).
 //!
-//! Only what explains performance: no serial number, host name, user name or path is read. The
+//! Machine probes read only what explains performance, without serial numbers or personal names. The
 //! slower probes (a command to run) are read once per process. [`scrub`] reads the user name only
 //! to take it out of text that leaves the machine (a telemetry item, a bug report's bundle).
 use std::path::Path;
 use std::sync::OnceLock;
 
+#[cfg(windows)]
+pub mod audio_session;
 pub mod scrub;
 
 /// What `program args` prints, trimmed, when it succeeds and prints something. On Windows the

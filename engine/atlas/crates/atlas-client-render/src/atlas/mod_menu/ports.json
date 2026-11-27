@@ -616,5 +616,17 @@
     "credits": {"contributor": ["Thomas7520 (reference mod)"]},
     "dependencies": {"atlas": ">=1.4.1"},
     "client": true
+  },
+  {
+    "id": "atlas-minimap",
+    "name": "Atlas Minimap",
+    "version": "1.0.0",
+    "description": "atlas.minimap.description",
+    "authors": ["SFrostStar"],
+    "licenses": ["MIT"],
+    "credits": {"contributor": ["xaero96 (behavioral reference)"]},
+    "dependencies": {"atlas": ">=1.4.2"},
+    "icon": "atlas/modmenu/icons/atlas-minimap",
+    "client": true
   }
 ]

@@ -93,6 +93,14 @@ AppleSkin uses `config/appleskin.json5` and the original payloads
 `appleskin:natural_regeneration`. The integrated Atlas server synchronizes them;
 external-server exhaustion requires a compatible server plugin, as in Java.
 
+Atlas Minimap uses the client's loaded chunk tiles for its square and circular
+displays, rotating and north-up views, cave layer, radar and chunk grid.
+`Y` opens settings, `B` creates a marker, `U` opens its list, `Z` enlarges the
+map, and numpad `+` creates a temporary marker. Permanent markers are scoped to
+the active world or server level and saved in the instance's config. The
+implementation and interface are original Atlas code and artwork, with controls
+and defaults checked against Xaero's Minimap 26.4.2 by xaero96.
+
 ## Updating the engine
 
 The feature code stays in `crates/atlas-client/src/game/atlas_ports/` and

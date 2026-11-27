@@ -374,6 +374,7 @@ pub enum Action {
     Quit,
     Options,
     Mods,
+    SwitchAccount,
     Accessibility,
     Language,
     /// AccessibilityOnboardingScreen's Music & Sounds button.
@@ -410,6 +411,7 @@ pub struct Title {
     pub mode: Mode,
     /// Realms is relevant only for a launcher-provided Microsoft session.
     microsoft_account: bool,
+    pub atlas_account_switcher: bool,
     /// Direct Connection's address, synchronized with `options.txt`'s `lastServer`.
     pub last_server: String,
     /// `skipMultiplayerWarning`, synchronized with `options.txt` the same way.
@@ -757,6 +759,7 @@ impl Title {
         Self {
             mode,
             microsoft_account: crate::auth::current().is_some(),
+            atlas_account_switcher: false,
             last_server: String::new(),
             skip_multiplayer_warning: false,
             saves,
@@ -1818,7 +1821,12 @@ impl Title {
         };
         match &self.mode {
             Mode::Main => {
-                let mut buttons = crate::atlas::menu::buttons(w, h, self.microsoft_account);
+                let mut buttons = crate::atlas::menu::buttons(
+                    w,
+                    h,
+                    self.microsoft_account,
+                    self.atlas_account_switcher,
+                );
                 for button in &mut buttons {
                     match button.id {
                         2 => button.action = Some(crate::widgets::Action::Exit),
@@ -3566,6 +3574,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             }
             (Mode::Main, Some(2)) => Action::Quit,
             (Mode::Main, Some(19)) => Action::Mods,
+            (Mode::Main, Some(crate::atlas::menu::ACCOUNT_SWITCHER)) => Action::SwitchAccount,
             (Mode::BanNotice(_), Some(id @ 120..=122)) => {
                 // BanNoticeScreens' callback: Open in Browser opens the link, Copy copies it
                 // and answers no; all of them run `next`.

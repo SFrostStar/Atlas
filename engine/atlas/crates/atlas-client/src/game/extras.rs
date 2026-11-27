@@ -64,6 +64,7 @@ impl Game<'_> {
         if !playing {
             self.extras.mouse = [false; 2];
         }
+        self.atlas_minimap_frame();
         self.update_minimap();
         // For mods (`render.frame-stats`, `native_frame_rate`).
         let now = self.extras_now();
@@ -92,7 +93,8 @@ impl Game<'_> {
         if self.title.is_some() || self.ui.hide_gui {
             return None;
         }
-        let m = self.minimap_wanted()?;
+        let atlas_minimap = self.atlas_minimap_request();
+        let m = atlas_minimap.or_else(|| self.native_minimap_now())?;
         let view = View {
             x: p.position.x,
             z: p.position.z,
@@ -100,12 +102,15 @@ impl Game<'_> {
             rotate: m.rotate,
             blocks_per_pixel: m.blocks_per_pixel,
             round: m.round,
+            grid: self.atlas_minimap_grid(),
+            atlas_style: atlas_minimap.is_some(),
         };
         Some((m.corner, m.size, view))
     }
     /// The minimap shown: a native mod's (`native_minimap`).
     fn minimap_wanted(&self) -> Option<NativeMinimap> {
-        self.native_minimap_now()
+        self.atlas_minimap_request()
+            .or_else(|| self.native_minimap_now())
     }
     /// Refresh the minimap's tiles within the frame budget, recompose its
     /// image when the view or a tile changed, and queue the upload.
@@ -128,11 +133,12 @@ impl Game<'_> {
         let (bx, bz) = (view.x.floor() as i32, view.z.floor() as i32);
         // Underground, under a roof or in the Nether: the floor around the player.
         let covered = self.world.light(bx, head, bz) >> 4 == 0;
-        let layer = if self.world.shape.has_ceiling || covered {
+        let automatic = if self.world.shape.has_ceiling || covered {
             Layer::Below(head)
         } else {
             Layer::Surface
         };
+        let layer = self.atlas_minimap_layer(head, automatic);
         // The chunks the image can reach (its corners when it turns).
         let reach = minimap::SIZE as f32 / 2.0 * view.blocks_per_pixel * std::f32::consts::SQRT_2;
         let radius = ((reach / 16.0).ceil() as i32 + 1).min(self.settings.render_distance.max(2));
@@ -184,32 +190,48 @@ impl Game<'_> {
     pub(super) fn zoom_turn_scale(&self) -> f64 {
         self.zoom_now().2
     }
-    /// The minimap and mods' corner panels, in the HUD layer (hidden with F1
-    /// by the caller). The top left corner gives way to the debug screen.
-    pub(super) fn draw_extras(&mut self, batch: &mut HudBatch) {
-        let map = self.minimap_shown();
-        let visible = |corner| !(self.debug && corner == Corner::TopLeft);
-        let mut corners = Corners::new(batch.width, batch.height, self.effect_rows_height());
+    fn draw_minimap(&self, batch: &mut HudBatch, corners: &mut Corners, above_tab: bool) {
         let atlas = &self.gui.atlas;
-        if let Some((map_corner, map_size, view)) = map
-            && visible(map_corner)
+        if let Some((map_corner, map_size, view)) = self.minimap_shown()
+            && !(self.debug && map_corner == Corner::TopLeft)
             && !self.extras.minimap.image.is_empty()
             && let Some(image) = atlas.sprites.get(MINIMAP_SPRITE).copied()
         {
-            let (arrow, north) = if view.rotate {
-                (0.0, Some(view.north()))
-            } else {
-                (180.0 + view.yaw, None)
-            };
-            let look = extras_hud::MinimapLook {
-                corner: map_corner,
-                size: map_size,
-                image,
-                arrow,
-                north,
-            };
-            extras_hud::draw_minimap(batch, atlas, &mut corners, &look);
+            if view.atlas_style {
+                let drawn = self.extras.minimap.rendered_view().unwrap_or(view);
+                let paint = above_tab == self.atlas_minimap_portraits();
+                self.draw_atlas_minimap(batch, corners, map_corner, image, drawn, paint);
+            } else if !above_tab {
+                let (arrow, north) = if view.rotate {
+                    (0.0, Some(view.north()))
+                } else {
+                    (180.0 + view.yaw, None)
+                };
+                let look = extras_hud::MinimapLook {
+                    corner: map_corner,
+                    size: map_size,
+                    image,
+                    arrow,
+                    north,
+                };
+                extras_hud::draw_minimap(batch, atlas, corners, &look);
+            }
         }
+    }
+
+    /// While Tab is held, give the map's portraits a layer above the player list.
+    pub(super) fn draw_minimap_over_tab(&self, batch: &mut HudBatch) {
+        if self.atlas_minimap_portraits() && self.atlas_minimap_request().is_some() {
+            let mut corners = Corners::new(batch.width, batch.height, self.effect_rows_height());
+            self.draw_minimap(batch, &mut corners, true);
+        }
+    }
+
+    /// The minimap and mods' corner panels, in the HUD layer (hidden with F1
+    /// by the caller). The top left corner gives way to the debug screen.
+    pub(super) fn draw_extras(&mut self, batch: &mut HudBatch) {
+        let mut corners = Corners::new(batch.width, batch.height, self.effect_rows_height());
+        self.draw_minimap(batch, &mut corners, false);
         self.draw_pvp_hud(batch, &mut corners);
         self.native_hud(batch, &mut corners);
         self.draw_atlas_ports(batch);

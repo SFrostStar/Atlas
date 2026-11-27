@@ -4191,9 +4191,9 @@ impl Game<'_> {
         if self.has_control_down_with_quirk(){
             use atlas_client::clipboard::EditShortcut;
             let shortcut=match key{KeyCode::KeyA=>Some(EditShortcut::SelectAll),KeyCode::KeyC=>Some(EditShortcut::Copy),KeyCode::KeyV=>Some(EditShortcut::Paste),KeyCode::KeyX=>Some(EditShortcut::Cut),_=>None};
-            if let Some(shortcut)=shortcut&&(self.atlas_macros_shortcut(shortcut)||self.atlas_config_shortcut(shortcut)||self.atlas_visual_screen_shortcut(shortcut)){return true;}
+            if let Some(shortcut)=shortcut&&(self.atlas_macros_shortcut(shortcut)||self.atlas_minimap_waypoints_shortcut(shortcut)||self.atlas_config_shortcut(shortcut)||self.atlas_visual_screen_shortcut(shortcut)){return true;}
         }
-        if self.atlas_macros_key(key) || self.atlas_mouse_tweaks_key(key) {
+        if self.atlas_macros_key(key) || self.atlas_minimap_waypoints_key(key) || self.atlas_mouse_tweaks_key(key) {
             return true;
         }
         if self.atlas_config_key(key,self.modifiers.control_key(),self.modifiers.shift_key())||self.atlas_visual_screen_key(key,true,self.modifiers.control_key(),self.modifiers.shift_key()){return true;}
@@ -4235,7 +4235,7 @@ impl Game<'_> {
     /// included (a text box reads Backspace, Delete and the like as keys).
     /// `None` when none of them is left to type.
     pub(super) fn screen_text_typed(&mut self, text: &str) -> Option<String> {
-        if self.atlas_macros_text(text)||self.atlas_config_char(text)||self.atlas_visual_screen_char(text){return None;}
+        if self.atlas_macros_text(text)||self.atlas_minimap_waypoints_text(text)||self.atlas_config_char(text)||self.atlas_visual_screen_char(text){return None;}
         let Some(screen) = self.screen_view_now() else {
             return Some(text.to_owned());
         };
@@ -4258,7 +4258,7 @@ impl Game<'_> {
         let Some(text) = text else {
             return;
         };
-        if (self.types_text() && self.atlas_macros_text(text)) || self.atlas_visual_screen_char(text){return;}
+        if (self.types_text() && self.atlas_macros_text(text)) || self.atlas_minimap_waypoints_text(text) || self.atlas_visual_screen_char(text){return;}
         if self.types_text()
             && let Some(result) = self.type_text_field_input(text)
         {
@@ -11277,6 +11277,7 @@ impl Game<'_> {
     /// A mod's own screen closes (Escape, or `native_mod_screen_close`).
     pub(super) fn close_mod_screen(&mut self) {
         self.atlas_mouse_tweaks_closed();
+        self.atlas_minimap_waypoints_closed();
         self.native_mod_screen = None;
         if self.screen == Screen::Mod {
             self.screen = self.atlas_ports.return_screen.take().unwrap_or(Screen::Playing);
@@ -12533,6 +12534,7 @@ impl Game<'_> {
         }
         if let Some(name) = keybinds::key_name(key) {
             self.atlas_macros_input(name, pressed);
+            self.atlas_minimap_input(name, pressed);
             if pressed {
                 self.atlas_aspect_open_key(name);
                 self.native_panel_key(name);
@@ -12563,6 +12565,7 @@ impl Game<'_> {
         if pressed&&self.native_playing(){self.atlas_actions_mouse_pearl(super::glfw_button(button));}
         let name = keybinds::mouse_name(button);
         self.atlas_macros_input(&name, pressed);
+        self.atlas_minimap_input(&name, pressed);
         if pressed {
             self.atlas_aspect_open_key(&name);
         }

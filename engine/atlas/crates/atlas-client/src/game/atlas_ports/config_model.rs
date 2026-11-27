@@ -110,6 +110,9 @@ pub(super) fn definition(id: &str) -> Option<Definition> {
     if id == super::inventory_hud::ID {
         return Some(super::inventory_hud::definition());
     }
+    if id == super::minimap_settings::ID {
+        return Some(super::minimap_settings::definition());
+    }
     if id == "atlas-gammautils" {
         return Some(gamma::definition());
     }

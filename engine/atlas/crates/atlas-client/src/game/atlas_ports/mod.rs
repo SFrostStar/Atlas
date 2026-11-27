@@ -12,6 +12,9 @@ mod food;
 mod ias;
 mod inventory_hud;
 mod macro_keybinds;
+mod minimap_port;
+mod minimap_settings;
+mod minimap_waypoints;
 mod mouse_tweaks;
 pub(super) mod saturation_plus;
 mod totem_tweaks;
@@ -39,6 +42,9 @@ pub(super) struct State {
     ias: ias::State,
     inventory_hud: inventory_hud::State,
     macro_keybinds: macro_keybinds::State,
+    minimap: minimap_settings::Settings,
+    minimap_runtime: minimap_port::Runtime,
+    minimap_waypoints: minimap_waypoints::State,
     armor: armor::State,
     aspect_ratio: aspect_ratio::State,
     esc_music: esc_music::State,
@@ -75,6 +81,7 @@ impl State {
                             || *id == ias::ID
                             || *id == inventory_hud::ID
                             || *id == macro_keybinds::ID
+                            || *id == minimap_settings::ID
                             || *id == saturation_plus::ID
                             || *id == mouse_tweaks::ID
                             || *id == totem_tweaks::ID
@@ -93,6 +100,10 @@ impl State {
         }
         if state.installed.contains(macro_keybinds::ID) {
             state.macro_keybinds = macro_keybinds::State::load(home);
+        }
+        if state.installed.contains(minimap_settings::ID) {
+            state.minimap = minimap_settings::Settings::load(home);
+            state.minimap_waypoints = minimap_waypoints::State::load(home);
         }
         if state.installed.contains(saturation_plus::ID) {
             state.saturation_plus = saturation_plus::State::load(home);
@@ -120,6 +131,7 @@ impl Game<'_> {
         match id {
             ias::ID => Some(self.atlas_ports.ias.config_value()),
             inventory_hud::ID => Some(self.atlas_ports.inventory_hud.config_value()),
+            minimap_settings::ID => Some(self.atlas_ports.minimap.config_value()),
             "atlas-appleskin" => Some(self.atlas_ports.food.config_value()),
             "atlas-zoomify" => self.atlas_utility_config(id),
             totem_tweaks::ID => Some(self.atlas_ports.totem_tweaks.config_value()),
@@ -131,6 +143,7 @@ impl Game<'_> {
         match id {
             ias::ID => Some(ias::State::config_default()),
             inventory_hud::ID => Some(inventory_hud::State::default_config()),
+            minimap_settings::ID => Some(minimap_settings::Settings::default_config()),
             "atlas-appleskin" => Some(food::State::default_config()),
             "atlas-zoomify" => serde_json::to_value(utility::config::Zoom::default()).ok(),
             totem_tweaks::ID => Some(totem_tweaks::State::default_config()),
@@ -144,10 +157,20 @@ impl Game<'_> {
     ) -> Result<(), String> {
         match id {
             ias::ID => self.atlas_ports.ias.apply_config(&Self::game_dir(), value),
-            inventory_hud::ID => self.atlas_ports.inventory_hud.set_config(&Self::game_dir(), value),
+            inventory_hud::ID => self
+                .atlas_ports
+                .inventory_hud
+                .set_config(&Self::game_dir(), value),
+            minimap_settings::ID => self
+                .atlas_ports
+                .minimap
+                .set_config(&Self::game_dir(), value),
             "atlas-appleskin" => self.atlas_ports.food.set_config(&Self::game_dir(), value),
             "atlas-zoomify" => self.atlas_utility_set_config(id, value),
-            totem_tweaks::ID => self.atlas_ports.totem_tweaks.set_config(&Self::game_dir(), value),
+            totem_tweaks::ID => self
+                .atlas_ports
+                .totem_tweaks
+                .set_config(&Self::game_dir(), value),
             _ => self.atlas_actions_set_config(id, value),
         }
     }
@@ -155,10 +178,14 @@ impl Game<'_> {
         match id {
             mouse_tweaks::ID => self.atlas_mouse_tweaks_open(),
             macro_keybinds::ID => self.atlas_macros_open(),
-            ias::ID | "atlas-appleskin" | "atlas-chunkanimator" | "atlas-zoomify" | "atlas-gammautils"
-            | totem_tweaks::ID | inventory_hud::ID => {
-                self.atlas_config_open(id)
-            }
+            ias::ID
+            | "atlas-appleskin"
+            | "atlas-chunkanimator"
+            | "atlas-zoomify"
+            | "atlas-gammautils"
+            | totem_tweaks::ID
+            | inventory_hud::ID
+            | minimap_settings::ID => self.atlas_config_open(id),
             "atlas-armorindicator" | "atlas-radarmod" => self.atlas_original_open_screen(id),
             _ => false,
         }
@@ -260,6 +287,11 @@ impl Game<'_> {
                 "Macro Keybinds",
                 "atlas.macro_keybinds.description",
             ),
+            (
+                minimap_settings::ID,
+                "Atlas Minimap",
+                "atlas.minimap.description",
+            ),
         ];
         for (id, name, description) in definitions
             .into_iter()
@@ -272,14 +304,21 @@ impl Game<'_> {
             mods.push(NativeMod {
                 id: id.into(),
                 title: name.into(),
-                description: if matches!(id, inventory_hud::ID | macro_keybinds::ID) {
+                description: if matches!(
+                    id,
+                    inventory_hud::ID | macro_keybinds::ID | minimap_settings::ID
+                ) {
                     atlas_client::lang::get(description)
                 } else {
                     description.into()
                 },
                 keys: if matches!(
                     id,
-                    esc_music::ID | ias::ID | saturation_plus::ID | mouse_tweaks::ID | totem_tweaks::ID
+                    esc_music::ID
+                        | ias::ID
+                        | saturation_plus::ID
+                        | mouse_tweaks::ID
+                        | totem_tweaks::ID
                 ) {
                     Vec::new()
                 } else if id == IDS[1] {
@@ -340,6 +379,8 @@ impl Game<'_> {
                     inventory_hud::keys()
                 } else if id == macro_keybinds::ID {
                     macro_keybinds::keys()
+                } else if id == minimap_settings::ID {
+                    minimap_settings::keys()
                 } else {
                     if visual::IDS.contains(&id) {
                         visual::keys(id)

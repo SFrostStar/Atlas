@@ -10,7 +10,7 @@ use atlas_client::{
     ui_theme::{Face, Ui, color},
     widgets,
 };
-use std::{borrow::Cow, time::Instant};
+use std::{borrow::Cow, sync::Arc, time::Instant};
 use winit::{event::MouseButton, keyboard::KeyCode};
 
 type Bounds = [f32; 4];
@@ -26,10 +26,17 @@ const PLAYBACK: [(u8, Command); 4] = [
 ];
 const SEEK_ID: u8 = 23;
 const PILL_ID: u8 = 24;
+const VOLUME_ID: u8 = 26;
+
+struct VolumeDrag {
+    id: Arc<str>,
+    level: f32,
+}
 
 #[derive(Default)]
 pub(super) struct State {
     seek_fraction: Option<f64>,
+    volume_drag: Option<VolumeDrag>,
     title: String,
     title_since: Option<Instant>,
     expansion: f32,
@@ -45,6 +52,8 @@ struct Layout {
     buttons: [Bounds; 4],
     caption: Bounds,
     rail: Bounds,
+    seek_end: f32,
+    volume: Bounds,
 }
 
 impl Layout {
@@ -54,9 +63,9 @@ impl Layout {
         let bottom = size.1 - 8.0;
         let room = bottom - pause_bottom - 5.0;
         let top = room < 42.0;
-        let tall = room >= 66.0;
+        let tall = room >= 78.0;
         let height = if tall {
-            72.0_f32.min(room)
+            86.0_f32.min(room)
         } else if top {
             38.0
         } else {
@@ -71,13 +80,16 @@ impl Layout {
         } else {
             x + width - 102.0
         };
-        let button_y = y + if tall { height - 24.0 } else { 5.0 };
+        let button_y = y + if tall { height - 38.0 } else { 5.0 };
         let text_edge = if tall {
             x + width - 10.0
         } else {
             buttons_x - 3.0
         };
         let time_width = if duration >= 3_600_000 { 41.0 } else { 33.0 };
+        let shared = !tall && duration > 0;
+        let seek_span = if shared { width * 0.60 } else { width };
+        let volume_left = if shared { seek_span } else { 0.0 };
         Self {
             pill: [pill_x, pill_y, 124.0, PILL_H],
             card: [x, y, width, height],
@@ -104,8 +116,15 @@ impl Layout {
             ],
             rail: [
                 x + time_width,
-                y + if tall { height - 28.0 } else { height - 8.0 },
-                width - time_width * 2.0,
+                y + if tall { height - 42.0 } else { height - 8.0 },
+                seek_span - time_width * 2.0,
+                2.0,
+            ],
+            seek_end: x + seek_span,
+            volume: [
+                x + volume_left + 22.0,
+                y + height - 8.0,
+                width - volume_left - 50.0,
                 2.0,
             ],
         }
@@ -126,6 +145,15 @@ impl Layout {
 
     fn seek_fraction(&self, x: f32) -> f64 {
         f64::from(((x - self.rail[0]) / self.rail[2]).clamp(0.0, 1.0))
+    }
+
+    fn volume_target(&self) -> Bounds {
+        let [x, y, w, h] = self.volume;
+        [x - 3.0, y - 4.0, w + 6.0, h + 8.0]
+    }
+
+    fn volume_level(&self, x: f32) -> f32 {
+        ((x - self.volume[0]) / self.volume[2]).clamp(0.0, 1.0)
     }
 }
 
@@ -257,7 +285,80 @@ fn draw_cover(ui: &mut Ui<'_>, rect: Bounds, track: Option<&Track>, alpha: f32) 
 }
 
 fn media_focus(id: u8) -> bool {
-    id == PILL_ID || id == SEEK_ID || PLAYBACK.iter().any(|(other, _)| *other == id)
+    matches!(id, PILL_ID | SEEK_ID | VOLUME_ID) || PLAYBACK.iter().any(|(other, _)| *other == id)
+}
+
+fn draw_volume(
+    ui: &mut Ui<'_>,
+    layout: &Layout,
+    level: Option<f32>,
+    dragging: bool,
+    focused: bool,
+    alpha: f32,
+    cursor: (f32, f32),
+) {
+    let [x, y, w, h] = layout.volume;
+    let target = layout.volume_target();
+    let ready = alpha >= 0.52 && level.is_some();
+    let hovered = contains(target, cursor);
+    let fraction = level.unwrap_or(0.0);
+    if alpha >= 0.52 {
+        let label = lang::get(if ready {
+            "atlas.esc_music.volume"
+        } else {
+            "atlas.esc_music.volume_unavailable"
+        });
+        let kind = widgets::Kind::Slider {
+            value: fraction,
+            track: [x, w],
+        };
+        widgets::record_as(&label, target, ready, kind);
+        if ready {
+            widgets::target_as(target, kind);
+            widgets::slider_cursor(hovered || dragging, true, dragging);
+        }
+        widgets::narratable(|| widgets::Narratable::slider(label, target, ready).hovered(hovered));
+    }
+    let dim = color::with_alpha(color::muted(), alpha);
+    let ink = color::with_alpha(color::text(), alpha);
+    let cy = y + h / 2.0;
+    ui.rounded(x - 16.0, cy - 1.5, 3.0, 3.0, 0.5, dim);
+    ui.batch.fill_quad(
+        ui.atlas,
+        [
+            [x - 14.0, cy - 1.5],
+            [x - 10.0, cy - 3.8],
+            [x - 10.0, cy + 3.8],
+            [x - 14.0, cy + 1.5],
+        ],
+        dim,
+    );
+    ui.rounded(
+        x,
+        y,
+        w,
+        h,
+        h / 2.0,
+        color::with_alpha(color::hover(), alpha),
+    );
+    if ready {
+        ui.rounded(x, y, w * fraction, h, h / 2.0, ink);
+        if hovered || dragging || focused {
+            ui.rounded(x + w * fraction - 2.5, cy - 2.5, 5.0, 5.0, 2.5, ink);
+        }
+        if focused {
+            ui.border(
+                target[0],
+                target[1] + 0.5,
+                target[2],
+                target[3] - 1.0,
+                4.0,
+                color::accent(),
+            );
+        }
+    }
+    let value = level.map_or_else(|| "–".to_owned(), |level| format!("{:.0}%", level * 100.0));
+    ui.text_line(Face::Mono, 7.0, 9.0, x + w + 4.0, cy - 4.5, dim, &value);
 }
 
 fn transition(expansion: f32, open: bool, seconds: f32) -> f32 {
@@ -283,6 +384,7 @@ impl Game<'_> {
             state.expansion = 0.0;
             state.pinned = false;
             state.keyboard = false;
+            state.volume_drag = None;
             return;
         }
         self.atlas_ports.esc_music.poll();
@@ -292,9 +394,17 @@ impl Game<'_> {
         }
         let playing = self.atlas_ports.esc_music.playing();
         let track = self.atlas_ports.esc_music.track();
+        let volume = track.and_then(|track| track.volume.as_ref());
         let state = &mut self.atlas_ports.esc_music_ui;
         if self.drag_button != Some(MouseButton::Left) {
             state.seek_fraction = None;
+            state.volume_drag = None;
+        } else if state
+            .volume_drag
+            .as_ref()
+            .is_some_and(|drag| volume.is_none_or(|volume| volume.id != drag.id))
+        {
+            state.volume_drag = None;
         }
         let now = Instant::now();
         let elapsed = state
@@ -305,6 +415,7 @@ impl Game<'_> {
         let opened = hovered
             || state.pinned
             || state.seek_fraction.is_some()
+            || state.volume_drag.is_some()
             || (state.keyboard && self.pause_focus.is_some_and(media_focus));
         state.expansion = transition(state.expansion, opened, elapsed);
         let current = state.seek_fraction.map_or_else(
@@ -494,8 +605,7 @@ impl Game<'_> {
                 time_ink,
                 &time,
             );
-            let total_x =
-                layout.card[0] + layout.card[2] - 10.0 - ui.measure(Face::Mono, 7.2, &total);
+            let total_x = layout.seek_end - 10.0 - ui.measure(Face::Mono, 7.2, &total);
             ui.text_line(Face::Mono, 7.2, 9.6, total_x, text_y, time_ink, &total);
             let fraction = (current as f64 / duration as f64).clamp(0.0, 1.0) as f32;
             let target = layout.seek_target();
@@ -551,6 +661,22 @@ impl Game<'_> {
                 );
             }
         }
+        if track.is_some() {
+            let level = state
+                .volume_drag
+                .as_ref()
+                .map(|drag| drag.level)
+                .or_else(|| volume.map(|volume| volume.level));
+            draw_volume(
+                &mut ui,
+                &layout,
+                level,
+                state.volume_drag.is_some(),
+                self.pause_focus == Some(VOLUME_ID),
+                alpha,
+                self.cursor,
+            );
+        }
         ui.finish();
     }
 
@@ -590,8 +716,11 @@ impl Game<'_> {
                     .filter(|(i, _)| *i != 3 || track.can_repeat)
                     .map(|(_, ((id, _), rect))| (id, rect)),
             );
-            if track.can_seek && duration > 0 {
+            if track.can_seek && duration > 0 && layout.rail[2] >= 16.0 {
                 targets.push((SEEK_ID, layout.seek_target()));
+            }
+            if track.volume.is_some() {
+                targets.push((VOLUME_ID, layout.volume_target()));
             }
         }
         targets
@@ -623,6 +752,20 @@ impl Game<'_> {
         let Some(track) = self.atlas_ports.esc_music.track() else {
             return false;
         };
+        if id == VOLUME_ID
+            && matches!(key, KeyCode::ArrowLeft | KeyCode::ArrowRight)
+            && let Some(volume) = &track.volume
+        {
+            let id = volume.id.clone();
+            let step = if key == KeyCode::ArrowLeft {
+                -0.05
+            } else {
+                0.05
+            };
+            let level = (volume.level + step).clamp(0.0, 1.0);
+            self.atlas_ports.esc_music.set_volume(&id, level);
+            return true;
+        }
         let action = match key {
             KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space => {
                 PLAYBACK.iter().find_map(|(control, command)| {
@@ -653,6 +796,7 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_esc_music_mouse(&mut self, button: i32, pressed: bool) -> bool {
         if !self.atlas_esc_music_visible() {
             self.atlas_ports.esc_music_ui.seek_fraction = None;
+            self.atlas_ports.esc_music_ui.volume_drag = None;
             return false;
         }
         if button != 0 {
@@ -660,6 +804,10 @@ impl Game<'_> {
         }
         let (layout, duration) = self.atlas_esc_music_layout(self.gui_size());
         if !pressed {
+            if let Some(drag) = self.atlas_ports.esc_music_ui.volume_drag.take() {
+                self.atlas_ports.esc_music.set_volume(&drag.id, drag.level);
+                return true;
+            }
             let Some(fraction) = self.atlas_ports.esc_music_ui.seek_fraction.take() else {
                 return false;
             };
@@ -691,10 +839,24 @@ impl Game<'_> {
                     return true;
                 }
             }
-            if track.can_seek && duration > 0 && contains(layout.seek_target(), self.cursor) {
+            if track.can_seek
+                && duration > 0
+                && layout.rail[2] >= 16.0
+                && contains(layout.seek_target(), self.cursor)
+            {
                 self.pause_focus = Some(SEEK_ID);
                 state.seek_fraction = Some(layout.seek_fraction(self.cursor.0));
                 self.audio.play_button_click();
+                return true;
+            }
+            if let Some(volume) = &track.volume
+                && contains(layout.volume_target(), self.cursor)
+            {
+                self.pause_focus = Some(VOLUME_ID);
+                state.volume_drag = Some(VolumeDrag {
+                    id: volume.id.clone(),
+                    level: layout.volume_level(self.cursor.0),
+                });
                 return true;
             }
         }
@@ -705,13 +867,19 @@ impl Game<'_> {
     pub(in crate::game) fn atlas_esc_music_drag(&mut self) -> bool {
         if self.drag_button != Some(MouseButton::Left) || !self.atlas_esc_music_visible() {
             self.atlas_ports.esc_music_ui.seek_fraction = None;
+            self.atlas_ports.esc_music_ui.volume_drag = None;
             return false;
         }
-        if self.atlas_ports.esc_music_ui.seek_fraction.is_none() {
+        let state = &self.atlas_ports.esc_music_ui;
+        if state.seek_fraction.is_none() && state.volume_drag.is_none() {
             return false;
         }
 
         let (layout, duration) = self.atlas_esc_music_layout(self.gui_size());
+        if let Some(drag) = &mut self.atlas_ports.esc_music_ui.volume_drag {
+            drag.level = layout.volume_level(self.cursor.0);
+            return true;
+        }
         if layout.rail[2] >= 16.0 && duration > 0 {
             self.atlas_ports.esc_music_ui.seek_fraction = Some(layout.seek_fraction(self.cursor.0));
             return true;
@@ -739,6 +907,7 @@ mod tests {
             can_repeat: true,
             repeat_one: false,
             native_repeat: false,
+            volume: None,
             sampled_at: now - Duration::from_millis(1500),
             cover: None,
         };
@@ -783,7 +952,10 @@ mod tests {
         let compact = Layout::new((320.0, 240.0), 210.0, 3_600_000);
         assert!(roomy.card[1] > 210.0);
         assert!(compact.card[1] + compact.card[3] < 40.0);
-        assert!(compact.seek_target()[2] > 100.0);
+        let seek = compact.seek_target();
+        let volume = compact.volume_target();
+        assert!(seek[2] >= 16.0);
+        assert!(seek[0] + seek[2] < volume[0]);
         assert_eq!(
             compact.seek_fraction(compact.rail[0] + compact.rail[2] / 2.0),
             0.5

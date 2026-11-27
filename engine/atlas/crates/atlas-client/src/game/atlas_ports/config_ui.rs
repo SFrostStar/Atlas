@@ -1020,7 +1020,7 @@ impl Game<'_> {
                                 value_rect[0],
                                 y,
                                 value_rect[2],
-                                &Text::tr("options.generic_value", &[&value]),
+                                &Text::literal(&label),
                                 (value - min) as f32 / (max - min).max(1) as f32,
                                 hit(value_rect, self.cursor.0, self.cursor.1),
                                 field.enabled,

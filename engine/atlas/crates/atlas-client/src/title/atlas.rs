@@ -7,6 +7,11 @@ impl Title {
         cursor: (f32, f32),
     ) {
         let buttons = self.buttons(batch.width, batch.height);
-        crate::atlas::menu::draw(atlas, batch, cursor, &buttons);
+        if crate::widgets::narrating()
+            && let Some(info) = self.narration()
+        {
+            crate::widgets::begin_screen(|| info);
+        }
+        crate::atlas::menu::draw(atlas, batch, cursor, &buttons, self.focused_button);
     }
 }

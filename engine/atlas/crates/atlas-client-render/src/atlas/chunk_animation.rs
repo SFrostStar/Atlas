@@ -123,8 +123,8 @@ impl State {
     pub fn reset(&mut self) {
         self.chunks.clear();
     }
-    pub fn retain(&mut self, origins: &std::collections::BTreeSet<[i32; 3]>) {
-        self.chunks.retain(|origin, _| origins.contains(origin));
+    pub fn retain(&mut self, mut loaded: impl FnMut([i32; 3]) -> bool) {
+        self.chunks.retain(|&origin, _| loaded(origin));
     }
     pub fn offset(&mut self, origin: [i32; 3], config: Config, now_ms: u64) -> [f32; 3] {
         let Config {
@@ -202,6 +202,22 @@ mod tests {
         assert_eq!(state.offset([0, 64, 0], c, 600), [0.0, -64.0, 0.0]);
         assert_eq!(state.offset([0, 64, 0], c, 1100), [0.0; 3]);
         assert_eq!(state.offset([0, 64, 0], c, 2100), [0.0; 3]);
+    }
+    #[test]
+    fn a_section_fading_in_over_lod_keeps_animating_until_unloaded() {
+        let mut state = State::default();
+        let config = Config {
+            easing: Easing::Linear,
+            ..Default::default()
+        };
+        let origin = [-16, 64, 32];
+        assert_eq!(state.offset(origin, config, 100), [0.0, -128.0, 0.0]);
+        state.retain(|point| point == origin);
+        assert_eq!(state.offset(origin, config, 600), [0.0, -64.0, 0.0]);
+        state.retain(|point| point == origin);
+        assert_eq!(state.offset(origin, config, 1100), [0.0; 3]);
+        state.retain(|_| false);
+        assert_eq!(state.offset(origin, config, 2100), [0.0, -128.0, 0.0]);
     }
     #[test]
     fn configured_modes_respect_horizon_world_bounds_and_player_distance() {
